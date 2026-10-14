@@ -37,12 +37,12 @@ struct LANTransferModuleView: View {
                     VStack(spacing: spacing) {
                         LANTransferView()
                             .frame(maxWidth: .infinity)
-                            .frame(height: availableHeight * 2 / 3)
+                            .frame(height: availableHeight / 3)
                             .jarvisModulePanel()
 
                         LANTransferTasksView()
                             .frame(maxWidth: .infinity)
-                            .frame(height: availableHeight / 3)
+                            .frame(height: availableHeight * 2 / 3)
                             .jarvisModulePanel()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
