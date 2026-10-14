@@ -5,14 +5,16 @@ MODE="${1:-run}"
 APP_NAME="Jarvis-Dev"
 BUNDLE_ID="com.jarvis.mac.dev"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
+# Sign and run outside cloud-backed project directories. File Provider adds
+# FinderInfo to bundle roots in those directories, which codesign rejects.
+APP_BUNDLE="${JARVIS_DEV_APP_DIR:-$HOME/Library/Caches/Jarvis/Development/$APP_NAME.app}"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/Jarvis"
 
 cd "$ROOT_DIR"
 # Only stop a previously launched development bundle. The production app has
 # the same executable name (Jarvis), so killing by process name would be unsafe.
 pkill -f -- "$APP_BINARY" >/dev/null 2>&1 || true
-JARVIS_DEV_BUILD=1 ./build_app.sh
+JARVIS_APP_DIR="$APP_BUNDLE" JARVIS_DEV_BUILD=1 ./build_app.sh
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

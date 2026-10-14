@@ -18,6 +18,7 @@ import Security
     @Published var isImporting = false
     @Published var importMessage: String?
     @Published var importHasErrors = false
+    public var onTransferEvent: ((Transfer) -> Void)?
 
     private var server: HTTPServer?
     private var addressTimer: Timer?
@@ -112,10 +113,14 @@ import Security
     }
 
     private func upsert(_ transfer: Transfer) {
+        let previousStatus = transfers.first(where: { $0.id == transfer.id })?.status
         if let index = transfers.firstIndex(where: { $0.id == transfer.id }) {
             transfers[index] = transfer
         } else {
             transfers.insert(transfer, at: 0)
+        }
+        if previousStatus != transfer.status {
+            onTransferEvent?(transfer)
         }
         if transfers.count > 100 {
             transfers.removeLast(transfers.count - 100)

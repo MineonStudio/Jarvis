@@ -162,6 +162,9 @@ if [[ -d "$ICON_COMPOSER_DIR" ]]; then
 fi
 
 ENTITLEMENTS="$ROOT_DIR/Resources/Jarvis.entitlements"
+# Cloud-backed workspaces can attach Finder/File Provider attributes to copied
+# bundle files. Code signing rejects these attributes on the generated app.
+xattr -cr "$APP_DIR"
 # The self-signed development certificate is not a trusted root, so Keychain
 # reports it only under the plain code-signing policy, not the "valid
 # identities" list that `security find-identity -v` prints.

@@ -23,14 +23,18 @@ private struct LANTransferTasksPanel: View {
                         .font(SettingsTypography.pageTitle)
 
                     if store.transfers.isEmpty {
-                        JarvisEmptyState(
-                            icon: "arrow.up.arrow.down",
-                            title: "暂无传输",
-                            message: "手机上传或下载后，任务会显示在这里。"
-                        )
+                        VStack(spacing: 12) {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.system(size: 28, weight: .light))
+                                .foregroundStyle(Color.jarvisAccent)
+                            Text("暂无传输")
+                                .font(JarvisTypography.cardTitle)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 190)
+                        .jarvisContentSurface(cornerRadius: JarvisMetrics.cardRadius)
                     } else {
                         ForEach(store.transfers) { transfer in
-                            transferCard(transfer)
+                            TransferRow(transfer: transfer) { store.cancel(transfer.id) }
                         }
                     }
                 }
@@ -54,52 +58,5 @@ private struct LANTransferTasksPanel: View {
             .padding(.trailing, 15)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func transferCard(_ transfer: Transfer) -> some View {
-        JarvisCard {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: transfer.direction == .upload ? "arrow.down.circle" : "arrow.up.circle")
-                    .font(.system(size: 22))
-                    .foregroundStyle(Color.jarvisAccent)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(transfer.name)
-                            .font(JarvisTypography.bodyEmphasis)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text(transfer.status.rawValue)
-                            .font(JarvisTypography.caption)
-                            .foregroundStyle(transfer.status == .failed ? .red : .secondary)
-                    }
-
-                    ProgressView(value: transfer.fraction)
-                        .tint(Color.jarvisAccent)
-
-                    HStack {
-                        Text("\(transfer.direction.rawValue) · \(ByteCountFormatter.string(fromByteCount: transfer.done, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: transfer.total, countStyle: .file))")
-                        Spacer(minLength: 8)
-                        if transfer.status == .active {
-                            Text("\(ByteCountFormatter.string(fromByteCount: Int64(transfer.bytesPerSecond), countStyle: .file))/s")
-                        }
-                    }
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(Color.jarvisTextSecondary)
-
-                    if !transfer.detail.isEmpty {
-                        Text(transfer.detail)
-                            .font(JarvisTypography.caption)
-                            .foregroundStyle(transfer.status == .failed ? .red : .secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-
-                if transfer.status == .active {
-                    Button("取消") { store.cancel(transfer.id) }
-                        .buttonStyle(JarvisSecondaryButtonStyle())
-                }
-            }
-        }
     }
 }
