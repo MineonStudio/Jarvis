@@ -23,7 +23,7 @@ artifacts, never the private key.
 Set a new, strictly increasing app version and build number, then run:
 
 ```sh
-JARVIS_VERSION=1.6.0 JARVIS_BUILD=359 ./package_release.sh
+JARVIS_VERSION=1.6.1 JARVIS_BUILD=360 ./package_release.sh
 ```
 
 Upload every emitted asset to the matching non-prerelease GitHub Release:
