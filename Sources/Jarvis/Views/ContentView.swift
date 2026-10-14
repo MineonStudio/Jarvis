@@ -1,10 +1,12 @@
 import AppKit
+import LANTransfer
 import SwiftUI
 
 struct ContentView: View {
     static let homePointerCoordinateSpace = "jarvis.main-window"
 
     @Binding var isSettingsPresented: Bool
+    @Binding var isLANTransferTasksPresented: Bool
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var navigationSelection: TopLevelSection = .home
@@ -156,6 +158,7 @@ struct ContentView: View {
         case .skill(.resume): ResumeContentView()
         case .skill(.wallpaper): WallpaperView()
         case .skill(.meetingNotes): MeetingView()
+        case .skill(.lanTransfer): LANTransferModuleView(isTasksPresented: $isLANTransferTasksPresented)
         }
     }
 

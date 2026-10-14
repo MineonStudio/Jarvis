@@ -1,4 +1,5 @@
 import AppKit
+import LANTransfer
 import SwiftUI
 
 enum JarvisApplicationPresentation {
@@ -59,6 +60,7 @@ struct JarvisApp: App {
         .windowToolbarLabelStyle(fixed: .iconOnly)
         .commands {
             CommandGroup(replacing: .sidebar) {}
+            LANTransferCommands()
         }
     }
 }
@@ -69,57 +71,70 @@ private struct JarvisRootView: View {
 
     @StateObject private var mainWindowController = JarvisMainWindowController()
     @State private var isSettingsPresented = false
+    @State private var isLANTransferTasksPresented = false
 
     var body: some View {
-        ContentView(isSettingsPresented: $isSettingsPresented)
-            .environment(appModel)
-            .environmentObject(appModel.resumeWorkspace)
-            .tint(appModel.accentColorPreference.resolvedColor)
-            .accentColor(appModel.accentColorPreference.resolvedColor)
-            .jarvisTheme(
-                appModel.themePreference,
-                systemColorScheme: appModel.systemColorScheme
+        ContentView(
+            isSettingsPresented: $isSettingsPresented,
+            isLANTransferTasksPresented: $isLANTransferTasksPresented
+        )
+        .environment(appModel)
+        .environmentObject(appModel.resumeWorkspace)
+        .tint(appModel.accentColorPreference.resolvedColor)
+        .accentColor(appModel.accentColorPreference.resolvedColor)
+        .jarvisTheme(
+            appModel.themePreference,
+            systemColorScheme: appModel.systemColorScheme
+        )
+        .frame(
+            minWidth: JarvisMainWindowController.minimumWindowSize.width,
+            minHeight: JarvisMainWindowController.minimumWindowSize.height
+        )
+        .overlay {
+            if let prompt = appModel.taskPermissionPrompt, !isSettingsPresented {
+                JarvisTaskPermissionOverlay(prompt: prompt)
+                    .environment(appModel)
+            }
+        }
+        .background {
+            SettingsOverlayAnchor(
+                isPresented: $isSettingsPresented,
+                app: appModel,
+                content: .settings
             )
-            .frame(
-                minWidth: JarvisMainWindowController.minimumWindowSize.width,
-                minHeight: JarvisMainWindowController.minimumWindowSize.height
+            SettingsOverlayAnchor(
+                isPresented: $isLANTransferTasksPresented,
+                app: appModel,
+                content: .lanTransferTasks
             )
-            .overlay {
-                if let prompt = appModel.taskPermissionPrompt, !isSettingsPresented {
-                    JarvisTaskPermissionOverlay(prompt: prompt)
-                        .environment(appModel)
-                }
+        }
+        .overlay(alignment: .bottom) {
+            JarvisToastHost(message: appModel.toastMessage)
+                .padding(.bottom, 26)
+                .allowsHitTesting(false)
+        }
+        .animation(.easeInOut(duration: 0.2), value: appModel.taskPermissionPrompt)
+        // Keep the system title-bar region and its native window controls.
+        // Apple recommends removing only the title and toolbar background
+        // when content should extend beneath that region.
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .toolbar(removing: .title)
+        .background(JarvisMainWindowAccessor(controller: mainWindowController))
+        .background(JarvisFirstFrameProbe().frame(width: 1, height: 1))
+        .onAppear {
+            appModel.refreshPermissionStatus()
+            JarvisMenuBarController.shared.bind {
+                openWindow(id: JarvisAppIdentity.mainWindowSceneID)
             }
-            .background {
-                SettingsOverlayAnchor(isPresented: $isSettingsPresented, app: appModel)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            appModel.refreshPermissionStatus()
+            if let prompt = appModel.taskPermissionPrompt,
+               appModel.isRequiredPermissionGranted(prompt.permission)
+            {
+                appModel.taskPermissionPrompt = nil
             }
-            .overlay(alignment: .bottom) {
-                JarvisToastHost(message: appModel.toastMessage)
-                    .padding(.bottom, 26)
-                    .allowsHitTesting(false)
-            }
-            .animation(.easeInOut(duration: 0.2), value: appModel.taskPermissionPrompt)
-            // Keep the system title-bar region and its native window controls.
-            // Apple recommends removing only the title and toolbar background
-            // when content should extend beneath that region.
-            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-            .toolbar(removing: .title)
-            .background(JarvisMainWindowAccessor(controller: mainWindowController))
-            .background(JarvisFirstFrameProbe().frame(width: 1, height: 1))
-            .onAppear {
-                appModel.refreshPermissionStatus()
-                JarvisMenuBarController.shared.bind {
-                    openWindow(id: JarvisAppIdentity.mainWindowSceneID)
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                appModel.refreshPermissionStatus()
-                if let prompt = appModel.taskPermissionPrompt,
-                   appModel.isRequiredPermissionGranted(prompt.permission)
-                {
-                    appModel.taskPermissionPrompt = nil
-                }
-            }
+        }
     }
 }
 

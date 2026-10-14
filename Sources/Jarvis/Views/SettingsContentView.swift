@@ -701,6 +701,18 @@ struct SettingsView: View {
 
 struct SettingsModalOverlay: View {
     @Binding var isPresented: Bool
+
+    var body: some View {
+        JarvisCenteredModalOverlay(isPresented: $isPresented, title: "设置") {
+            SettingsView { isPresented = false }
+        }
+    }
+}
+
+struct JarvisCenteredModalOverlay<Content: View>: View {
+    @Binding var isPresented: Bool
+    let title: String
+    @ViewBuilder let content: Content
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -713,18 +725,16 @@ struct SettingsModalOverlay: View {
                 Color.clear
                     .contentShape(Rectangle())
 
-                SettingsView {
-                    isPresented = false
-                }
-                .frame(width: fitted.width, height: fitted.height)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.8)
-                }
-                .shadow(color: Color.black.opacity(0.30), radius: 34, y: 18)
-                .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
+                content
+                    .frame(width: fitted.width, height: fitted.height)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.8)
+                    }
+                    .shadow(color: Color.black.opacity(0.30), radius: 34, y: 18)
+                    .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .overlay(alignment: .bottom) {
@@ -739,8 +749,13 @@ struct SettingsModalOverlay: View {
             isPresented = false
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("设置")
+        .accessibilityLabel(title)
     }
+}
+
+enum JarvisModalContent {
+    case settings
+    case lanTransferTasks
 }
 
 /// Installs the settings card above the window's AppKit sidebar and toolbar.
@@ -751,6 +766,7 @@ struct SettingsOverlayAnchor: NSViewRepresentable {
     /// Passed in directly. Reading `@Environment` here crashes while AppKit
     /// builds the key-view loop, before that environment value is installed.
     let app: AppModel
+    let content: JarvisModalContent
 
     func makeCoordinator() -> SettingsOverlayAnchorView {
         SettingsOverlayAnchorView()
@@ -761,7 +777,7 @@ struct SettingsOverlayAnchor: NSViewRepresentable {
     }
 
     func updateNSView(_ anchor: SettingsOverlayAnchorView, context _: Context) {
-        anchor.update(isPresented: isPresented, app: app) {
+        anchor.update(isPresented: isPresented, app: app, content: content) {
             isPresented = $0
         }
     }
@@ -770,6 +786,7 @@ struct SettingsOverlayAnchor: NSViewRepresentable {
 final class SettingsOverlayAnchorView: NSView {
     private var presented = false
     private var app: AppModel?
+    private var content: JarvisModalContent = .settings
     private var setPresented: ((Bool) -> Void)?
     private var container: SettingsOverlayContainer?
 
@@ -784,9 +801,15 @@ final class SettingsOverlayAnchorView: NSView {
         }
     }
 
-    func update(isPresented: Bool, app: AppModel, setPresented: @escaping (Bool) -> Void) {
+    func update(
+        isPresented: Bool,
+        app: AppModel,
+        content: JarvisModalContent,
+        setPresented: @escaping (Bool) -> Void
+    ) {
         presented = isPresented
         self.app = app
+        self.content = content
         self.setPresented = setPresented
         sync()
     }
@@ -808,7 +831,7 @@ final class SettingsOverlayAnchorView: NSView {
                 self?.setPresented?(newValue)
             }
         )
-        container.present(isPresented: binding, app: app, in: parent)
+        container.present(isPresented: binding, app: app, content: content, in: parent)
     }
 
     private var overlayParent: NSView? {
@@ -820,13 +843,21 @@ final class SettingsOverlayAnchorView: NSView {
 private struct SettingsOverlayRoot: View {
     @Binding var isPresented: Bool
     let app: AppModel
+    let content: JarvisModalContent
 
     var body: some View {
-        SettingsModalOverlay(isPresented: $isPresented)
-            .environment(app)
-            .tint(app.accentColorPreference.resolvedColor)
-            .accentColor(app.accentColorPreference.resolvedColor)
-            .jarvisTheme(app.themePreference, systemColorScheme: app.systemColorScheme)
+        Group {
+            switch content {
+            case .settings:
+                SettingsModalOverlay(isPresented: $isPresented)
+            case .lanTransferTasks:
+                LANTransferTasksModalOverlay(isPresented: $isPresented)
+            }
+        }
+        .environment(app)
+        .tint(app.accentColorPreference.resolvedColor)
+        .accentColor(app.accentColorPreference.resolvedColor)
+        .jarvisTheme(app.themePreference, systemColorScheme: app.systemColorScheme)
     }
 }
 
@@ -976,7 +1007,12 @@ private final class SettingsOverlayContainer: NSView {
         bringToFront()
     }
 
-    func present(isPresented: Binding<Bool>, app: AppModel, in parent: NSView) {
+    func present(
+        isPresented: Binding<Bool>,
+        app: AppModel,
+        content: JarvisModalContent,
+        in parent: NSView
+    ) {
         SettingsBackdropLock.isActive = true
         installEventMonitor()
         // Replacing rootView resets the settings selection, so install it once per open.
@@ -994,7 +1030,7 @@ private final class SettingsOverlayContainer: NSView {
             hosting.sizingOptions = []
             hosting.safeAreaRegions = []
             hosting.rootView = AnyView(
-                SettingsOverlayRoot(isPresented: isPresented, app: app)
+                SettingsOverlayRoot(isPresented: isPresented, app: app, content: content)
             )
             hosting.sizingOptions = []
             isInstalled = true

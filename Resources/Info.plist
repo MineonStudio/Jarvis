@@ -24,6 +24,12 @@
 	<string>rrvW4anLRPtUz/hRVjtfA3EpmwWf1sgqps/vvC7+5ws=</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>贾维斯在局域网传输模块中与同一网络的设备互传文件。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_http._tcp</string>
+	</array>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>贾维斯在会议记录中采集系统播放音频，以便识别耳机中远程参会者的发言；原始音频保存在本机。</string>
 	<key>NSCameraUsageDescription</key>

@@ -39,6 +39,7 @@ enum AppSection: Hashable, Identifiable {
         case .skill(.resume): "简历制作"
         case .skill(.wallpaper): "桌面壁纸"
         case .skill(.meetingNotes): "会议记录"
+        case .skill(.lanTransfer): "局域网传输"
         }
     }
 
