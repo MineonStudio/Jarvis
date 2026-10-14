@@ -5,7 +5,6 @@ import SwiftUI
 struct LANTransferModuleView: View {
     @Binding var isTasksPresented: Bool
     @ObservedObject private var store = ShareStore.shared
-    @State private var showsHotspotGuide = false
 
     var body: some View {
         JarvisContentArea(
@@ -42,24 +41,11 @@ struct LANTransferModuleView: View {
                     .buttonStyle(JarvisToolbarButtonStyle.menu())
                     .help("查看局域网传输任务")
                 }
-                ToolbarSpacer(.fixed, placement: .automatic)
-                ToolbarItem(id: "lan-transfer.hotspot-guide", placement: .automatic) {
-                    Button {
-                        showsHotspotGuide = true
-                    } label: {
-                        Label("热点指引", systemImage: "questionmark.circle")
-                    }
-                    .buttonStyle(JarvisToolbarButtonStyle.menu())
-                    .help("查看手机热点连接方法")
-                }
             },
             content: {
                 LANTransferView()
                     .jarvisModulePanel()
             }
         )
-        .sheet(isPresented: $showsHotspotGuide) {
-            HotspotGuide()
-        }
     }
 }

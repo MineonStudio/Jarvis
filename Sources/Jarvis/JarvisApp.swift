@@ -31,6 +31,29 @@ struct JarvisApp: App {
 
         let appModel = AppModel()
         _appModel = State(initialValue: appModel)
+        ShareStore.shared.onTransferEvent = { [weak appModel] transfer in
+            let fields = [
+                "direction": transfer.direction.rawValue,
+                "status": transfer.status.rawValue,
+                "bytes": String(transfer.done),
+                "totalBytes": String(transfer.total),
+                "reason": transfer.status == .failed ? transfer.detail : ""
+            ]
+            switch transfer.status {
+            case .active:
+                JarvisLog.info(category: .network, event: "lanTransfer.started", fields: fields)
+            case .completed:
+                JarvisLog.notice(category: .network, event: "lanTransfer.completed", result: "success", fields: fields)
+                if transfer.direction == .upload {
+                    appModel?.showToast("已接收：\(transfer.name)")
+                }
+            case .failed:
+                JarvisLog.error(category: .network, event: "lanTransfer.failed", result: "failure", fields: fields)
+                appModel?.showToast("\(transfer.direction.rawValue)失败：\(transfer.detail)")
+            case .cancelled:
+                JarvisLog.notice(category: .network, event: "lanTransfer.cancelled", result: "cancelled", fields: fields)
+            }
+        }
         memoryPressureMonitor = JarvisMemoryPressureMonitor {
             Task { @MainActor in
                 JarvisThumbnailCache.purge()

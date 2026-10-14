@@ -16,6 +16,8 @@ final class HTTPServer: @unchecked Sendable {
     private var listener: NWListener?
     private var clients: [UUID: HTTPConnection] = [:]
     private var sessions: [String: Date] = [:]
+    private var transferRecords: [UUID: Transfer] = [:]
+    private var transferOrder: [UUID] = []
     private var stopped = false
 
     init(ip: String, token: String, sharedDirectory: URL, receivedDirectory: URL, maxBytes: Int64) {
@@ -39,7 +41,17 @@ final class HTTPServer: @unchecked Sendable {
     }
 
     func cancel(_ id: UUID) {
-        queue.async { self.clients[id]?.cancel() }
+        queue.async { _ = self.cancelTransfer(id) }
+    }
+
+    fileprivate func cancelTransfer(_ id: UUID) -> Bool {
+        guard let client = clients.values.first(where: { $0.transferID == id }) else { return false }
+        client.cancel()
+        return true
+    }
+
+    fileprivate func transferRecord(_ id: UUID) -> Transfer? {
+        transferRecords[id]
     }
 
     private func listen(port: UInt16) {
@@ -80,6 +92,16 @@ final class HTTPServer: @unchecked Sendable {
     }
 
     fileprivate func emit(_ transfer: Transfer) {
+        if transferRecords[transfer.id] == nil {
+            transferOrder.insert(transfer.id, at: 0)
+        }
+        transferRecords[transfer.id] = transfer
+        if transferOrder.count > 100 {
+            for id in transferOrder.dropFirst(100) {
+                transferRecords.removeValue(forKey: id)
+            }
+            transferOrder = Array(transferOrder.prefix(100))
+        }
         onTransfer?(transfer)
     }
 
@@ -127,6 +149,9 @@ final class HTTPConnection: @unchecked Sendable {
     private var closed = false
     private var rejectedRemaining: Int64?
     private var rejectionResponseSent = false
+    fileprivate var transferID: UUID? {
+        transfer?.id
+    }
 
     init(connection: NWConnection, server: HTTPServer) {
         self.connection = connection; self.server = server
@@ -235,12 +260,30 @@ final class HTTPConnection: @unchecked Sendable {
             sendHeaders(200, extra: ["Content-Type: text/html; charset=utf-8", "Set-Cookie: lan_session=\(session); HttpOnly; SameSite=Strict; Path=/", "Cache-Control: no-store"], length: Int64(html.count)) { [weak self] in self?.send(html) }
             return
         }
-        guard server.session(for: headers) != nil else { respond(401, "会话已过期，请重新扫描二维码"); return }
+        let session = server.session(for: headers)
+        let downloadTokenIsValid = (method == "GET" || method == "HEAD")
+            && components.path == "/api/file" && query["t"] == server.token
+        guard session != nil || downloadTokenIsValid else {
+            respond(401, "会话已过期，请重新扫描二维码")
+            return
+        }
         switch (method, components.path) {
         case ("GET", "/api/files"): listFiles()
+        case ("GET", "/api/transfer"):
+            guard let value = query["id"], let id = UUID(uuidString: value) else { respond(400, "无效任务"); return }
+            transferStatus(id)
+        case ("POST", "/api/cancel"):
+            guard let value = query["id"], let id = UUID(uuidString: value) else { respond(400, "无效任务"); return }
+            guard server.cancelTransfer(id) else { respond(404, "任务不存在"); return }
+            respond(200, "已取消")
         case ("GET", "/api/file"), ("HEAD", "/api/file"):
             guard let name = query["name"] else { respond(400, "缺少文件名"); return }
-            download(name: name, range: headers["range"], headOnly: method == "HEAD")
+            download(
+                name: name,
+                range: headers["range"],
+                headOnly: method == "HEAD",
+                requestedID: query["id"].flatMap(UUID.init(uuidString:))
+            )
         case ("PUT", "/api/upload"):
             guard let name = query["name"] else { respond(400, "缺少文件名"); return }
             guard headers["transfer-encoding"] == nil, let lengthString = headers["content-length"],
@@ -255,12 +298,28 @@ final class HTTPConnection: @unchecked Sendable {
     }
 
     private func listFiles() {
-        let urls = (try? FileManager.default.contentsOfDirectory(at: server.sharedDirectory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey], options: [.skipsHiddenFiles])) ?? []
-        let files = urls.compactMap { url -> [String: Any]? in
-            guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]), values.isRegularFile == true, values.isSymbolicLink != true else { return nil }
-            return ["name": url.lastPathComponent, "size": values.fileSize ?? 0]
-        }.sorted { ($0["name"] as? String ?? "") < ($1["name"] as? String ?? "") }
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: server.sharedDirectory, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles]
+        )) ?? []
+        let files = urls.compactMap { url -> (name: String, size: Int, modified: Date)? in
+            guard let values = try? url.resourceValues(forKeys: keys),
+                  values.isRegularFile == true, values.isSymbolicLink != true else { return nil }
+            return (url.lastPathComponent, values.fileSize ?? 0, values.contentModificationDate ?? .distantPast)
+        }.sorted { $0.modified > $1.modified }
+            .prefix(10)
+            .map { ["name": $0.name, "size": $0.size] as [String: Any] }
         let data = (try? JSONSerialization.data(withJSONObject: files)) ?? Data("[]".utf8)
+        sendHeaders(200, extra: ["Content-Type: application/json; charset=utf-8", "Cache-Control: no-store"], length: Int64(data.count)) { [weak self] in self?.send(data) }
+    }
+
+    private func transferStatus(_ id: UUID) {
+        guard let task = server.transferRecord(id) else { respond(404, "任务不存在"); return }
+        let data = (try? JSONSerialization.data(withJSONObject: [
+            "status": task.status.rawValue,
+            "done": task.done,
+            "total": task.total
+        ])) ?? Data("{}".utf8)
         sendHeaders(200, extra: ["Content-Type: application/json; charset=utf-8", "Cache-Control: no-store"], length: Int64(data.count)) { [weak self] in self?.send(data) }
     }
 
@@ -321,7 +380,7 @@ final class HTTPConnection: @unchecked Sendable {
         } catch { fail("保存失败：\(error.localizedDescription)") }
     }
 
-    private func download(name: String, range: String?, headOnly: Bool) {
+    private func download(name: String, range: String?, headOnly: Bool, requestedID: UUID?) {
         guard validName(name) else { respond(400, "无效文件名"); return }
         let url = server.sharedDirectory.appendingPathComponent(name)
         guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]), values.isRegularFile == true, values.isSymbolicLink != true,
@@ -347,16 +406,22 @@ final class HTTPConnection: @unchecked Sendable {
             status = 206
         }
         let length = total == 0 ? 0 : end - start + 1
-        let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "file"
-        var extra = ["Content-Type: application/octet-stream", "Content-Disposition: attachment; filename*=UTF-8''\(encoded)", "Accept-Ranges: bytes"]
+        let rfc5987Safe = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$&+-.^_|~")
+        let encoded = name.addingPercentEncoding(withAllowedCharacters: rfc5987Safe) ?? "file"
+        var extra = [
+            "Content-Type: application/octet-stream",
+            "Content-Disposition: attachment; filename=\"download\"; filename*=UTF-8''\(encoded)",
+            "Accept-Ranges: bytes",
+            "Cache-Control: no-store"
+        ]
         if status == 206 {
             extra.append("Content-Range: bytes \(start)-\(end)/\(total)")
         }
         if headOnly {
-            try? handle.close(); sendHeaders(status, extra: extra, length: length) { [weak self] in self?.close() }; return
+            try? handle.close(); sendHeaders(status, extra: extra, length: length) { [weak self] in self?.finishOutput() }; return
         }
         file = handle
-        transfer = Transfer(id: id, name: name, direction: .download, total: length)
+        transfer = Transfer(id: requestedID ?? id, name: name, direction: .download, total: length)
         server.emit(transfer!)
         do { try handle.seek(toOffset: UInt64(start)) }
         catch { fail("读取失败"); return }
@@ -366,8 +431,13 @@ final class HTTPConnection: @unchecked Sendable {
     private func sendFile(remaining: Int64) {
         guard !closed else { return }
         if remaining == 0 {
-            var completed = transfer!; completed.done = completed.total; completed.status = .completed; server.emit(completed)
-            close(); return
+            guard var completed = transfer else { return }
+            completed.done = completed.total
+            completed.status = .completed
+            transfer = completed
+            server.emit(completed)
+            finishOutput()
+            return
         }
         do {
             let data = try file!.read(upToCount: Int(min(262_144, remaining))) ?? Data()
@@ -436,15 +506,31 @@ final class HTTPConnection: @unchecked Sendable {
             if let error {
                 self?.fail(error.localizedDescription)
             } else {
-                self?.close()
+                self?.finishOutput()
             }
         })
+    }
+
+    private func finishOutput() {
+        connection.send(
+            content: nil,
+            contentContext: .finalMessage,
+            isComplete: true,
+            completion: .contentProcessed { [weak self] error in
+                guard let self else { return }
+                if let error {
+                    self.fail(error.localizedDescription)
+                    return
+                }
+                self.server.queue.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.close() }
+            }
+        )
     }
 
     private func fail(_ reason: String) {
         guard !closed else { return }
         if var task = transfer, task.status == .active {
-            task.status = reason == "已取消" ? .cancelled : .failed
+            task.status = reason == "已取消" || reason == "连接已取消" ? .cancelled : .failed
             task.detail = reason; server.emit(task)
         }
         close()
