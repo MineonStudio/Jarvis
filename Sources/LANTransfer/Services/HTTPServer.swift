@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import UniformTypeIdentifiers
 
 final class HTTPServer: @unchecked Sendable {
     let ip: String
@@ -508,7 +509,8 @@ final class HTTPConnection: @unchecked Sendable {
             download(
                 taskID: id,
                 range: headers["range"],
-                headOnly: method == "HEAD"
+                headOnly: method == "HEAD",
+                inline: query["inline"] == "1"
             )
         case ("PUT", "/api/upload"):
             guard let name = query["name"], let value = query["id"], let taskID = UUID(uuidString: value)
@@ -533,7 +535,7 @@ final class HTTPConnection: @unchecked Sendable {
             "id": task.id.uuidString,
             "name": task.name,
             "size": task.total,
-            "displaySize": ByteCountFormatter.string(fromByteCount: task.total, countStyle: .file)
+            "displaySize": TransferByteCount.string(from: task.total)
         ])) ?? Data("{}".utf8)
         sendHeaders(200, extra: ["Content-Type: application/json; charset=utf-8", "Cache-Control: no-store"], length: Int64(data.count)) { [weak self] in self?.send(data) }
     }
@@ -613,7 +615,7 @@ final class HTTPConnection: @unchecked Sendable {
         } catch { fail("保存失败：\(error.localizedDescription)") }
     }
 
-    private func download(taskID: UUID, range: String?, headOnly: Bool) {
+    private func download(taskID: UUID, range: String?, headOnly: Bool, inline: Bool = false) {
         guard let task = server.transferRecord(taskID), task.direction == .download,
               task.status != .cancelled, task.status != .failed,
               let url = task.resourceURL else { respond(404, "任务不存在"); return }
@@ -648,9 +650,15 @@ final class HTTPConnection: @unchecked Sendable {
         let length = total == 0 ? 0 : end - start + 1
         let rfc5987Safe = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$&+-.^_|~")
         let encoded = name.addingPercentEncoding(withAllowedCharacters: rfc5987Safe) ?? "file"
+        let mime = inline
+            ? (UTType(filenameExtension: (name as NSString).pathExtension)?.preferredMIMEType ?? "application/octet-stream")
+            : "application/octet-stream"
+        let disposition = inline
+            ? "inline; filename*=UTF-8''\(encoded)"
+            : "attachment; filename=\"download\"; filename*=UTF-8''\(encoded)"
         var extra = [
-            "Content-Type: application/octet-stream",
-            "Content-Disposition: attachment; filename=\"download\"; filename*=UTF-8''\(encoded)",
+            "Content-Type: \(mime)",
+            "Content-Disposition: \(disposition)",
             "Accept-Ranges: bytes",
             "Cache-Control: no-store"
         ]

@@ -24,6 +24,7 @@ import Security
     private var server: HTTPServer?
     private var addressTimer: Timer?
     private var lastIP: String?
+    private var deletedIDs: Set<UUID> = []
     private let importer = SharedFileImporter()
     private let historyURL: URL
     public var canStartTask: Bool {
@@ -59,7 +60,7 @@ import Security
         else { errorMessage = "局域网传输目录不可用。"; return }
         guard let ip = NetworkAddress.localIPv4() else { errorMessage = "找不到局域网 IPv4 地址。请先连接 Wi-Fi 或手机热点。"; return }
         errorMessage = ""
-        var tokenBytes = [UInt8](repeating: 0, count: 16)
+        var tokenBytes = [UInt8](repeating: 0, count: 4)
         guard SecRandomCopyBytes(kSecRandomDefault, tokenBytes.count, &tokenBytes) == errSecSuccess else { errorMessage = "无法生成访问令牌。"; return }
         let token = tokenBytes.map { String(format: "%02x", $0) }.joined()
         let server = HTTPServer(ip: ip, token: token, sharedDirectory: sharedDirectory, receivedDirectory: receivedDirectory, maxBytes: Self.maxFileBytes)
@@ -98,6 +99,25 @@ import Security
         server?.cancel(id)
     }
 
+    public func delete(_ id: UUID) {
+        guard let index = transfers.firstIndex(where: { $0.id == id }) else { return }
+        let transfer = transfers[index]
+        if let url = transfer.resourceURL, FileManager.default.fileExists(atPath: url.path), isManagedFile(url) {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                importMessage = "无法删除源文件：\(error.localizedDescription)"
+                importHasErrors = true
+                return
+            }
+        }
+        if incomingOffer?.id == id { incomingOffer = nil }
+        if transfer.isInProgress {
+            server?.cancel(id)
+        }
+        removeRecord(id)
+    }
+
     public func acceptIncoming(_ id: UUID) {
         guard incomingOffer?.id == id else { return }
         incomingOffer = nil
@@ -113,6 +133,17 @@ import Security
             return
         }
         NSWorkspace.shared.open(url)
+    }
+
+    @discardableResult
+    public func copyResource(_ transfer: Transfer) -> Bool {
+        guard let url = transfer.resourceURL,
+              let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+              values.isRegularFile == true, values.isSymbolicLink != true else {
+            return false
+        }
+        NSPasteboard.general.clearContents()
+        return NSPasteboard.general.writeObjects([url as NSURL])
     }
 
     public func resend(_ transfer: Transfer) {
@@ -177,6 +208,7 @@ import Security
     }
 
     private func upsert(_ transfer: Transfer) {
+        guard !deletedIDs.contains(transfer.id) else { return }
         let previousStatus = transfers.first(where: { $0.id == transfer.id })?.status
         if let index = transfers.firstIndex(where: { $0.id == transfer.id }) {
             transfers[index] = transfer
@@ -199,6 +231,23 @@ import Security
     private func persistHistory() {
         guard let data = try? JSONEncoder().encode(transfers) else { return }
         try? data.write(to: historyURL, options: .atomic)
+    }
+
+    private func removeRecord(_ id: UUID) {
+        deletedIDs.insert(id)
+        transfers.removeAll { $0.id == id }
+        persistHistory()
+    }
+
+    private func isManagedFile(_ url: URL) -> Bool {
+        let path = url.resolvingSymlinksInPath().standardizedFileURL.path
+        return isInside(path, directory: sharedDirectory) || isInside(path, directory: receivedDirectory)
+    }
+
+    private func isInside(_ path: String, directory: URL) -> Bool {
+        let root = directory.resolvingSymlinksInPath().standardizedFileURL.path
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        return path.hasPrefix(prefix)
     }
 
     private func adoptExistingFiles(fileManager: FileManager) {

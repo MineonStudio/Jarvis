@@ -26,18 +26,23 @@ struct ContentView: View {
     }
 
     private var activeContent: some View {
-        ScrollView {
-            VStack(spacing: 16) {
+        GeometryReader { geometry in
+            let padding: CGFloat = 16
+            let spacing: CGFloat = 16
+            let innerWidth = max(0, geometry.size.width - padding * 2)
+            let innerHeight = max(0, geometry.size.height - padding * 2)
+            let availableWidth = max(0, innerWidth - spacing)
+            HStack(alignment: .top, spacing: spacing) {
                 connectionPanel
-                HStack(alignment: .top, spacing: 16) {
+                    .frame(width: availableWidth * 2 / 3, height: innerHeight)
+                VStack(spacing: 12) {
                     sendPanel
                     receivePanel
                 }
+                .frame(width: availableWidth / 3, height: innerHeight)
             }
-            .padding(20)
+            .padding(padding)
         }
-        .scrollIndicators(.hidden)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var waitingContent: some View {
@@ -62,7 +67,7 @@ struct ContentView: View {
     }
 
     private var connectionPanel: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 18) {
             qrCode
             VStack(alignment: .leading, spacing: 13) {
                 Label("连接设备", systemImage: "iphone.gen3.radiowaves.left.and.right")
@@ -91,11 +96,8 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .padding(20)
-        .frame(height: 228)
-        .frame(maxWidth: .infinity)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 20))
         .onChange(of: store.address) { _, _ in copied = false }
     }
 
@@ -124,25 +126,27 @@ struct ContentView: View {
             Image(nsImage: image)
                 .interpolation(.none)
                 .resizable()
-                .frame(width: 140, height: 140)
+                .aspectRatio(1, contentMode: .fit)
+                .frame(maxHeight: .infinity)
+                .layoutPriority(1)
                 .padding(8)
-                .background(.white, in: RoundedRectangle(cornerRadius: 15))
+                .background(.white, in: RoundedRectangle(cornerRadius: 14))
                 .accessibilityLabel("连接二维码")
         }
     }
 
     private var sendPanel: some View {
-        directionPanel("发送到其他设备", icon: "square.and.arrow.up", tint: .blue) {
+        directionPanel("发送到其他设备", icon: "square.and.arrow.up", tint: .accentColor) {
             if let task = store.transfers.first(where: { $0.direction == .download && $0.isInProgress }) {
-                transferAnimation(task, tint: .blue)
+                transferAnimation(task, tint: .accentColor)
             } else if store.isImporting {
-                VStack(spacing: 12) {
+                HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("正在准备")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity, minHeight: 116)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 uploadDropZone
             }
@@ -156,19 +160,15 @@ struct ContentView: View {
     }
 
     private var receivePanel: some View {
-        directionPanel("从其他设备接收", icon: "square.and.arrow.down", tint: .green) {
+        directionPanel("从其他设备接收", icon: "square.and.arrow.down", tint: .accentColor) {
             if let task = store.transfers.first(where: { $0.direction == .upload && $0.isInProgress }) {
-                transferAnimation(task, tint: .green)
+                transferAnimation(task, tint: .accentColor)
             } else {
-                VStack(spacing: 10) {
-                    Image(systemName: "square.and.arrow.down")
-                        .font(.system(size: 28, weight: .light))
-                        .foregroundStyle(.green)
-                    Text("等待文件")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 116)
+                Text("等待文件")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
             }
         }
     }
@@ -177,39 +177,29 @@ struct ContentView: View {
         _ title: String, icon: String, tint: Color,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 9) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
                     .foregroundStyle(tint)
-                    .frame(width: 28, height: 28)
-                    .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 8))
+                    .frame(width: 22, height: 22)
+                    .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 6))
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
             }
             content()
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 204, alignment: .topLeading)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 20))
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func transferAnimation(_ task: Transfer, tint: Color) -> some View {
-        VStack(spacing: 13) {
-            Image(systemName: task.direction == .download ? "square.and.arrow.up" : "square.and.arrow.down")
-                .font(.system(size: 27, weight: .light))
-                .foregroundStyle(tint)
-                .frame(width: 54, height: 54)
-                .background(tint.opacity(0.11), in: Circle())
-                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
-            if task.status == .active {
-                ProgressView(value: task.fraction)
-                    .tint(tint)
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(height: 4)
-            }
+        VStack(spacing: 8) {
             HStack(spacing: 6) {
+                Image(systemName: task.direction == .download ? "square.and.arrow.up" : "square.and.arrow.down")
+                    .font(.system(size: 16, weight: .light))
+                    .foregroundStyle(tint)
+                    .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
                 Text(task.status.rawValue)
                 if task.status == .active {
                     Text("\(Int(task.fraction * 100))%")
@@ -218,26 +208,28 @@ struct ContentView: View {
             }
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(.secondary)
+            if task.status == .active {
+                ProgressView(value: task.fraction)
+                    .tint(tint)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 116)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
     }
 
     private var uploadDropZone: some View {
         Button { store.chooseSharedFiles() } label: {
-            VStack(spacing: 10) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 25, weight: .light))
-                    .foregroundStyle(.tint)
-                Text("选择文件")
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .frame(maxWidth: .infinity, minHeight: 116)
-            .background(Color.accentColor.opacity(isDropTargeted ? 0.12 : 0.045), in: RoundedRectangle(cornerRadius: 14))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(Color.accentColor.opacity(isDropTargeted ? 0.7 : 0.18), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-            }
+            Text("选择文件")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.accentColor.opacity(isDropTargeted ? 0.12 : 0.045), in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.accentColor.opacity(isDropTargeted ? 0.7 : 0.18), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+                }
         }
         .buttonStyle(.plain)
         .disabled(!store.canStartTask)

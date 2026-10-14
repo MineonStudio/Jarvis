@@ -99,6 +99,10 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(second.1, Data("world".utf8))
         XCTAssertEqual(try status(id, in: harness)["status"] as? String, TransferStatus.completed.rawValue)
         XCTAssertEqual(try request("api/offer", base: harness.base, cookie: harness.cookie).0.statusCode, 204)
+        let preview = try request("api/file?id=\(id.uuidString)&t=test-secret&inline=1", base: harness.base)
+        XCTAssertEqual(preview.0.statusCode, 200)
+        XCTAssertEqual(preview.0.value(forHTTPHeaderField: "Content-Type"), "text/plain")
+        XCTAssertTrue(preview.0.value(forHTTPHeaderField: "Content-Disposition")?.hasPrefix("inline") == true)
     }
 
     func testPhoneUploadWaitsForMacAcceptanceAndSavesReceivedFile() throws {
