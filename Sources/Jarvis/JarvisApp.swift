@@ -40,6 +40,10 @@ struct JarvisApp: App {
                 "reason": transfer.status == .failed ? transfer.detail : ""
             ]
             switch transfer.status {
+            case .pending:
+                JarvisLog.info(category: .network, event: "lanTransfer.waiting", fields: fields)
+            case .accepted:
+                JarvisLog.info(category: .network, event: "lanTransfer.accepted", fields: fields)
             case .active:
                 JarvisLog.info(category: .network, event: "lanTransfer.started", fields: fields)
             case .completed:
@@ -91,16 +95,13 @@ struct JarvisApp: App {
 private struct JarvisRootView: View {
     let appModel: AppModel
     @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var shareStore = ShareStore.shared
 
     @StateObject private var mainWindowController = JarvisMainWindowController()
     @State private var isSettingsPresented = false
-    @State private var isLANTransferTasksPresented = false
 
     var body: some View {
-        ContentView(
-            isSettingsPresented: $isSettingsPresented,
-            isLANTransferTasksPresented: $isLANTransferTasksPresented
-        )
+        ContentView(isSettingsPresented: $isSettingsPresented)
         .environment(appModel)
         .environmentObject(appModel.resumeWorkspace)
         .tint(appModel.accentColorPreference.resolvedColor)
@@ -119,16 +120,26 @@ private struct JarvisRootView: View {
                     .environment(appModel)
             }
         }
+        .alert("接收文件", isPresented: Binding(
+            get: { shareStore.incomingOffer != nil },
+            set: { _ in }
+        )) {
+            Button("取消", role: .cancel) {
+                if let offer = shareStore.incomingOffer { shareStore.cancel(offer.id) }
+            }
+            Button("下载") {
+                if let offer = shareStore.incomingOffer { shareStore.acceptIncoming(offer.id) }
+            }
+        } message: {
+            if let offer = shareStore.incomingOffer {
+                Text("\(offer.name) · \(ByteCountFormatter.string(fromByteCount: offer.total, countStyle: .file))")
+            }
+        }
         .background {
             SettingsOverlayAnchor(
                 isPresented: $isSettingsPresented,
                 app: appModel,
                 content: .settings
-            )
-            SettingsOverlayAnchor(
-                isPresented: $isLANTransferTasksPresented,
-                app: appModel,
-                content: .lanTransferTasks
             )
         }
         .overlay(alignment: .bottom) {

@@ -12,6 +12,15 @@ public struct LANTransferView: View {
 }
 
 @MainActor
+public struct LANTransferTasksView: View {
+    public init() {}
+
+    public var body: some View {
+        TransferTaskPanel(store: ShareStore.shared)
+    }
+}
+
+@MainActor
 public struct LANTransferCommands: Commands {
     @ObservedObject private var store = ShareStore.shared
 

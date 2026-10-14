@@ -755,7 +755,6 @@ struct JarvisCenteredModalOverlay<Content: View>: View {
 
 enum JarvisModalContent {
     case settings
-    case lanTransferTasks
 }
 
 /// Installs the settings card above the window's AppKit sidebar and toolbar.
@@ -846,14 +845,7 @@ private struct SettingsOverlayRoot: View {
     let content: JarvisModalContent
 
     var body: some View {
-        Group {
-            switch content {
-            case .settings:
-                SettingsModalOverlay(isPresented: $isPresented)
-            case .lanTransferTasks:
-                LANTransferTasksModalOverlay(isPresented: $isPresented)
-            }
-        }
+        SettingsModalOverlay(isPresented: $isPresented)
         .environment(app)
         .tint(app.accentColorPreference.resolvedColor)
         .accentColor(app.accentColorPreference.resolvedColor)

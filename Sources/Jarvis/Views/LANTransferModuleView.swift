@@ -3,7 +3,6 @@ import LANTransfer
 import SwiftUI
 
 struct LANTransferModuleView: View {
-    @Binding var isTasksPresented: Bool
     @ObservedObject private var store = ShareStore.shared
 
     var body: some View {
@@ -29,22 +28,25 @@ struct LANTransferModuleView: View {
                 }
             },
             trailingToolbar: {
-                ToolbarItem(id: "lan-transfer.tasks", placement: .automatic) {
-                    Button {
-                        isTasksPresented = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.up.arrow.down")
-                            Text("传输任务")
-                        }
-                    }
-                    .buttonStyle(JarvisToolbarButtonStyle.menu())
-                    .help("查看局域网传输任务")
-                }
+                ToolbarSpacer(.fixed, placement: .automatic)
             },
             content: {
-                LANTransferView()
-                    .jarvisModulePanel()
+                GeometryReader { geometry in
+                    let spacing: CGFloat = 12
+                    let availableHeight = max(0, geometry.size.height - spacing)
+                    VStack(spacing: spacing) {
+                        LANTransferView()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: availableHeight * 2 / 3)
+                            .jarvisModulePanel()
+
+                        LANTransferTasksView()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: availableHeight / 3)
+                            .jarvisModulePanel()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         )
     }
