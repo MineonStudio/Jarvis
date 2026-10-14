@@ -173,9 +173,9 @@ struct ContentView: View {
         }
     }
 
-    private func directionPanel<Content: View>(
+    private func directionPanel(
         _ title: String, icon: String, tint: Color,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: () -> some View
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {

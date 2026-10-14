@@ -1,5 +1,5 @@
-import AVFoundation
 import AppKit
+import AVFoundation
 import Combine
 import ImageIO
 import SwiftUI
@@ -8,7 +8,10 @@ import UniformTypeIdentifiers
 enum TransferCardMetrics {
     static let height: CGFloat = 112
     static let padding: CGFloat = 10
-    static var thumb: CGFloat { height - padding * 2 }
+    static var thumb: CGFloat {
+        height - padding * 2
+    }
+
     static let corner: CGFloat = 14
 }
 
@@ -46,7 +49,9 @@ public struct TransferRow: View {
     }
 
     private var statusColor: Color {
-        if resourceMissing { return .orange }
+        if resourceMissing {
+            return .orange
+        }
         switch transfer.status {
         case .completed: return .green
         case .failed: return .red
@@ -129,10 +134,14 @@ public struct TransferRow: View {
             withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.16)) {
                 isHovered = hovering
             }
-            if !hovering { copied = false }
+            if !hovering {
+                copied = false
+            }
         }
         .onTapGesture(count: 2) {
-            if hasFile { onOpen() }
+            if hasFile {
+                onOpen()
+            }
         }
         .contextMenu { contextActions }
         .accessibilityElement(children: .contain)
@@ -141,7 +150,11 @@ public struct TransferRow: View {
                 ? "\(transfer.name)，\(statusText)，\(Int(transfer.fraction * 100))%"
                 : "\(transfer.name)，\(Int(transfer.fraction * 100))%"
         )
-        .accessibilityAction(named: "打开") { if hasFile { onOpen() } }
+        .accessibilityAction(named: "打开") {
+            if hasFile {
+                onOpen()
+            }
+        }
         .accessibilityAction(named: "复制") { copyFile() }
         .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
             resourceCheck &+= 1
@@ -261,13 +274,13 @@ private struct TransferFilePreview: View {
                 }
             }
             .task(id: "\(url?.path ?? "")|\(name)") {
-            let fileURL = url
-            let fileName = name
-            let pixelSize = TransferCardMetrics.thumb * 2
-            image = await Task.detached(priority: .utility) {
-                await TransferFileIcon.image(url: fileURL, name: fileName, pixelSize: pixelSize)
-            }.value
-        }
+                let fileURL = url
+                let fileName = name
+                let pixelSize = TransferCardMetrics.thumb * 2
+                image = await Task.detached(priority: .utility) {
+                    await TransferFileIcon.image(url: fileURL, name: fileName, pixelSize: pixelSize)
+                }.value
+            }
     }
 }
 
@@ -299,7 +312,9 @@ private enum TransferFileIcon {
 
     private static func isVideo(url: URL, name: String) -> Bool {
         let ext = (url.pathExtension.isEmpty ? (name as NSString).pathExtension : url.pathExtension).lowercased()
-        if ["mp4", "mov", "m4v", "avi", "mkv", "webm", "mpg", "mpeg"].contains(ext) { return true }
+        if ["mp4", "mov", "m4v", "avi", "mkv", "webm", "mpg", "mpeg"].contains(ext) {
+            return true
+        }
         guard let type = UTType(filenameExtension: ext) else { return false }
         return type.conforms(to: .movie) || type.conforms(to: .video)
     }

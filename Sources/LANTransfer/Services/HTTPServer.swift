@@ -111,7 +111,8 @@ final class HTTPServer: @unchecked Sendable {
         guard let url = task.resourceURL,
               let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]),
               values.isRegularFile == true, values.isSymbolicLink != true,
-              values.fileSize.map(Int64.init) == task.total else {
+              values.fileSize.map(Int64.init) == task.total
+        else {
             failMissingResource(task.id)
             return nil
         }
@@ -218,7 +219,9 @@ final class HTTPServer: @unchecked Sendable {
         guard let existing = transferRecords[id], existing.name == name, existing.total == total,
               existing.direction == .download, existing.status != .cancelled, existing.status != .failed
         else { return false }
-        if existing.status == .completed { return true }
+        if existing.status == .completed {
+            return true
+        }
         var progress = downloads[id] ?? DownloadProgress(name: name, total: total)
         progress.inFlight[connectionID] = start ..< start
         progress.idleGeneration += 1
@@ -621,7 +624,8 @@ final class HTTPConnection: @unchecked Sendable {
               let url = task.resourceURL else { respond(404, "任务不存在"); return }
         let name = task.name
         guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]), values.isRegularFile == true, values.isSymbolicLink != true,
-              let size = values.fileSize, let handle = try? FileHandle(forReadingFrom: url) else {
+              let size = values.fileSize, let handle = try? FileHandle(forReadingFrom: url)
+        else {
             server.failMissingResource(taskID)
             respond(410, "发送文件已不存在")
             return

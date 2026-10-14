@@ -11,7 +11,9 @@ public enum TransferTaskFilter: String, CaseIterable, Identifiable, Hashable {
     case received
     case sent
 
-    public var id: String { rawValue }
+    public var id: String {
+        rawValue
+    }
 
     public var title: String {
         switch self {
@@ -56,6 +58,7 @@ public struct Transfer: Identifiable, Codable {
     public var isInProgress: Bool {
         status == .pending || status == .accepted || status == .active
     }
+
     public var fraction: Double {
         total > 0 ? min(1, Double(done) / Double(total)) : 0
     }

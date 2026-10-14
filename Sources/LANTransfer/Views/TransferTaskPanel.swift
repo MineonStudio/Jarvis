@@ -53,12 +53,18 @@ struct TransferTaskPanel: View {
             "删除这条传输任务？",
             isPresented: Binding(
                 get: { pendingDelete != nil },
-                set: { if !$0 { pendingDelete = nil } }
+                set: {
+                    if !$0 {
+                        pendingDelete = nil
+                    }
+                }
             ),
             titleVisibility: .visible
         ) {
             Button("删除", role: .destructive) {
-                if let pendingDelete { store.delete(pendingDelete.id) }
+                if let pendingDelete {
+                    store.delete(pendingDelete.id)
+                }
                 pendingDelete = nil
             }
             Button("取消", role: .cancel) {

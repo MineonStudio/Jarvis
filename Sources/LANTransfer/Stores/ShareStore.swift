@@ -43,7 +43,8 @@ import Security
             errorMessage = "无法建立局域网传输目录：\(error.localizedDescription)"
         }
         if let data = try? Data(contentsOf: historyURL),
-           var saved = try? JSONDecoder().decode([Transfer].self, from: data) {
+           var saved = try? JSONDecoder().decode([Transfer].self, from: data)
+        {
             for index in saved.indices where saved[index].isInProgress {
                 saved[index].status = .failed
                 saved[index].detail = "传输已中断"
@@ -95,7 +96,9 @@ import Security
     }
 
     public func cancel(_ id: UUID) {
-        if incomingOffer?.id == id { incomingOffer = nil }
+        if incomingOffer?.id == id {
+            incomingOffer = nil
+        }
         server?.cancel(id)
     }
 
@@ -111,7 +114,9 @@ import Security
                 return
             }
         }
-        if incomingOffer?.id == id { incomingOffer = nil }
+        if incomingOffer?.id == id {
+            incomingOffer = nil
+        }
         if transfer.isInProgress {
             server?.cancel(id)
         }
@@ -127,7 +132,8 @@ import Security
     public func openResource(_ transfer: Transfer) {
         guard let url = transfer.resourceURL,
               let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
-              values.isRegularFile == true, values.isSymbolicLink != true else {
+              values.isRegularFile == true, values.isSymbolicLink != true
+        else {
             importMessage = "文件已移除"
             importHasErrors = true
             return
@@ -139,7 +145,8 @@ import Security
     public func copyResource(_ transfer: Transfer) -> Bool {
         guard let url = transfer.resourceURL,
               let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
-              values.isRegularFile == true, values.isSymbolicLink != true else {
+              values.isRegularFile == true, values.isSymbolicLink != true
+        else {
             return false
         }
         NSPasteboard.general.clearContents()
@@ -149,7 +156,8 @@ import Security
     public func resend(_ transfer: Transfer) {
         guard canStartTask, let url = transfer.resourceURL,
               let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
-              values.isRegularFile == true, values.isSymbolicLink != true else {
+              values.isRegularFile == true, values.isSymbolicLink != true
+        else {
             importMessage = "文件已移除或当前无法发送"
             importHasErrors = true
             return

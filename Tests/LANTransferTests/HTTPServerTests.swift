@@ -38,8 +38,12 @@ final class HTTPServerTests: XCTestCase {
         var input = try URLRequest(url: XCTUnwrap(URL(string: path, relativeTo: base)?.absoluteURL))
         input.httpMethod = method
         input.httpBody = body
-        if let cookie { input.setValue(cookie, forHTTPHeaderField: "Cookie") }
-        if let range { input.setValue(range, forHTTPHeaderField: "Range") }
+        if let cookie {
+            input.setValue(cookie, forHTTPHeaderField: "Cookie")
+        }
+        if let range {
+            input.setValue(range, forHTTPHeaderField: "Range")
+        }
         let config = URLSessionConfiguration.ephemeral
         config.httpCookieStorage = nil
         let session = URLSession(configuration: config)
@@ -48,12 +52,16 @@ final class HTTPServerTests: XCTestCase {
         var requestError: Error?
         session.dataTask(with: input) { data, response, error in
             requestError = error
-            if let response = response as? HTTPURLResponse { output = (response, data ?? Data()) }
+            if let response = response as? HTTPURLResponse {
+                output = (response, data ?? Data())
+            }
             done.fulfill()
         }.resume()
         wait(for: [done], timeout: 5)
         session.invalidateAndCancel()
-        if let requestError { throw requestError }
+        if let requestError {
+            throw requestError
+        }
         return try XCTUnwrap(output)
     }
 
@@ -118,7 +126,9 @@ final class HTTPServerTests: XCTestCase {
 
         let accepted = expectation(description: "Mac accepted")
         harness.server.onTransfer = { transfer in
-            if transfer.id == id, transfer.status == .accepted { accepted.fulfill() }
+            if transfer.id == id, transfer.status == .accepted {
+                accepted.fulfill()
+            }
         }
         harness.server.acceptUpload(id)
         wait(for: [accepted], timeout: 5)

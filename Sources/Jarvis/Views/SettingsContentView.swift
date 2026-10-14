@@ -846,10 +846,10 @@ private struct SettingsOverlayRoot: View {
 
     var body: some View {
         SettingsModalOverlay(isPresented: $isPresented)
-        .environment(app)
-        .tint(app.accentColorPreference.resolvedColor)
-        .accentColor(app.accentColorPreference.resolvedColor)
-        .jarvisTheme(app.themePreference, systemColorScheme: app.systemColorScheme)
+            .environment(app)
+            .tint(app.accentColorPreference.resolvedColor)
+            .accentColor(app.accentColorPreference.resolvedColor)
+            .jarvisTheme(app.themePreference, systemColorScheme: app.systemColorScheme)
     }
 }
 
