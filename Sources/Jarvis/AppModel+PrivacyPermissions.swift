@@ -7,18 +7,18 @@ struct JarvisTaskPermissionPrompt: Equatable {
 
     var title: String {
         switch permission {
-        case .screenCapture: "截图需要屏幕录制权限"
+        case .screenCapture: "截图和会议记录需要屏幕录制权限"
         case .accessibility: "窗口布局需要辅助功能权限"
-        case .microphone: "会议记录需要麦克风权限"
+        case .microphone: "网页需要麦克风权限"
         case .camera: "此功能需要摄像头权限"
         }
     }
 
     var message: String {
         switch permission {
-        case .screenCapture: "macOS 需要授予屏幕录制权限，Jarvis 才能读取你选择的屏幕区域并完成截图。"
+        case .screenCapture: "macOS 需要授予屏幕录制权限，Jarvis 才能截图，并采集会议的系统音频。"
         case .accessibility: "macOS 需要授予辅助功能权限，Jarvis 才能调整其他应用窗口的位置和大小。"
-        case .microphone: "macOS 需要授予麦克风权限，Jarvis 才能录制会议中的声音。"
+        case .microphone: "macOS 需要授予麦克风权限，网页才能使用麦克风。"
         case .camera: "macOS 需要授予摄像头权限，Jarvis 才能使用摄像头。"
         }
     }

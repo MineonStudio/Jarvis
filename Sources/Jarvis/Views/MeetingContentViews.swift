@@ -28,9 +28,6 @@ struct MeetingView: View {
                 ToolbarItem(id: "meeting.recording", placement: .navigation) {
                     recordingToolbarButton
                 }
-                ToolbarItem(id: "meeting.captureMode", placement: .navigation) {
-                    captureModeToolbar
-                }
             },
             trailingToolbar: {
                 ToolbarItem(id: "meeting.copy", placement: .automatic) {
@@ -221,7 +218,7 @@ struct MeetingView: View {
             app.toggleMeetingRecording()
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "mic.fill")
+                Image(systemName: "speaker.wave.2.fill")
                 Text(isRecording
                     ? MeetingRecordingStyle.displayTitle(for: app.meetingElapsed)
                     : "开始录制"
@@ -240,32 +237,6 @@ struct MeetingView: View {
                 ? "结束录音，已录制 \(MeetingRecordingStyle.formatDuration(app.meetingElapsed))"
                 : "开始录制"
         )
-    }
-
-    private var captureModeToolbar: some View {
-        let isRecording = app.meetingCurrentRecordingID != nil
-        let activeMode = selectedRecord?.id == app.meetingCurrentRecordingID
-            ? selectedRecord?.resolvedCaptureMode ?? app.meetingCaptureMode
-            : app.meetingCaptureMode
-        return Menu {
-            ForEach(MeetingCaptureMode.allCases) { mode in
-                Button {
-                    app.setMeetingCaptureMode(mode)
-                } label: {
-                    if mode == app.meetingCaptureMode {
-                        Label(mode.title, systemImage: "checkmark")
-                    } else {
-                        Text(mode.title)
-                    }
-                }
-            }
-        } label: {
-            Text(isRecording ? activeMode.title : app.meetingCaptureMode.title)
-                .font(JarvisTypography.control)
-        }
-        .disabled(isRecording)
-        .accessibilityLabel("录音方式")
-        .accessibilityValue(isRecording ? activeMode.title : app.meetingCaptureMode.title)
     }
 }
 
@@ -1163,7 +1134,7 @@ private struct MeetingRecordingCard: View {
         JarvisCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
-                    Image(systemName: app.meetingRecordingPaused ? "pause.fill" : "mic.fill")
+                    Image(systemName: app.meetingRecordingPaused ? "pause.fill" : "speaker.wave.2.fill")
                         .foregroundStyle(.red)
                         .frame(width: 28, height: 28)
                         .background(Color.red.opacity(0.12), in: Circle())
@@ -1191,10 +1162,7 @@ private struct MeetingRecordingCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    labeledMeter("麦克风", level: meterLevel(app.meetingMicrophonePower))
-                    if activeCaptureMode == .dual {
-                        labeledMeter("系统音频", level: meterLevel(app.meetingSystemPower))
-                    }
+                    labeledMeter("系统音频", level: meterLevel(app.meetingSystemPower))
                     Text("已写入 \(byteText)")
                         .font(JarvisTypography.caption)
                         .foregroundStyle(Color.jarvisTextSecondary)
@@ -1203,22 +1171,8 @@ private struct MeetingRecordingCard: View {
         }
     }
 
-    private var activeCaptureMode: MeetingCaptureMode {
-        app.meetingRecords.first { $0.id == app.meetingCurrentRecordingID }?.resolvedCaptureMode
-            ?? app.meetingCaptureMode
-    }
-
     private var statusLine: String {
-        switch activeCaptureMode {
-        case .microphone:
-            "线下单麦。房间里的声音都会写入麦克风。"
-        case .dual:
-            "线上双轨。麦克风只在你说话时写入。\(systemTrackText)"
-        }
-    }
-
-    private var systemTrackText: String {
-        guard let power = app.meetingSystemPower else { return "系统音轨还没有声音。" }
+        guard let power = app.meetingSystemPower else { return "正在采集系统音频。" }
         return power < -45 ? "系统音轨当前没有声音。" : "系统音轨有声音。"
     }
 

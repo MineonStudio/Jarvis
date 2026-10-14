@@ -58,7 +58,7 @@ final class MeetingRecorder {
     private var inputDeviceListener: MeetingInputDeviceListener?
 
     var isRecording: Bool {
-        microphoneCapture?.isRunning == true
+        systemAudioStarted && isSessionOpen && !isPaused
     }
 
     var isSessionOpen: Bool {
@@ -101,25 +101,18 @@ final class MeetingRecorder {
 
     func start(
         meetingID: UUID,
-        microphoneURL: URL,
-        systemAudioURL: URL,
-        capturesSystemAudio: Bool
-    ) async throws -> MeetingRecordingSources {
+        systemAudioURL: URL
+    ) async throws {
         guard !isStopping else {
             throw MeetingRecorderError.stopInProgress
         }
-        guard !isSessionOpen else {
-            return MeetingRecordingSources(
-                systemAudioStarted: systemAudioStarted,
-                systemAudioErrorMessage: nil
-            )
-        }
+        guard !isSessionOpen else { return }
 
         self.meetingID = meetingID
-        directoryURL = microphoneURL.deletingLastPathComponent()
-        canonicalMicrophoneURL = microphoneURL
+        directoryURL = systemAudioURL.deletingLastPathComponent()
+        canonicalMicrophoneURL = nil
         canonicalSystemURL = systemAudioURL
-        self.capturesSystemAudio = capturesSystemAudio
+        capturesSystemAudio = true
         closedChunks = []
         microphoneChunkIndex = 0
         systemChunkIndex = 0
@@ -129,30 +122,15 @@ final class MeetingRecorder {
         isPaused = false
         wallAnchor = Date()
         startedAt = Date()
-        try beginMicrophoneChunk()
-        installInputDeviceListener()
-
-        guard capturesSystemAudio else {
-            systemAudioStarted = false
-            systemAudioStartedAt = nil
-            return MeetingRecordingSources(systemAudioStarted: false, systemAudioErrorMessage: nil)
-        }
 
         do {
             let chunkURL = try chunkURL(kind: .system, index: 0)
             try await systemAudioRecorder.start(to: chunkURL)
             systemAudioStarted = true
             systemAudioStartedAt = Date()
-            microphoneCapture?.setGateSpeech(true)
-            return MeetingRecordingSources(systemAudioStarted: true, systemAudioErrorMessage: nil)
         } catch {
-            systemAudioStarted = false
-            systemAudioStartedAt = nil
-            microphoneCapture?.setGateSpeech(false)
-            return MeetingRecordingSources(
-                systemAudioStarted: false,
-                systemAudioErrorMessage: error.localizedDescription
-            )
+            await discard()
+            throw error
         }
     }
 
@@ -207,7 +185,6 @@ final class MeetingRecorder {
 
     func resumeRecording() throws {
         guard isPaused else { return }
-        try beginMicrophoneChunk()
         if let pauseBegan {
             pausedDuration += Date().timeIntervalSince(pauseBegan)
         }
@@ -233,7 +210,10 @@ final class MeetingRecorder {
         let finishedChunks = closedChunks
         let capturedSystemAudio = systemAudioStarted && stats.didWriteAudio
             && finishedChunks.contains { $0.kind == .system }
-        var duration = finishedChunks.filter { $0.kind == .microphone }.reduce(0) { $0 + $1.duration }
+        var duration = finishedChunks.filter { $0.kind == .system }.reduce(0) { $0 + $1.duration }
+        if duration == 0 {
+            duration = finishedChunks.filter { $0.kind == .microphone }.reduce(0) { $0 + $1.duration }
+        }
         if let microphoneURL = canonicalMicrophoneURL {
             let micURLs = chunkURLs(kind: .microphone)
             if let assembled = try? await MeetingAudioAssembler.concatenate(urls: micURLs, outputURL: microphoneURL) {
@@ -243,7 +223,8 @@ final class MeetingRecorder {
         }
         if capturedSystemAudio, let systemURL = canonicalSystemURL {
             let systemURLs = chunkURLs(kind: .system)
-            if await (try? MeetingAudioAssembler.concatenate(urls: systemURLs, outputURL: systemURL)) != nil {
+            if let assembled = try? await MeetingAudioAssembler.concatenate(urls: systemURLs, outputURL: systemURL) {
+                duration = max(duration, assembled)
                 removeChunkFiles(kind: .system)
             }
         }
@@ -312,7 +293,7 @@ final class MeetingRecorder {
     }
 
     private func finalizeMicrophoneChunk(duration _: TimeInterval) -> [MeetingAudioChunk] {
-        guard let meetingID else { return [] }
+        guard let meetingID, microphoneCapture != nil else { return [] }
         let duration = microphoneCapture?.finish() ?? 0
         microphoneCapture = nil
         let chunk = MeetingAudioChunk(
@@ -825,12 +806,22 @@ enum MeetingAudioMixer {
     }
 
     static func makeMixedAudio(
-        microphoneURL: URL,
+        microphoneURL: URL?,
         systemAudioURL: URL?,
         outputURL: URL,
         systemAudioDelay: TimeInterval = 0
     ) async throws {
-        guard isReadyAudioFile(at: microphoneURL) else {
+        let microphoneReady = microphoneURL.map { isReadyAudioFile(at: $0) } ?? false
+        let systemReady = systemAudioURL.map { isReadyAudioFile(at: $0) } ?? false
+        if !microphoneReady, let systemAudioURL, systemReady {
+            if systemAudioURL.standardizedFileURL == outputURL.standardizedFileURL {
+                return
+            }
+            try? FileManager.default.removeItem(at: outputURL)
+            try FileManager.default.copyItem(at: systemAudioURL, to: outputURL)
+            return
+        }
+        guard let microphoneURL, microphoneReady else {
             throw Error.microphoneMissing
         }
 
@@ -839,7 +830,7 @@ enum MeetingAudioMixer {
         }
 
         try? FileManager.default.removeItem(at: outputURL)
-        guard let systemAudioURL, isReadyAudioFile(at: systemAudioURL) else {
+        guard let systemAudioURL, systemReady else {
             try FileManager.default.copyItem(at: microphoneURL, to: outputURL)
             return
         }

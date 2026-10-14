@@ -117,8 +117,8 @@ extension AppModel {
     func toggleMeetingRecording() {
         if meetingCurrentRecordingID == nil {
             refreshPermissionStatus()
-            guard microphonePermissionGranted else {
-                promptForTaskPermission(.microphone)
+            guard screenCapturePermissionGranted else {
+                promptForTaskPermission(.screenCapture)
                 return
             }
         }
@@ -156,10 +156,11 @@ extension AppModel {
             return
         }
 
-        guard await microphoneAccessForMeeting() else {
-            meetingProcessingState = .failed("缺少麦克风权限。请到系统设置 > 隐私与安全性 > 麦克风，允许贾维斯。")
-            refreshPermissionStatus()
-            showToast(JarvisFeedbackCopy.microphoneRequired)
+        refreshPermissionStatus()
+        guard screenCapturePermissionGranted else {
+            meetingProcessingState = .failed("缺少屏幕录制权限。请到系统设置 > 隐私与安全性 > 屏幕录制，允许贾维斯。")
+            promptForTaskPermission(.screenCapture)
+            showToast("请允许屏幕录制权限")
             return
         }
 
@@ -175,26 +176,18 @@ extension AppModel {
         }
         warnIfMeetingDiskIsLow()
 
-        let capturesSystemAudio = meetingCaptureMode == .dual
         do {
-            let sources = try await meetingRecorder.start(
+            try await meetingRecorder.start(
                 meetingID: id,
-                microphoneURL: recordingURLs.microphone,
-                systemAudioURL: recordingURLs.system,
-                capturesSystemAudio: capturesSystemAudio
+                systemAudioURL: recordingURLs.system
             )
-            let captureMode: MeetingCaptureMode = capturesSystemAudio && sources.systemAudioStarted
-                ? .dual
-                : .microphone
             if let reusedIndex = meetingRecords.firstIndex(where: { $0.id == id }), reused != nil {
                 var record = meetingRecords[reusedIndex]
                 record.duration = 0
-                record.microphoneAudioFileName = recordingURLs.microphone.lastPathComponent
-                record.systemAudioFileName = sources.systemAudioStarted
-                    ? recordingURLs.system.lastPathComponent
-                    : nil
+                record.microphoneAudioFileName = nil
+                record.systemAudioFileName = recordingURLs.system.lastPathComponent
                 record.language = language
-                record.captureMode = captureMode
+                record.captureMode = .system
                 record.status = .recording
                 record.errorMessage = nil
                 record.interruptedRecording = nil
@@ -208,12 +201,10 @@ extension AppModel {
                     title: title,
                     createdAt: now,
                     audioFileName: recordingURLs.mixed.lastPathComponent,
-                    microphoneAudioFileName: recordingURLs.microphone.lastPathComponent,
-                    systemAudioFileName: sources.systemAudioStarted
-                        ? recordingURLs.system.lastPathComponent
-                        : nil,
+                    microphoneAudioFileName: nil,
+                    systemAudioFileName: recordingURLs.system.lastPathComponent,
                     language: language,
-                    captureMode: captureMode,
+                    captureMode: .system,
                     awaitingAssets: false
                 )
                 try meetingRepository.save(record)
@@ -248,16 +239,11 @@ extension AppModel {
                     }
                     self.snapshotRecordingIfNeeded(id)
                     self.refreshMeetingRecordingMeters()
-                    self.warnIfMicrophoneStaysSilent()
                     self.warnIfSystemAudioStaysSilent()
                     self.updateMeetingMenuBarState()
                 }
             }
-            if sources.systemAudioErrorMessage != nil {
-                showToast(JarvisFeedbackCopy.recordingStartedWithoutSystemAudio)
-            } else {
-                showToast(JarvisFeedbackCopy.recordingStarted)
-            }
+            showToast(JarvisFeedbackCopy.recordingStarted)
         } catch {
             await meetingRecorder.discard()
             meetingProcessingState = .failed("开始录音失败：\(error.localizedDescription)")
@@ -670,11 +656,6 @@ extension AppModel {
         persistMeeting(meetingRecords[index])
     }
 
-    func setMeetingCaptureMode(_ mode: MeetingCaptureMode) {
-        meetingCaptureMode = mode
-        UserDefaults.standard.set(mode.rawValue, forKey: "jarvis.meeting.captureMode")
-    }
-
     func createMeetingPlaceholder() {
         let id = UUID()
         let urls = meetingRepository.recordingURLs(for: id)
@@ -981,7 +962,9 @@ extension AppModel {
         _ = await assembleMeetingChunksIfCanonicalMissing(recordID: record.id)
         let source = meetingRecords.first { $0.id == record.id } ?? record
         let audioURL = try meetingRepository.audioURL(for: source)
-        let microphoneURL = try meetingRepository.microphoneAudioURL(for: source)
+        let microphoneURL = source.resolvedCaptureMode.recordsMicrophone
+            ? try meetingRepository.microphoneAudioURL(for: source)
+            : nil
         var systemAudioURL = try meetingRepository.systemAudioURL(for: source)
         var systemAudioFileName = source.systemAudioFileName
         let recordingURLs = meetingRepository.recordingURLs(for: source.id)
@@ -1099,6 +1082,21 @@ extension AppModel {
         mixedURL: URL,
         systemAudioFileName: String?
     ) -> [MeetingTranscriptionTrack] {
+        if record.resolvedCaptureMode == .system,
+           let systemURL = readySystemAudioURL(
+               recordID: record.id,
+               preferredFileName: systemAudioFileName ?? record.systemAudioFileName
+           )
+        {
+            return [
+                MeetingTranscriptionTrack(
+                    url: systemURL,
+                    timeOffset: 0,
+                    diarize: true,
+                    trackID: "system"
+                )
+            ]
+        }
         let microphoneURL = (try? meetingRepository.microphoneAudioURL(for: record)) ?? mixedURL
         var tracks = [
             MeetingTranscriptionTrack(url: microphoneURL, timeOffset: 0, diarize: true, trackID: "mic")
@@ -1189,7 +1187,7 @@ extension AppModel {
     }
 
     private func warnIfSystemAudioStaysSilent() {
-        guard meetingCaptureMode == .dual, !meetingDidWarnAboutSystemSilence, !meetingRecordingPaused else { return }
+        guard !meetingDidWarnAboutSystemSilence, !meetingRecordingPaused else { return }
         guard let power = meetingRecorder.systemAveragePower() else { return }
         if power < -45 {
             if meetingSystemSilentSince == nil {
@@ -1215,7 +1213,13 @@ extension AppModel {
     /// A playable microphone file does not skip system slices that are still on disk.
     private func assembleMeetingChunksIfCanonicalMissing(recordID: UUID) async -> Bool {
         let urls = meetingRepository.recordingURLs(for: recordID)
-        let microphoneReady = await MeetingAudioAssembler.playableDuration(at: urls.microphone) != nil
+        guard let record = meetingRecords.first(where: { $0.id == recordID }) else {
+            return false
+        }
+        let recordsMicrophone = record.resolvedCaptureMode.recordsMicrophone
+        let microphoneReady = recordsMicrophone
+            ? await MeetingAudioAssembler.playableDuration(at: urls.microphone) != nil
+            : true
         let systemCAFReady = await MeetingAudioAssembler.playableDuration(at: urls.system) != nil
         let systemM4AReady = await MeetingAudioAssembler.playableDuration(at: urls.systemCompressed) != nil
         let systemReady = systemCAFReady || systemM4AReady
@@ -1224,10 +1228,7 @@ extension AppModel {
             systemReady: systemReady
         )
         if !plan.assembleMicrophone && !plan.assembleSystem {
-            return true
-        }
-        guard let record = meetingRecords.first(where: { $0.id == recordID }) else {
-            return microphoneReady
+            return recordsMicrophone ? microphoneReady : systemReady
         }
         let directory = urls.microphone.deletingLastPathComponent()
         let fileNames = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
@@ -1242,7 +1243,9 @@ extension AppModel {
         let system = plan.assembleSystem
             ? playable.filter { $0.chunk.kind == .system }
             : []
-        guard !microphone.isEmpty || !system.isEmpty else { return microphoneReady }
+        guard !microphone.isEmpty || !system.isEmpty else {
+            return recordsMicrophone ? microphoneReady : systemReady
+        }
 
         var consumedNames = Set<String>()
         var assembledDuration: TimeInterval = 0
@@ -1268,7 +1271,9 @@ extension AppModel {
             consumedNames.formUnion(system.map(\.url.lastPathComponent))
         }
         guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }) else {
-            return await MeetingAudioAssembler.playableDuration(at: urls.microphone) != nil
+            return recordsMicrophone
+                ? await MeetingAudioAssembler.playableDuration(at: urls.microphone) != nil
+                : systemReady
         }
         if assembledDuration > 0 {
             meetingRecords[index].microphoneAudioFileName = urls.microphone.lastPathComponent
@@ -1279,6 +1284,12 @@ extension AppModel {
             if meetingRecords[index].captureMode == nil {
                 meetingRecords[index].captureMode = .dual
             }
+            if !recordsMicrophone {
+                meetingRecords[index].duration = max(
+                    meetingRecords[index].duration,
+                    system.reduce(0) { $0 + $1.chunk.duration }
+                )
+            }
         }
         if !consumedNames.isEmpty {
             for name in consumedNames {
@@ -1288,7 +1299,13 @@ extension AppModel {
             meetingRecords[index].audioChunks.removeAll { consumedNames.contains($0.fileName) }
             persistMeeting(meetingRecords[index])
         }
-        return await MeetingAudioAssembler.playableDuration(at: urls.microphone) != nil
+        if recordsMicrophone {
+            return await MeetingAudioAssembler.playableDuration(at: urls.microphone) != nil
+        }
+        if await MeetingAudioAssembler.playableDuration(at: urls.system) != nil {
+            return true
+        }
+        return await MeetingAudioAssembler.playableDuration(at: urls.systemCompressed) != nil
     }
 
     func recoverInterruptedMeetingAudio() async {
@@ -1376,24 +1393,6 @@ extension AppModel {
 
     private func isReadyAudioFile(at url: URL) -> Bool {
         MeetingAudioMixer.isReadyAudioFile(at: url)
-    }
-
-    private func microphoneAccessForMeeting() async -> Bool {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:
-            return true
-        case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                AVCaptureDevice.requestAccess(for: .audio) { granted in
-                    continuation.resume(returning: granted)
-                }
-            }
-        case .denied, .restricted:
-            JarvisPrivacyPermissionAccess.openSettings(for: .microphone)
-            return false
-        @unknown default:
-            return false
-        }
     }
 
     func updateMeetingMenuBarState() {

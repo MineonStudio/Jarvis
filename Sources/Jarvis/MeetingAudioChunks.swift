@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 
 enum MeetingCaptureMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case system
     case dual
     case microphone
 
@@ -11,9 +12,14 @@ enum MeetingCaptureMode: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
+        case .system: "系统音频"
         case .dual: "线上双轨"
         case .microphone: "线下单麦"
         }
+    }
+
+    var recordsMicrophone: Bool {
+        self != .system
     }
 }
 

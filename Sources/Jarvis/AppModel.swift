@@ -120,7 +120,7 @@ final class AppModel {
     var meetingDidWarnAboutSilence = false
     var meetingSystemSilentSince: Date?
     var meetingDidWarnAboutSystemSilence = false
-    var meetingCaptureMode: MeetingCaptureMode = .dual
+    var meetingCaptureMode: MeetingCaptureMode = .system
     var meetingRecordingPaused = false
     var meetingMicrophonePower: Float?
     var meetingSystemPower: Float?
@@ -311,11 +311,6 @@ final class AppModel {
         }
         meetingRecorder.onAudioEvent = { [weak self] event in
             self?.appendMeetingAudioEvent(event)
-        }
-        if let storedMode = UserDefaults.standard.string(forKey: "jarvis.meeting.captureMode"),
-           let mode = MeetingCaptureMode(rawValue: storedMode)
-        {
-            meetingCaptureMode = mode
         }
         Task { @MainActor [weak self] in
             await self?.recoverInterruptedMeetingAudio()

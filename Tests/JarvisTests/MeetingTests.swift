@@ -1227,6 +1227,7 @@ extension MeetingTests {
         XCTAssertNil(record.awaitingAssets)
         XCTAssertNil(record.diarizationDegraded)
         XCTAssertEqual(record.resolvedCaptureMode, .microphone)
+        XCTAssertTrue(record.resolvedCaptureMode.recordsMicrophone)
         XCTAssertEqual(record.status, .failed)
         XCTAssertTrue(record.canRetryProcessing)
 
@@ -1236,6 +1237,20 @@ extension MeetingTests {
         let placeholder = try JSONDecoder().decode(MeetingRecord.self, from: Data(waiting.utf8))
         XCTAssertEqual(placeholder.awaitingAssets, true)
         XCTAssertFalse(placeholder.canRetryProcessing)
+    }
+
+    func testSystemCaptureModeDoesNotRecordMicrophone() {
+        let id = UUID()
+        let record = MeetingRecord(
+            id: id,
+            title: "系统音频会议",
+            audioFileName: "meeting-\(id.uuidString).m4a",
+            systemAudioFileName: "meeting-\(id.uuidString).system.caf",
+            captureMode: .system
+        )
+        XCTAssertEqual(record.resolvedCaptureMode, .system)
+        XCTAssertFalse(record.resolvedCaptureMode.recordsMicrophone)
+        XCTAssertEqual(MeetingCaptureMode.system.title, "系统音频")
     }
 
     func testDiscoveredChunksKeepClosedSlicesAndMarkTheNewestOpen() {

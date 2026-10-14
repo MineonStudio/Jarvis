@@ -59,8 +59,8 @@ enum MeetingRecordingStyle {
         ]
         let textSize = (title as NSString).size(withAttributes: textAttributes)
         let icon = NSImage(
-            systemSymbolName: "mic.fill",
-            accessibilityDescription: "录音中"
+            systemSymbolName: "speaker.wave.2.fill",
+            accessibilityDescription: "正在采集系统音频"
         )?.withSymbolConfiguration(
             NSImage.SymbolConfiguration(
                 pointSize: statusBarIconSize,
