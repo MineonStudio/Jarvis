@@ -370,6 +370,25 @@ extension AppModel {
         }
     }
 
+    /// Stops the run in flight — including the request itself, which is cancelled mid-stream.
+    /// Everything already produced stays: the transcript, the finished windows, and whatever
+    /// part of the minutes had arrived.
+    func cancelMeetingProcessing() {
+        guard meetingProcessingTask != nil else { return }
+        meetingProcessingTask?.cancel()
+        meetingProcessingTask = nil
+        let activeID = meetingActiveProcessingID
+        meetingActiveProcessingID = nil
+        if let activeID, let index = meetingRecords.firstIndex(where: { $0.id == activeID }) {
+            meetingRecords[index].status = meetingRecords[index].transcript.isEmpty ? .failed : .summaryFailed
+            meetingRecords[index].errorMessage = JarvisFeedbackCopy.processingStopped
+            persistMeeting(meetingRecords[index])
+        }
+        meetingProcessingState = .idle
+        showToast(JarvisFeedbackCopy.processingStopped)
+        startNextMeetingProcessingIfNeeded()
+    }
+
     func ensureMeetingDetailLoaded(_ id: UUID) {
         guard let index = meetingRecords.firstIndex(where: { $0.id == id }) else { return }
         if !meetingRecords[index].detail.isEmpty {
@@ -885,7 +904,10 @@ extension AppModel {
                 "resuming": record.summaryCheckpoint == nil ? "false" : "true"
             ]
         )
-        let summary = try await MeetingSummaryService(api: aiTextCompletionAPI).summarize(
+        let summary = try await MeetingSummaryService(
+            api: aiTextCompletionAPI,
+            policy: AIStreamingPolicy.load(configuration: configuration)
+        ).summarize(
             record: record,
             configuration: configuration,
             checkpoint: preserveUserEdits ? record.summaryCheckpoint : nil,
@@ -912,6 +934,18 @@ extension AppModel {
             onProgress: { [weak self] progress in
                 guard let self, self.meetingActiveProcessingID == record.id else { return }
                 self.meetingProcessingState = .processing(stage: .summarizing, progress: progress)
+            },
+            onLiveUpdate: { [weak self] update in
+                guard let self, self.meetingActiveProcessingID == record.id else { return }
+                switch update {
+                case .thinking:
+                    self.meetingProcessingState = .processing(stage: .thinking, progress: nil)
+                case let .draft(draft):
+                    self.meetingProcessingState = .processing(stage: .summarizing, progress: nil)
+                    // Shown while the model is still writing; the finished summary replaces it.
+                    guard let index = self.meetingRecords.firstIndex(where: { $0.id == record.id }) else { return }
+                    self.meetingRecords[index].summary = draft
+                }
             }
         )
         guard let index = meetingRecords.firstIndex(where: { $0.id == record.id }) else { return }

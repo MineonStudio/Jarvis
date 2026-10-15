@@ -8,6 +8,7 @@ struct AIAPISettingsCard: View {
     @State private var model = ""
     @State private var apiKey = ""
     @State private var showingDeleteConfirmation = false
+    @AppStorage(AIStreamingPolicy.hedgeEnabledKey) private var hedgeEnabled = true
 
     private var hasStoredConfiguration: Bool {
         app.aiAPIKeyConfigured || AIAPIConfiguration.hasStoredAPIEndpoint()
@@ -131,6 +132,25 @@ struct AIAPISettingsCard: View {
                         isDisabled: isLocked || app.aiModelsLoading
                     )
                 }
+            }
+
+            VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
+                Text("网络")
+                    .font(SettingsTypography.itemTitle)
+
+                Toggle("服务商排队时自动补发一次请求", isOn: $hedgeEnabled)
+                    .toggleStyle(.switch)
+                    .disabled(isLocked)
+
+                Text(
+                    """
+                    模型服务在高峰期会把请求压住不发。打开后，首字超过一段时间仍没有 \
+                    返回，就并发补发同样的一次请求，谁先出内容用谁，另一份立刻取消；\
+                    已经开始输出的请求不会被补发。关掉可以完全避免重复消耗额度。
+                    """
+                )
+                .font(SettingsTypography.itemSubtitle)
+                .foregroundStyle(Color.jarvisTextSecondary)
             }
 
             apiField(title: "Key") {

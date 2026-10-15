@@ -960,13 +960,13 @@ extension MeetingTests {
             startTime: 0,
             endTime: 1,
             speakerID: "S1",
-            text: String(repeating: "议", count: 4300)
+            text: String(repeating: "议", count: 9000)
         )
         let secondSegment = MeetingTranscriptSegment(
             startTime: 1,
             endTime: 2,
             speakerID: "S1",
-            text: String(repeating: "题", count: 4300)
+            text: String(repeating: "题", count: 9000)
         )
         let record = meetingRecord(title: "余额不足", segments: [firstSegment, secondSegment])
         let firstOverview = paddedSummary("第一段确认了发布范围。")
@@ -1059,8 +1059,8 @@ extension MeetingTests {
         let record = meetingRecord(
             title: "合并失败",
             segments: [
-                MeetingTranscriptSegment(startTime: 0, endTime: 1, speakerID: "S1", text: String(repeating: "议", count: 4300)),
-                MeetingTranscriptSegment(startTime: 1, endTime: 2, speakerID: "S1", text: String(repeating: "题", count: 4300))
+                MeetingTranscriptSegment(startTime: 0, endTime: 1, speakerID: "S1", text: String(repeating: "议", count: 9000)),
+                MeetingTranscriptSegment(startTime: 1, endTime: 2, speakerID: "S1", text: String(repeating: "题", count: 9000))
             ]
         )
         let window = try minutesJSON(summary: paddedSummary("这一段确认了发布范围。"))
@@ -1343,7 +1343,6 @@ extension MeetingTests {
         XCTAssertEqual(SkillID.meetingNotes.navigationTitle, "会议记录")
     }
 }
-
 
 private func writeSilentCAF(to url: URL, seconds: Double) throws {
     let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1))

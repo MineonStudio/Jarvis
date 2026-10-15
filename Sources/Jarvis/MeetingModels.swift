@@ -42,12 +42,15 @@ enum MeetingProcessingStage: String, Sendable {
     case transcribing
     case diarizing
     case summarizing
+    /// The model is thinking out loud before it writes any minutes.
+    case thinking
 
     var title: String {
         switch self {
         case .transcribing: "正在转写录音"
         case .diarizing: "正在识别说话人"
         case .summarizing: "正在生成会议总结"
+        case .thinking: "模型正在思考"
         }
     }
 }
@@ -92,7 +95,10 @@ struct MeetingFact: Codable, Equatable, Identifiable, Sendable {
 }
 
 struct MeetingSummaryCheckpoint: Codable, Equatable, Sendable {
-    static let currentPipelineVersion = 2
+    /// 3: the pipeline streams one request, validates items as they arrive, and asks the
+    /// model for segment keywords instead of copied sentences. Earlier checkpoints were
+    /// produced by a different prompt and are not resumed.
+    static let currentPipelineVersion = 3
 
     var pipelineVersion: Int
     var transcriptFingerprint: String

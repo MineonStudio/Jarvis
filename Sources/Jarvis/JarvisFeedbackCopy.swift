@@ -68,6 +68,7 @@ enum JarvisFeedbackCopy {
     static let configureAIFirst = "请先配置 AI 服务"
     static let summaryReady = "总结已生成"
     static let summaryFailed = "纪要生成失败"
+    static let processingStopped = "已停止，逐字稿和已完成的内容都还在"
     static let processingFailed = "处理失败"
     static let microphoneRequired = "请允许麦克风权限"
     static let shortcutUpdated = "快捷键已更新"

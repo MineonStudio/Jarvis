@@ -207,6 +207,18 @@ protocol AITextCompletionAPI: Sendable {
         configuration: AIAPIConfiguration,
         options: AICompletionOptions
     ) async throws -> String
+
+    /// Same request as `complete`, but hands back each piece as it arrives and returns the
+    /// whole answer at the end. `onEvent` runs off the caller's actor and may be called
+    /// concurrently with nothing else: the client serialises it.
+    func stream(
+        systemPrompt: String,
+        userPrompt: String,
+        configuration: AIAPIConfiguration,
+        options: AICompletionOptions,
+        policy: AIStreamingPolicy,
+        onEvent: @escaping @Sendable (AIStreamEvent) -> Void
+    ) async throws -> String
 }
 
 extension AITextCompletionAPI {
@@ -221,6 +233,26 @@ extension AITextCompletionAPI {
             userPrompt: userPrompt,
             configuration: configuration
         )
+    }
+
+    /// Fallback for APIs that only implement `complete`: one event with the whole answer.
+    /// Callers see the same result and the same progress-free behaviour they had before.
+    func stream(
+        systemPrompt: String,
+        userPrompt: String,
+        configuration: AIAPIConfiguration,
+        options: AICompletionOptions,
+        policy _: AIStreamingPolicy,
+        onEvent: @escaping @Sendable (AIStreamEvent) -> Void
+    ) async throws -> String {
+        let content = try await complete(
+            systemPrompt: systemPrompt,
+            userPrompt: userPrompt,
+            configuration: configuration,
+            options: options
+        )
+        onEvent(.content(content))
+        return content
     }
 }
 
@@ -239,6 +271,8 @@ enum AIAPIError: LocalizedError, Equatable {
     case emptyGeneratedContent(context: String)
     case duplicateGeneratedContent(context: String)
     case outputTruncated
+    case streamStalled(seconds: TimeInterval, beforeFirstToken: Bool)
+    case streamTimedOut(seconds: TimeInterval)
     case server(String)
 
     var errorDescription: String? {
@@ -263,8 +297,23 @@ enum AIAPIError: LocalizedError, Equatable {
             "\(context)没有生成新的内容，请稍后再试"
         case .outputTruncated:
             "AI 服务输出未完成：模型或服务端提前结束了响应，请检查模型上下文容量或服务商限制"
+        case let .streamStalled(seconds, beforeFirstToken):
+            beforeFirstToken
+                ? "AI 服务 \(Int(seconds)) 秒没有开始返回内容，已放弃本次请求。"
+                : "AI 服务返回中途卡住，\(Int(seconds)) 秒没有新内容，已放弃本次请求。"
+        case let .streamTimedOut(seconds):
+            "AI 服务超过 \(Int(seconds)) 秒仍未完成，已放弃本次请求。"
         case let .server(message):
             message
+        }
+    }
+
+    /// True when the provider accepted the request and then went quiet. Callers treat that
+    /// as a stalled service rather than a wrong answer, because asking again is worthwhile.
+    var isStreamInterruption: Bool {
+        switch self {
+        case .streamStalled, .streamTimedOut: true
+        default: false
         }
     }
 
@@ -378,18 +427,14 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         Self.applyAuthentication(to: &request, configuration: configuration)
-        var body: [String: Any] = [
-            "model": configuration.model,
-            "temperature": options.temperature,
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": userPrompt]
-            ]
-        ]
-        if options.responseFormat == .jsonObject {
-            body["response_format"] = ["type": "json_object"]
-        }
-        let requestBody = try JSONSerialization.data(withJSONObject: body)
+        let requestBody = try JSONSerialization.data(
+            withJSONObject: Self.completionBody(
+                systemPrompt: systemPrompt,
+                userPrompt: userPrompt,
+                configuration: configuration,
+                options: options
+            )
+        )
         request.httpBody = requestBody
 
         let requestID = JarvisLog.operationID()
@@ -468,7 +513,323 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
         }
     }
 
+    static func completionBody(
+        systemPrompt: String,
+        userPrompt: String,
+        configuration: AIAPIConfiguration,
+        options: AICompletionOptions
+    ) -> [String: Any] {
+        var body: [String: Any] = [
+            "model": configuration.model,
+            "temperature": options.temperature,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": userPrompt]
+            ]
+        ]
+        if options.responseFormat == .jsonObject {
+            body["response_format"] = ["type": "json_object"]
+        }
+        return body
+    }
+
+    /// Streams one request. Never trusts the provider to match the documented shape:
+    /// a server that ignores `stream` is read as a plain completion instead, and a stalled
+    /// connection is abandoned on the policy's deadlines instead of waiting forever.
+    func stream(
+        systemPrompt: String,
+        userPrompt: String,
+        configuration: AIAPIConfiguration,
+        options: AICompletionOptions,
+        policy: AIStreamingPolicy,
+        onEvent: @escaping @Sendable (AIStreamEvent) -> Void
+    ) async throws -> String {
+        guard configuration.isConfigured else { throw AIAPIError.missingConfiguration }
+        guard let endpoint = Self.normalizedEndpointURL(
+            from: configuration.endpoint,
+            provider: configuration.provider
+        ) else {
+            throw AIAPIError.invalidEndpoint
+        }
+
+        let sink = AIStreamSink(onEvent: onEvent)
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        let requestID = JarvisLog.operationID()
+        let resumption = AIStreamingLatencyHistory.shared
+        JarvisLog.notice(
+            category: .network,
+            event: "ai.stream.request",
+            operationID: requestID,
+            result: "started",
+            fields: [
+                "task": options.task,
+                "provider": configuration.provider.rawValue,
+                "model": configuration.model,
+                "hedgeSeconds": String(format: "%.1f", policy.hedgeDelay),
+                "hedging": policy.hedgingEnabled ? "true" : "false"
+            ]
+        )
+
+        do {
+            let content = try await withThrowingTaskGroup(of: StreamAttemptOutcome.self) { group in
+                let attemptCount = policy.hedgingEnabled ? 2 : 1
+                for id in 0 ..< attemptCount {
+                    group.addTask { [self] in
+                        if id > 0 {
+                            // A duplicate request only makes sense while the first one is silent.
+                            try await Task.sleep(for: .seconds(policy.hedgeDelay))
+                            if await sink.hasProducedEvent {
+                                return .skipped
+                            }
+                        }
+                        do {
+                            let text = try await runStreamAttempt(
+                                StreamAttemptRequest(
+                                    endpoint: endpoint,
+                                    systemPrompt: systemPrompt,
+                                    userPrompt: userPrompt,
+                                    configuration: configuration,
+                                    options: options,
+                                    policy: policy
+                                ),
+                                attemptID: id,
+                                sink: sink,
+                                history: resumption
+                            )
+                            return .finished(text)
+                        } catch is CancellationError {
+                            return .skipped
+                        } catch {
+                            return .failed(error)
+                        }
+                    }
+                }
+                group.addTask {
+                    try await Self.watchStream(sink: sink, policy: policy, startedAt: startedAt)
+                    return .skipped
+                }
+
+                var failures: [Error] = []
+                for try await outcome in group {
+                    switch outcome {
+                    case let .finished(text):
+                        group.cancelAll()
+                        return text
+                    case .skipped:
+                        continue
+                    case let .failed(error):
+                        failures.append(error)
+                    }
+                }
+                throw failures.first ?? AIAPIError.invalidTransportResponse
+            }
+            JarvisLog.notice(
+                category: .network,
+                event: "ai.stream.complete",
+                operationID: requestID,
+                durationMilliseconds: (ProcessInfo.processInfo.systemUptime - startedAt) * 1000,
+                result: "success",
+                fields: [
+                    "task": options.task,
+                    "provider": configuration.provider.rawValue,
+                    "model": configuration.model,
+                    "contentCharacters": String(content.count)
+                ]
+            )
+            return content
+        } catch {
+            let nsError = error as NSError
+            JarvisLog.error(
+                category: .network,
+                event: "ai.stream.failed",
+                operationID: requestID,
+                durationMilliseconds: (ProcessInfo.processInfo.systemUptime - startedAt) * 1000,
+                fields: [
+                    "task": options.task,
+                    "provider": configuration.provider.rawValue,
+                    "model": configuration.model,
+                    "errorDomain": nsError.domain,
+                    "errorCode": String(nsError.code)
+                ]
+            )
+            throw error
+        }
+    }
+
+    private enum StreamAttemptOutcome: Sendable {
+        case finished(String)
+        case failed(Error)
+        /// The duplicate never had to run, or lost the race and stopped.
+        case skipped
+    }
+
+    /// Fails the whole request when the stream goes quiet, so a silent provider cannot
+    /// hold the app for as long as it likes.
+    private static func watchStream(
+        sink: AIStreamSink,
+        policy: AIStreamingPolicy,
+        startedAt: TimeInterval
+    ) async throws {
+        while true {
+            try await Task.sleep(for: .seconds(1))
+            let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+            if elapsed > policy.totalTimeout {
+                throw AIAPIError.streamTimedOut(seconds: elapsed)
+            }
+            let silence = await sink.secondsSinceActivity
+            let produced = await sink.hasProducedEvent
+            let allowance = produced ? policy.idleTimeout : policy.firstDeltaTimeout
+            // The duplicate may still save the request; only give up once both are spent.
+            if silence > allowance, !policy.hedgingEnabled || elapsed > policy.hedgeDelay {
+                throw AIAPIError.streamStalled(seconds: silence, beforeFirstToken: !produced)
+            }
+        }
+    }
+
+    /// Everything one attempt needs, so the attempt itself only takes its identity and
+    /// the shared sink.
+    struct StreamAttemptRequest: Sendable {
+        var endpoint: URL
+        var systemPrompt: String
+        var userPrompt: String
+        var configuration: AIAPIConfiguration
+        var options: AICompletionOptions
+        var policy: AIStreamingPolicy
+    }
+
+    private func runStreamAttempt(
+        _ attempt: StreamAttemptRequest,
+        attemptID: Int,
+        sink: AIStreamSink,
+        history: AIStreamingLatencyHistory
+    ) async throws -> String {
+        var body = Self.completionBody(
+            systemPrompt: attempt.systemPrompt,
+            userPrompt: attempt.userPrompt,
+            configuration: attempt.configuration,
+            options: attempt.options
+        )
+        body["stream"] = true
+
+        var request = URLRequest(url: attempt.endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = attempt.policy.firstDeltaTimeout + attempt.policy.idleTimeout
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        Self.applyAuthentication(to: &request, configuration: attempt.configuration)
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let attemptStartedAt = ProcessInfo.processInfo.systemUptime
+        let (bytes, response) = try await Self.streamingSession.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIAPIError.invalidTransportResponse
+        }
+        guard (200 ..< 300).contains(httpResponse.statusCode) else {
+            let data = try await Self.collectBody(bytes)
+            throw AIAPIError.server(
+                Self.serverMessage(from: data) ?? "AI 服务请求失败（\(httpResponse.statusCode)）"
+            )
+        }
+
+        var state = StreamReadState()
+        // Nested so both the streaming and the buffered path share one place that
+        // accumulates content and hands events to the sink, in order.
+        func handle(line: String) async throws {
+            let events = state.decoder.feed(line: line)
+            guard !events.isEmpty else { return }
+            if !state.sawFirstToken {
+                state.sawFirstToken = true
+                history.record(
+                    firstTokenSeconds: ProcessInfo.processInfo.systemUptime - attemptStartedAt,
+                    configuration: attempt.configuration
+                )
+            }
+            for event in events {
+                if case let .content(text) = event {
+                    state.content += text
+                }
+            }
+            guard await sink.accept(attempt: attemptID, events: events) else {
+                throw CancellationError()
+            }
+        }
+
+        let contentType = (httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
+        if contentType.contains("text/event-stream") {
+            for try await line in bytes.lines {
+                try await handle(line: line)
+            }
+        } else {
+            // Either an ordinary completion envelope, or a stream from a server that did
+            // not label it. Read the body once and tell the two apart.
+            let data = try await Self.collectBody(bytes)
+            let text = String(decoding: data, as: UTF8.self)
+            if text.contains("data:") {
+                for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+                    try await handle(line: String(line))
+                }
+            } else {
+                let content = try Self.chatCompletionContent(from: data)
+                history.record(
+                    firstTokenSeconds: ProcessInfo.processInfo.systemUptime - attemptStartedAt,
+                    configuration: attempt.configuration
+                )
+                guard await sink.accept(attempt: attemptID, events: [.content(content)]) else {
+                    throw CancellationError()
+                }
+                return content
+            }
+        }
+
+        guard state.decoder.sawAnyEvent || state.decoder.sawCompletion else {
+            throw AIAPIError.outputTruncated
+        }
+        guard !state.content.isEmpty else {
+            throw AIAPIError.emptyGeneratedContent(context: attempt.options.task)
+        }
+        return state.content
+    }
+
+    private struct StreamReadState {
+        var decoder = SSEChatCompletionDecoder()
+        var content = ""
+        var sawFirstToken = false
+    }
+
+    private static func collectBody(_ bytes: URLSession.AsyncBytes) async throws -> Data {
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+        }
+        return data
+    }
+
+    private static let streamingSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.waitsForConnectivity = false
+        configuration.timeoutIntervalForRequest = 120
+        configuration.timeoutIntervalForResource = 3600
+        configuration.httpMaximumConnectionsPerHost = 8
+        return URLSession(configuration: configuration)
+    }()
+
+    /// What a provider says about its models. The context window is optional on the wire:
+    /// providers that report it let the app size its requests correctly instead of guessing.
+    struct ModelCatalogue: Sendable {
+        var identifiers: [String]
+        var contextWindows: [String: Int]
+
+        init(identifiers: [String], contextWindows: [String: Int] = [:]) {
+            self.identifiers = identifiers
+            self.contextWindows = contextWindows
+        }
+    }
+
     func fetchModels(configuration: AIAPIConfiguration) async throws -> [String] {
+        try await fetchModelCatalogue(configuration: configuration).identifiers
+    }
+
+    func fetchModelCatalogue(configuration: AIAPIConfiguration) async throws -> ModelCatalogue {
         let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else { throw AIAPIError.missingConfiguration }
         guard let endpoint = Self.normalizedModelsURL(
@@ -494,7 +855,27 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
             throw AIAPIError.server(message)
         }
 
-        return try Self.modelIdentifiers(from: data)
+        return try ModelCatalogue(
+            identifiers: Self.modelIdentifiers(from: data),
+            contextWindows: Self.modelContextWindows(from: data)
+        )
+    }
+
+    /// `context_window` is not part of the OpenAI schema; it is read when a provider offers it.
+    static func modelContextWindows(from data: Data) -> [String: Int] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let values = root["data"] as? [[String: Any]]
+        else { return [:] }
+        var windows: [String: Int] = [:]
+        for value in values {
+            guard let identifier = value["id"] as? String, !identifier.isEmpty else { continue }
+            if let window = value["context_window"] as? Int, window > 0 {
+                windows[identifier] = window
+            } else if let window = value["context_length"] as? Int, window > 0 {
+                windows[identifier] = window
+            }
+        }
+        return windows
     }
 
     static func applyAuthentication(

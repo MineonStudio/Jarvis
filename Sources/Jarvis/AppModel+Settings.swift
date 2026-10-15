@@ -211,11 +211,17 @@ extension AppModel {
                     apiKey: resolvedAPIKey,
                     providerID: provider.rawValue
                 )
-                let models = try await OpenAICompatibleAPIClient().fetchModels(
+                let catalogue = try await OpenAICompatibleAPIClient().fetchModelCatalogue(
                     configuration: configuration
                 )
                 guard !Task.isCancelled else { return }
-                await self?.finishAIModelsRefresh(models)
+                // Models that advertise a context window teach the meeting pipeline how
+                // much transcript one request may carry.
+                AIContextBudgetStore.shared.recordContextWindows(
+                    catalogue.contextWindows,
+                    providerID: configuration.provider.rawValue
+                )
+                await self?.finishAIModelsRefresh(catalogue.identifiers)
             } catch {
                 guard !Task.isCancelled else { return }
                 await self?.failAIModelsRefresh(error.localizedDescription)

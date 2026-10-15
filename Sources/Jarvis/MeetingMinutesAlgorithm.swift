@@ -3,7 +3,9 @@ import Foundation
 /// Validates model minutes against the transcript. Quotes must be exact substrings.
 /// Items without a usable quote are dropped. Nothing here is specific to one meeting.
 enum MeetingMinutesAlgorithm {
-    static let promptVersion = "minutes-schema-1"
+    /// Bumped when the schema the model is asked for changes shape: the prompt now carries
+    /// short segment ids and asks for a keyword instead of a copied sentence.
+    static let promptVersion = "minutes-schema-2"
     static let uncertainSpeakerID = "uncertain"
     static let uncertainSpeakerName = "说话人不确定"
     static let ownerMissingLabel = "未指定"
@@ -21,6 +23,9 @@ enum MeetingMinutesAlgorithm {
         var startMs: Int
         var endMs: Int
         var quote: String
+        /// What the model is pointing at, when it names a phrase instead of copying the
+        /// sentence. The app turns it into an exact quote from the segment.
+        var keyword: String?
 
         private enum CodingKeys: String, CodingKey {
             case segmentID
@@ -30,13 +35,15 @@ enum MeetingMinutesAlgorithm {
             case endMs
             case endMsSnake = "end_ms"
             case quote
+            case keyword
         }
 
-        init(segmentID: String, startMs: Int, endMs: Int, quote: String) {
+        init(segmentID: String, startMs: Int, endMs: Int, quote: String, keyword: String? = nil) {
             self.segmentID = segmentID
             self.startMs = startMs
             self.endMs = endMs
             self.quote = quote
+            self.keyword = keyword
         }
 
         init(from decoder: Decoder) throws {
@@ -51,6 +58,7 @@ enum MeetingMinutesAlgorithm {
                 ?? container.decodeIfPresent(Int.self, forKey: .endMsSnake)
                 ?? 0
             quote = try container.decodeIfPresent(String.self, forKey: .quote) ?? ""
+            keyword = try container.decodeIfPresent(String.self, forKey: .keyword)
         }
     }
 
@@ -163,6 +171,15 @@ enum MeetingMinutesAlgorithm {
         /// True when the model returned points or todos and every one of them was dropped.
         var droppedAllCitedItems: Bool
         var summaryOutsidePreferredRange: Bool
+
+        /// Whether anything at all came back that can be shown without inventing text.
+        var hasUsableMinutes: Bool {
+            !summary.overview.isEmpty || !summary.points.isEmpty || !summary.actionItems.isEmpty
+        }
+    }
+
+    static func summaryOutsidePreferredRange(_ overview: String) -> Bool {
+        !summaryCharacterRange.contains(overview.count)
     }
 
     static func validate(
@@ -173,58 +190,39 @@ enum MeetingMinutesAlgorithm {
         generation: MeetingMinutesGeneration,
         calendar: Calendar = .current
     ) -> ValidationResult {
-        let segmentsByID = Dictionary(uniqueKeysWithValues: transcript.map { ($0.id, $0) })
+        let index = TranscriptIndex(transcript: transcript)
         let allowedOwnerText = ownerCorpus(transcript: transcript, speakers: speakers)
         var droppedPoints: [String] = []
         var droppedTodos: [String] = []
         var points: [MeetingDiscussionPoint] = []
         let draftPoints = draft.points ?? []
-        for (index, draftPoint) in draftPoints.enumerated() {
-            let identifier = trimmed(draftPoint.id) ?? "P\(index + 1)"
-            let evidence = acceptedEvidence(draftPoint.evidence ?? [], segmentsByID: segmentsByID)
-            let title = trimmed(draftPoint.title) ?? ""
-            let detail = trimmed(draftPoint.detail) ?? ""
-            guard !title.isEmpty || !detail.isEmpty, !evidence.isEmpty else {
+        for (position, draftPoint) in draftPoints.enumerated() {
+            let identifier = trimmed(draftPoint.id) ?? "P\(position + 1)"
+            if let point = makePoint(draftPoint, identifier: identifier, index: index) {
+                points.append(point)
+            } else {
                 droppedPoints.append(identifier)
-                continue
             }
-            points.append(
-                MeetingDiscussionPoint(
-                    id: identifier,
-                    title: title.isEmpty ? detail : title,
-                    detail: title.isEmpty ? "" : detail,
-                    evidence: evidence
-                )
-            )
         }
 
         var actionItems: [MeetingActionItem] = []
         let draftTodos = draft.todos ?? draft.actionItems ?? []
-        for (index, draftTodo) in draftTodos.enumerated() {
-            let identifier = trimmed(draftTodo.id) ?? "T\(index + 1)"
-            let task = trimmed(draftTodo.task) ?? ""
-            let evidence = acceptedEvidence(draftTodo.evidence ?? [], segmentsByID: segmentsByID)
-            guard !task.isEmpty, !evidence.isEmpty else {
+        for (position, draftTodo) in draftTodos.enumerated() {
+            let identifier = trimmed(draftTodo.id) ?? "T\(position + 1)"
+            let item = makeActionItem(
+                draftTodo,
+                identifier: identifier,
+                index: index,
+                allowedOwnerText: allowedOwnerText,
+                speakerNames: speakers.map(\.name),
+                meetingDate: meetingDate,
+                calendar: calendar
+            )
+            if let item {
+                actionItems.append(item)
+            } else {
                 droppedTodos.append(identifier)
-                continue
             }
-            let owner = acceptedOwner(
-                draftTodo.owner,
-                evidence: evidence,
-                allowedText: allowedOwnerText,
-                speakerNames: speakers.map(\.name)
-            )
-            let due = acceptedDueDate(draftTodo.due ?? draftTodo.dueDate, meetingDate: meetingDate, calendar: calendar)
-            actionItems.append(
-                MeetingActionItem(
-                    task: task,
-                    owner: owner.value,
-                    dueDate: due.value,
-                    evidence: evidence,
-                    ownerMissing: owner.missing,
-                    dueMissing: due.missing
-                )
-            )
         }
 
         let overview = trimmed(draft.summary) ?? trimmed(draft.overview) ?? ""
@@ -448,25 +446,70 @@ enum MeetingMinutesAlgorithm {
         var missing: String?
     }
 
+    /// One point, validated on its own so a streamed answer can be checked the moment an
+    /// item arrives instead of after the whole document lands.
+    static func makePoint(
+        _ draft: DraftPoint,
+        identifier: String,
+        index: TranscriptIndex
+    ) -> MeetingDiscussionPoint? {
+        let evidence = acceptedEvidence(draft.evidence ?? [], index: index)
+        let title = trimmed(draft.title) ?? ""
+        let detail = trimmed(draft.detail) ?? ""
+        guard !title.isEmpty || !detail.isEmpty, !evidence.isEmpty else { return nil }
+        return MeetingDiscussionPoint(
+            id: identifier,
+            title: title.isEmpty ? detail : title,
+            detail: title.isEmpty ? "" : detail,
+            evidence: evidence
+        )
+    }
+
+    static func makeActionItem(
+        _ draft: DraftTodo,
+        identifier _: String,
+        index: TranscriptIndex,
+        allowedOwnerText: String,
+        speakerNames: [String],
+        meetingDate: Date,
+        calendar: Calendar
+    ) -> MeetingActionItem? {
+        let task = trimmed(draft.task) ?? ""
+        let evidence = acceptedEvidence(draft.evidence ?? [], index: index)
+        guard !task.isEmpty, !evidence.isEmpty else { return nil }
+        let owner = acceptedOwner(
+            draft.owner,
+            evidence: evidence,
+            allowedText: allowedOwnerText,
+            speakerNames: speakerNames
+        )
+        let due = acceptedDueDate(draft.due ?? draft.dueDate, meetingDate: meetingDate, calendar: calendar)
+        return MeetingActionItem(
+            task: task,
+            owner: owner.value,
+            dueDate: due.value,
+            evidence: evidence,
+            ownerMissing: owner.missing,
+            dueMissing: due.missing
+        )
+    }
+
     private static func acceptedEvidence(
         _ drafts: [DraftEvidence],
-        segmentsByID: [UUID: MeetingTranscriptSegment]
+        index: TranscriptIndex
     ) -> [MeetingEvidence] {
         var accepted: [MeetingEvidence] = []
         var seen = Set<String>()
         for draft in drafts {
-            guard let segmentID = UUID(uuidString: draft.segmentID),
-                  let segment = segmentsByID[segmentID]
-            else { continue }
-            let quote = draft.quote.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !quote.isEmpty, segment.text.contains(quote) else { continue }
-            let key = "\(segmentID.uuidString)|\(quote)"
+            guard let segment = index.segment(for: draft.segmentID) else { continue }
+            guard let quote = evidenceQuote(draft, in: segment) else { continue }
+            let key = "\(segment.id.uuidString)|\(quote)"
             guard seen.insert(key).inserted else { continue }
             let segmentStart = Int((segment.startTime * 1000).rounded())
             let segmentEnd = Int((segment.endTime * 1000).rounded())
             accepted.append(
                 MeetingEvidence(
-                    segmentID: segmentID,
+                    segmentID: segment.id,
                     startMs: segmentStart,
                     endMs: segmentEnd,
                     quote: quote
@@ -474,6 +517,53 @@ enum MeetingMinutesAlgorithm {
             )
         }
         return accepted
+    }
+
+    /// Both routes end in an exact substring of the segment, which is what the transcript
+    /// view highlights: either the model copied the words correctly, or it named a keyword
+    /// and the app cuts the quote out of the original itself.
+    static func evidenceQuote(_ draft: DraftEvidence, in segment: MeetingTranscriptSegment) -> String? {
+        let quote = draft.quote.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !quote.isEmpty, segment.text.contains(quote) {
+            return quote
+        }
+        let keyword = draft.keyword?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !keyword.isEmpty else { return nil }
+        return quoteAround(keyword, in: segment.text)
+    }
+
+    /// The sentence around a keyword, or a window centred on it when the sentence is long.
+    static func quoteAround(_ keyword: String, in text: String, maximumLength: Int = 60) -> String? {
+        guard let range = text.range(of: keyword) ?? text.range(of: keyword, options: .caseInsensitive) else {
+            return nil
+        }
+        let boundaries: Set<Character> = ["。", "！", "？", "；", "，", "、", "\n", ".", "!", "?", ";", ","]
+        var lower = range.lowerBound
+        while lower > text.startIndex {
+            let previous = text.index(before: lower)
+            if boundaries.contains(text[previous]) {
+                break
+            }
+            lower = previous
+        }
+        var upper = range.upperBound
+        while upper < text.endIndex {
+            let character = text[upper]
+            let next = text.index(after: upper)
+            if boundaries.contains(character) {
+                upper = next
+                break
+            }
+            upper = next
+        }
+        var sentence = text[lower ..< upper].trimmingCharacters(in: .whitespacesAndNewlines)
+        if sentence.count > maximumLength {
+            let padding = max(8, (maximumLength - keyword.count) / 2)
+            let start = text.index(range.lowerBound, offsetBy: -padding, limitedBy: lower) ?? lower
+            let end = text.index(range.upperBound, offsetBy: padding, limitedBy: upper) ?? upper
+            sentence = text[start ..< end].trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return sentence.isEmpty ? nil : sentence
     }
 
     private static func acceptedOwner(

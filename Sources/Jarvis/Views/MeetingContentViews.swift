@@ -266,7 +266,6 @@ private struct MeetingEmptyState: View {
             }
             .buttonStyle(JarvisPrimaryButtonStyle())
             .disabled(!app.meetingModelsReady)
-
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
@@ -1294,6 +1293,7 @@ private struct MeetingAudioPlayer: View {
 }
 
 private struct MeetingProcessingCard: View {
+    @Environment(AppModel.self) private var app
     let state: MeetingProcessingState
 
     var body: some View {
@@ -1310,6 +1310,11 @@ private struct MeetingProcessingCard: View {
                             .font(JarvisTypography.monospaced)
                             .foregroundStyle(Color.jarvisTextSecondary)
                     }
+                    Button("停止") {
+                        app.cancelMeetingProcessing()
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityHint("停止当前处理，已经完成的部分会保留")
                 }
                 if case let .processing(_, progress) = state {
                     if let progress {
