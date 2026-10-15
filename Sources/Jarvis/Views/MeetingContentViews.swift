@@ -30,9 +30,6 @@ struct MeetingView: View {
                 }
             },
             trailingToolbar: {
-                ToolbarItem(id: "meeting.speakers", placement: .automatic) {
-                    MeetingSpeakerToolbar(record: selectedRecord)
-                }
                 ToolbarItem(id: "meeting.copy", placement: .automatic) {
                     MeetingCopyToolbar(record: selectedRecord)
                 }
@@ -357,117 +354,113 @@ private struct MeetingStorageErrorBanner: View {
     }
 }
 
-private struct MeetingSpeakerToolbar: View {
-    let record: MeetingRecord?
-    @State private var isPresented = false
-
-    private var canEdit: Bool {
-        !(record?.speakers.isEmpty ?? true)
-    }
-
-    var body: some View {
-        Button {
-            isPresented = true
-        } label: {
-            Image(systemName: "person.2.wave.2")
-                .font(.system(size: JarvisToolbarMetrics.iconSize, weight: .medium))
-                .foregroundStyle(.secondary)
-        }
-        .buttonStyle(JarvisToolbarIconButtonStyle())
-        .disabled(!canEdit)
-        .accessibilityLabel("说话人")
-        .help("重命名说话人")
-        .padding(4)
-        .frame(height: JarvisToolbarMetrics.controlSize)
-        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-            if let record {
-                MeetingSpeakerEditor(record: record)
-            }
-        }
-    }
-}
-
-/// Renaming belongs here now that the transcript is not shown: the names are what the
-/// minutes use for 负责人, and they are the only part of the transcript worth editing
-/// without reading it.
-private struct MeetingSpeakerEditor: View {
+private struct MeetingSpeakerSection: View {
     @Environment(AppModel.self) private var app
     let record: MeetingRecord
+    @Binding var citedPlayback: CitedAudioPlayback
 
+    @StateObject private var clips = MeetingSpeakerClipPlayer()
     @State private var drafts: [String: String] = [:]
     @State private var collisionName: String?
     @FocusState private var focusedKey: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("说话人")
-                .font(JarvisTypography.bodyEmphasis)
-
-            if let detail = diarizationDetail {
-                Text(detail)
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(Color.jarvisTextSecondary)
-            }
-
-            VStack(spacing: 8) {
-                ForEach(record.speakers) { speaker in
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(speakerColor(speaker.colorIndex))
-                            .frame(width: 8, height: 8)
-                        TextField("说话人名称", text: binding(for: speaker))
-                            .textFieldStyle(.roundedBorder)
-                            .focused($focusedKey, equals: draftKey(for: speaker))
-                            .onSubmit { commit(speaker) }
-                        Text("\(segmentCount(of: speaker)) 段")
-                            .font(JarvisTypography.caption)
-                            .foregroundStyle(Color.jarvisTextSecondary)
-                            .frame(width: 46, alignment: .trailing)
-                    }
-                }
-            }
-
-            if let collisionName {
-                Text("已经有说话人叫「\(collisionName)」，没有保存。请换一个名字。")
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(.orange)
-            } else {
-                Text("改名会同步更新纪要里的负责人。")
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(Color.jarvisTextSecondary)
-            }
-
-            if !record.speakerTurns.isEmpty {
-                Divider()
+        if !record.speakers.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("按说话人时段重新划分逐字稿")
-                        .font(JarvisTypography.caption)
+                    MeetingSectionHeader(title: "说话人", systemImage: "person.2.wave.2")
+                    Spacer()
+                    Text("\(record.speakers.count)")
+                        .font(JarvisTypography.captionEmphasis)
                         .foregroundStyle(Color.jarvisTextSecondary)
-                    Spacer(minLength: 8)
-                    Button("重新合并") {
-                        app.remergeMeetingSpeakers(recordID: record.id)
+                }
+                JarvisCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(record.speakers) { speaker in
+                            speakerRow(speaker)
+                        }
+                        if let collisionName {
+                            Text("已经有说话人叫「\(collisionName)」，没有保存。请换一个名字。")
+                                .font(JarvisTypography.caption)
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text("改名前先听一句他说的话，名字会同步更新纪要里的负责人。")
+                                .font(JarvisTypography.caption)
+                                .foregroundStyle(Color.jarvisTextSecondary)
+                        }
+                        if let detail = diarizationDetail {
+                            Text(detail)
+                                .font(JarvisTypography.caption)
+                                .foregroundStyle(Color.jarvisTextSecondary)
+                        }
+                        if !record.speakerTurns.isEmpty {
+                            Divider()
+                            HStack {
+                                Text("用已保存的时段按当前算法重算归属")
+                                    .font(JarvisTypography.caption)
+                                    .foregroundStyle(Color.jarvisTextSecondary)
+                                Spacer(minLength: 8)
+                                Button("重新合并") {
+                                    app.remergeMeetingSpeakers(recordID: record.id)
+                                }
+                                .buttonStyle(.borderless)
+                                .help("录音时保存了每个说话人的发言时段，这里用现在的算法重新划分一次")
+                            }
+                        }
                     }
-                    .buttonStyle(.borderless)
                 }
             }
-        }
-        .padding(16)
-        .frame(width: 360)
-        .task(id: record.id) {
-            drafts = Dictionary(
-                uniqueKeysWithValues: record.speakers.map { (draftKey(for: $0), $0.name) }
-            )
-            collisionName = nil
-        }
-        .onChange(of: focusedKey) { previous, _ in
-            guard let previous,
-                  let speaker = record.speakers.first(where: { draftKey(for: $0) == previous })
-            else { return }
-            commit(speaker)
-        }
-        .onDisappear {
-            for speaker in record.speakers {
+            .task(id: record.id) {
+                clips.stop()
+                drafts = Dictionary(
+                    uniqueKeysWithValues: record.speakers.map { (draftKey(for: $0), $0.name) }
+                )
+                collisionName = nil
+            }
+            .onChange(of: focusedKey) { previous, _ in
+                guard let previous,
+                      let speaker = record.speakers.first(where: { draftKey(for: $0) == previous })
+                else { return }
                 commit(speaker)
+            }
+            .onDisappear {
+                for speaker in record.speakers {
+                    commit(speaker)
+                }
+                clips.stop()
+            }
+        }
+    }
+
+    private func speakerRow(_ speaker: MeetingSpeaker) -> some View {
+        let first = firstUtterance(of: speaker)
+        return HStack(spacing: 10) {
+            Circle()
+                .fill(speakerColor(speaker.colorIndex))
+                .frame(width: 8, height: 8)
+            TextField("说话人名称", text: binding(for: speaker))
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 220)
+                .focused($focusedKey, equals: draftKey(for: speaker))
+                .onSubmit { commit(speaker) }
+            Text("\(segmentCount(of: speaker)) 段")
+                .font(JarvisTypography.caption)
+                .foregroundStyle(Color.jarvisTextSecondary)
+            Spacer(minLength: 8)
+            if let first {
+                Button {
+                    preview(speaker, from: first)
+                } label: {
+                    Image(systemName: clips.playingSpeakerID == speaker.id ? "stop.fill" : "play.fill")
+                }
+                .buttonStyle(.borderless)
+                .disabled(app.meetingAudioURL(for: record) == nil)
+                .help("试听这个人第一次说的话")
+                .accessibilityLabel(
+                    clips.playingSpeakerID == speaker.id
+                        ? "停止试听\(speaker.name)"
+                        : "试听\(speaker.name)第一次说的话"
+                )
             }
         }
     }
@@ -483,12 +476,28 @@ private struct MeetingSpeakerEditor: View {
         return parts.isEmpty ? nil : parts.joined(separator: "，") + "。"
     }
 
+    /// The moment this speaker first says anything, which is what the preview plays.
+    private func firstUtterance(of speaker: MeetingSpeaker) -> MeetingTranscriptSegment? {
+        record.transcript
+            .filter { $0.speakerID == speaker.id && !$0.text.isEmpty }
+            .min { $0.startTime < $1.startTime }
+    }
+
+    private func preview(_ speaker: MeetingSpeaker, from segment: MeetingTranscriptSegment) {
+        // Two recordings never play at once: the meeting's own player stands down.
+        citedPlayback.stopRequest += 1
+        clips.toggle(
+            speakerID: speaker.id,
+            url: app.meetingAudioURL(for: record),
+            start: segment.startTime,
+            length: min(max(segment.endTime - segment.startTime, 2.5), 8)
+        )
+    }
+
     private func segmentCount(of speaker: MeetingSpeaker) -> Int {
         record.transcript.count { $0.speakerID == speaker.id }
     }
 
-    /// Speaker ids repeat between meetings — `mic:0` is the first voice in every one of
-    /// them — so a draft is only ever addressed through its own recording.
     private func draftKey(for speaker: MeetingSpeaker) -> String {
         "\(record.id.uuidString)|\(speaker.id)"
     }
@@ -504,13 +513,9 @@ private struct MeetingSpeakerEditor: View {
         guard let draft = drafts[draftKey(for: speaker)] else { return }
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            // An empty name is refused, so the field goes back to the name in use rather
-            // than showing something that was never saved.
             drafts[draftKey(for: speaker)] = speaker.name
             return
         }
-        // Two speakers with one name make the minutes' 负责人 ambiguous, and the rename
-        // would follow the wrong items.
         guard !MeetingSpeakerRenaming.isTaken(trimmed, by: speaker, among: record.speakers) else {
             collisionName = trimmed
             drafts[draftKey(for: speaker)] = speaker.name
@@ -523,6 +528,43 @@ private struct MeetingSpeakerEditor: View {
     private func speakerColor(_ index: Int) -> Color {
         let palette: [Color] = [.blue, .purple, .teal, .orange, .pink, .green, .indigo, .brown]
         return palette[abs(index) % palette.count]
+    }
+}
+
+/// Plays a few seconds from one moment in the recording, so a speaker can be identified by
+/// ear without the transcript being on screen.
+@MainActor
+private final class MeetingSpeakerClipPlayer: ObservableObject {
+    @Published private(set) var playingSpeakerID: String?
+
+    private var player: AVAudioPlayer?
+    private var stopTask: Task<Void, Never>?
+
+    func toggle(speakerID: String, url: URL?, start: TimeInterval, length: TimeInterval) {
+        if playingSpeakerID == speakerID {
+            stop()
+            return
+        }
+        stop()
+        guard let url, let player = try? AVAudioPlayer(contentsOf: url) else { return }
+        player.currentTime = min(max(0, start), player.duration)
+        player.prepareToPlay()
+        player.play()
+        self.player = player
+        playingSpeakerID = speakerID
+        stopTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(length))
+            guard !Task.isCancelled else { return }
+            self?.stop()
+        }
+    }
+
+    func stop() {
+        stopTask?.cancel()
+        stopTask = nil
+        player?.stop()
+        player = nil
+        playingSpeakerID = nil
     }
 }
 
@@ -802,6 +844,8 @@ private struct MeetingDetailPane: View {
                         {
                             MeetingNeedsSummaryCard(record: record)
                         }
+
+                        MeetingSpeakerSection(record: record, citedPlayback: $citedPlayback)
                     }
                     .frame(maxWidth: 860, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .center)

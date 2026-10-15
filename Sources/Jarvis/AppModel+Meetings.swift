@@ -632,21 +632,6 @@ extension AppModel {
         persistMeeting(meetingRecords[index])
     }
 
-    func reassignMeetingSegment(recordID: UUID, segmentID: UUID, speakerID: String) {
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }),
-              let segmentIndex = meetingRecords[index].transcript.firstIndex(where: { $0.id == segmentID }),
-              meetingRecords[index].speakers.contains(where: { $0.id == speakerID })
-        else { return }
-        meetingRecords[index].transcript[segmentIndex].speakerID = speakerID
-        meetingRecords[index].transcript[segmentIndex].isUncertainSpeaker =
-            speakerID == MeetingMinutesAlgorithm.uncertainSpeakerID
-        meetingRecords[index].segmentSpeakerOverrides.removeAll { $0.segmentID == segmentID }
-        meetingRecords[index].segmentSpeakerOverrides.append(
-            MeetingSegmentSpeakerOverride(segmentID: segmentID, speakerID: speakerID)
-        )
-        persistMeeting(meetingRecords[index])
-    }
-
     func remergeMeetingSpeakers(recordID: UUID) {
         ensureMeetingDetailLoaded(recordID)
         guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }) else { return }
