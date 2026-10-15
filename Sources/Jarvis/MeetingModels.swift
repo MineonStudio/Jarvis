@@ -62,38 +62,6 @@ enum MeetingSummaryStage: String, Codable, Sendable {
     case failed
 }
 
-enum MeetingFactKind: String, Codable, Sendable {
-    case keyPoint
-    case decision
-    case actionItem
-    case openQuestion
-}
-
-struct MeetingFact: Codable, Equatable, Identifiable, Sendable {
-    let id: UUID
-    let kind: MeetingFactKind
-    var text: String
-    var owner: String
-    var dueDate: String
-    var sourceSegmentIDs: [UUID]
-
-    init(
-        id: UUID = UUID(),
-        kind: MeetingFactKind,
-        text: String,
-        owner: String = "",
-        dueDate: String = "",
-        sourceSegmentIDs: [UUID] = []
-    ) {
-        self.id = id
-        self.kind = kind
-        self.text = text
-        self.owner = owner
-        self.dueDate = dueDate
-        self.sourceSegmentIDs = sourceSegmentIDs
-    }
-}
-
 struct MeetingSummaryCheckpoint: Codable, Equatable, Sendable {
     /// 3: the pipeline streams one request, validates items as they arrive, and asks the
     /// model for segment keywords instead of copied sentences. Earlier checkpoints were
@@ -105,10 +73,6 @@ struct MeetingSummaryCheckpoint: Codable, Equatable, Sendable {
     var stage: MeetingSummaryStage
     var completedChunkCount: Int
     var totalChunkCount: Int
-    var facts: [MeetingFact]
-    /// Set when the summary was produced in one request, without fact extraction.
-    var directSummary: Bool?
-    var errorMessage: String?
     var updatedAt: Date
     /// Window minutes already accepted. A resumed run does not repeat those windows.
     var windowSummaries: [MeetingSummary]?
@@ -120,9 +84,6 @@ struct MeetingSummaryCheckpoint: Codable, Equatable, Sendable {
         stage: MeetingSummaryStage,
         completedChunkCount: Int,
         totalChunkCount: Int,
-        facts: [MeetingFact] = [],
-        directSummary: Bool? = nil,
-        errorMessage: String? = nil,
         updatedAt: Date = Date()
     ) {
         pipelineVersion = Self.currentPipelineVersion
@@ -130,9 +91,6 @@ struct MeetingSummaryCheckpoint: Codable, Equatable, Sendable {
         self.stage = stage
         self.completedChunkCount = completedChunkCount
         self.totalChunkCount = totalChunkCount
-        self.facts = facts
-        self.directSummary = directSummary
-        self.errorMessage = errorMessage
         self.updatedAt = updatedAt
         windowSummaries = nil
         finishedSummary = nil
@@ -324,13 +282,6 @@ struct MeetingDiscussionPoint: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct MeetingMinutesGeneration: Codable, Equatable, Sendable {
-    var modelName: String
-    var promptVersion: String
-    var generatedAt: Date
-    var transcriptFingerprint: String
-}
-
 struct MeetingActionItem: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     var task: String
@@ -406,96 +357,37 @@ struct MeetingActionItem: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct MeetingSummaryCitation: Codable, Equatable, Sendable {
-    let kind: MeetingFactKind
-    let text: String
-    var sourceSegmentIDs: [UUID]
-}
-
 struct MeetingSummary: Codable, Equatable, Sendable {
     var overview: String
-    var keyPoints: [String]
-    var decisions: [String]
     var actionItems: [MeetingActionItem]
-    var openQuestions: [String]
-    var citations: [MeetingSummaryCitation]?
     var points: [MeetingDiscussionPoint]
     var overviewIsUserEdited: Bool
-    var generation: MeetingMinutesGeneration?
 
     init(
         overview: String,
-        keyPoints: [String],
-        decisions: [String],
         actionItems: [MeetingActionItem],
-        openQuestions: [String],
-        citations: [MeetingSummaryCitation]? = nil,
         points: [MeetingDiscussionPoint] = [],
-        overviewIsUserEdited: Bool = false,
-        generation: MeetingMinutesGeneration? = nil
+        overviewIsUserEdited: Bool = false
     ) {
         self.overview = overview
-        self.keyPoints = keyPoints
-        self.decisions = decisions
         self.actionItems = actionItems
-        self.openQuestions = openQuestions
-        self.citations = citations
         self.points = points
         self.overviewIsUserEdited = overviewIsUserEdited
-        self.generation = generation
-    }
-
-    /// Old records stored three lists. New records store `points`. Display uses points when present.
-    var renderedPoints: [MeetingDiscussionPoint] {
-        if !points.isEmpty {
-            return points
-        }
-        var synthesized: [MeetingDiscussionPoint] = []
-        func append(texts: [String], prefix: String) {
-            for (index, text) in texts.enumerated() where !text.isEmpty {
-                let evidence = (citations ?? [])
-                    .filter { $0.text == text }
-                    .flatMap(\.sourceSegmentIDs)
-                    .map { MeetingEvidence(segmentID: $0, startMs: 0, endMs: 0, quote: text) }
-                synthesized.append(
-                    MeetingDiscussionPoint(
-                        id: "\(prefix)\(index + 1)",
-                        title: text,
-                        detail: "",
-                        evidence: evidence
-                    )
-                )
-            }
-        }
-        append(texts: decisions, prefix: "D")
-        append(texts: openQuestions, prefix: "Q")
-        append(texts: keyPoints, prefix: "K")
-        return synthesized
     }
 
     private enum CodingKeys: String, CodingKey {
         case overview
-        case keyPoints
-        case decisions
         case actionItems
-        case openQuestions
-        case citations
         case points
         case overviewIsUserEdited
-        case generation
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         overview = try container.decodeIfPresent(String.self, forKey: .overview) ?? ""
-        keyPoints = try container.decodeIfPresent([String].self, forKey: .keyPoints) ?? []
-        decisions = try container.decodeIfPresent([String].self, forKey: .decisions) ?? []
         actionItems = try container.decodeIfPresent([MeetingActionItem].self, forKey: .actionItems) ?? []
-        openQuestions = try container.decodeIfPresent([String].self, forKey: .openQuestions) ?? []
-        citations = try container.decodeIfPresent([MeetingSummaryCitation].self, forKey: .citations)
         points = try container.decodeIfPresent([MeetingDiscussionPoint].self, forKey: .points) ?? []
         overviewIsUserEdited = try container.decodeIfPresent(Bool.self, forKey: .overviewIsUserEdited) ?? false
-        generation = try container.decodeIfPresent(MeetingMinutesGeneration.self, forKey: .generation)
     }
 }
 
@@ -534,8 +426,6 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
     var diarizationDegradeReason: String?
     var estimatedSpeakerCount: Int?
     var uncertainSegmentRatio: Double?
-    var speakerTurns: [MeetingSpeakerTurnRecord]
-    var segmentSpeakerOverrides: [MeetingSegmentSpeakerOverride]
     var minutesVersions: [MeetingMinutesVersion]
 
     init(
@@ -563,8 +453,6 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
         diarizationDegradeReason: String? = nil,
         estimatedSpeakerCount: Int? = nil,
         uncertainSegmentRatio: Double? = nil,
-        speakerTurns: [MeetingSpeakerTurnRecord] = [],
-        segmentSpeakerOverrides: [MeetingSegmentSpeakerOverride] = [],
         minutesVersions: [MeetingMinutesVersion] = []
     ) {
         self.id = id
@@ -591,8 +479,6 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
         self.diarizationDegradeReason = diarizationDegradeReason
         self.estimatedSpeakerCount = estimatedSpeakerCount
         self.uncertainSegmentRatio = uncertainSegmentRatio
-        self.speakerTurns = speakerTurns
-        self.segmentSpeakerOverrides = segmentSpeakerOverrides
         self.minutesVersions = minutesVersions
     }
 
@@ -628,8 +514,6 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
         case diarizationDegradeReason
         case estimatedSpeakerCount
         case uncertainSegmentRatio
-        case speakerTurns
-        case segmentSpeakerOverrides
         case minutesVersions
     }
 
@@ -659,11 +543,6 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
         diarizationDegradeReason = try container.decodeIfPresent(String.self, forKey: .diarizationDegradeReason)
         estimatedSpeakerCount = try container.decodeIfPresent(Int.self, forKey: .estimatedSpeakerCount)
         uncertainSegmentRatio = try container.decodeIfPresent(Double.self, forKey: .uncertainSegmentRatio)
-        speakerTurns = try container.decodeIfPresent([MeetingSpeakerTurnRecord].self, forKey: .speakerTurns) ?? []
-        segmentSpeakerOverrides = try container.decodeIfPresent(
-            [MeetingSegmentSpeakerOverride].self,
-            forKey: .segmentSpeakerOverrides
-        ) ?? []
         minutesVersions = try container.decodeIfPresent([MeetingMinutesVersion].self, forKey: .minutesVersions) ?? []
     }
 
@@ -693,8 +572,6 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
         try container.encodeIfPresent(diarizationDegradeReason, forKey: .diarizationDegradeReason)
         try container.encodeIfPresent(estimatedSpeakerCount, forKey: .estimatedSpeakerCount)
         try container.encodeIfPresent(uncertainSegmentRatio, forKey: .uncertainSegmentRatio)
-        try container.encode(speakerTurns, forKey: .speakerTurns)
-        try container.encode(segmentSpeakerOverrides, forKey: .segmentSpeakerOverrides)
         try container.encode(minutesVersions, forKey: .minutesVersions)
     }
 
@@ -731,9 +608,8 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
             return true
         }
         guard let summary else { return false }
-        let pointText = summary.renderedPoints.flatMap { [$0.title, $0.detail] }
-        return ([summary.overview] + summary.keyPoints + summary.decisions + summary.openQuestions
-            + pointText
+        let pointText = summary.points.flatMap { [$0.title, $0.detail] }
+        return ([summary.overview] + pointText
             + summary.actionItems.map(\.task))
             .contains { $0.meetingSearchContains(query) }
     }
@@ -778,13 +654,11 @@ struct MeetingRecordDetail: Codable, Equatable, Sendable {
     var transcript: [MeetingTranscriptSegment]
     var summary: MeetingSummary?
     var summaryCheckpoint: MeetingSummaryCheckpoint?
-    var speakerTurns: [MeetingSpeakerTurnRecord]
-    var segmentSpeakerOverrides: [MeetingSegmentSpeakerOverride]
     var minutesVersions: [MeetingMinutesVersion]
 
     var isEmpty: Bool {
         speakers.isEmpty && transcript.isEmpty && summary == nil && summaryCheckpoint == nil
-            && speakerTurns.isEmpty && segmentSpeakerOverrides.isEmpty && minutesVersions.isEmpty
+            && minutesVersions.isEmpty
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -792,8 +666,6 @@ struct MeetingRecordDetail: Codable, Equatable, Sendable {
         case transcript
         case summary
         case summaryCheckpoint
-        case speakerTurns
-        case segmentSpeakerOverrides
         case minutesVersions
     }
 
@@ -802,16 +674,12 @@ struct MeetingRecordDetail: Codable, Equatable, Sendable {
         transcript: [MeetingTranscriptSegment],
         summary: MeetingSummary?,
         summaryCheckpoint: MeetingSummaryCheckpoint?,
-        speakerTurns: [MeetingSpeakerTurnRecord] = [],
-        segmentSpeakerOverrides: [MeetingSegmentSpeakerOverride] = [],
         minutesVersions: [MeetingMinutesVersion] = []
     ) {
         self.speakers = speakers
         self.transcript = transcript
         self.summary = summary
         self.summaryCheckpoint = summaryCheckpoint
-        self.speakerTurns = speakerTurns
-        self.segmentSpeakerOverrides = segmentSpeakerOverrides
         self.minutesVersions = minutesVersions
     }
 
@@ -821,11 +689,6 @@ struct MeetingRecordDetail: Codable, Equatable, Sendable {
         transcript = try container.decodeIfPresent([MeetingTranscriptSegment].self, forKey: .transcript) ?? []
         summary = try container.decodeIfPresent(MeetingSummary.self, forKey: .summary)
         summaryCheckpoint = try container.decodeIfPresent(MeetingSummaryCheckpoint.self, forKey: .summaryCheckpoint)
-        speakerTurns = try container.decodeIfPresent([MeetingSpeakerTurnRecord].self, forKey: .speakerTurns) ?? []
-        segmentSpeakerOverrides = try container.decodeIfPresent(
-            [MeetingSegmentSpeakerOverride].self,
-            forKey: .segmentSpeakerOverrides
-        ) ?? []
         minutesVersions = try container.decodeIfPresent([MeetingMinutesVersion].self, forKey: .minutesVersions) ?? []
     }
 
@@ -835,8 +698,6 @@ struct MeetingRecordDetail: Codable, Equatable, Sendable {
         try container.encode(transcript, forKey: .transcript)
         try container.encodeIfPresent(summary, forKey: .summary)
         try container.encodeIfPresent(summaryCheckpoint, forKey: .summaryCheckpoint)
-        try container.encode(speakerTurns, forKey: .speakerTurns)
-        try container.encode(segmentSpeakerOverrides, forKey: .segmentSpeakerOverrides)
         try container.encode(minutesVersions, forKey: .minutesVersions)
     }
 }
@@ -848,8 +709,6 @@ extension MeetingRecord {
             transcript: transcript,
             summary: summary,
             summaryCheckpoint: summaryCheckpoint,
-            speakerTurns: speakerTurns,
-            segmentSpeakerOverrides: segmentSpeakerOverrides,
             minutesVersions: minutesVersions
         )
     }
@@ -860,8 +719,6 @@ extension MeetingRecord {
         copy.transcript = []
         copy.summary = nil
         copy.summaryCheckpoint = nil
-        copy.speakerTurns = []
-        copy.segmentSpeakerOverrides = []
         copy.minutesVersions = []
         return copy
     }
@@ -871,8 +728,6 @@ extension MeetingRecord {
         transcript = detail.transcript
         summary = detail.summary
         summaryCheckpoint = detail.summaryCheckpoint
-        speakerTurns = detail.speakerTurns
-        segmentSpeakerOverrides = detail.segmentSpeakerOverrides
         minutesVersions = detail.minutesVersions
     }
 
@@ -894,7 +749,7 @@ extension MeetingRecord {
                 lines.append("")
                 lines.append(summary.overview)
             }
-            let points = summary.renderedPoints
+            let points = summary.points
             if !points.isEmpty {
                 lines.append("")
                 lines.append("## 讨论要点")
@@ -915,7 +770,7 @@ extension MeetingRecord {
                     lines.append("- [\(item.isCompleted ? "x" : " ")] \(item.task)")
                     lines.append("  负责人：\(item.ownerLabel)")
                     lines.append("  期限：\(item.dueLabel)")
-                    appendEvidence(item.evidence.isEmpty ? legacyEvidence(for: item, in: summary) : item.evidence, to: &lines)
+                    appendEvidence(item.evidence, to: &lines)
                 }
             }
         }
@@ -957,21 +812,6 @@ extension MeetingRecord {
             lines.append("  - 出处 [\(stamp)] \(item.quote)")
         }
     }
-
-    private func legacyEvidence(for item: MeetingActionItem, in summary: MeetingSummary) -> [MeetingEvidence] {
-        guard let citation = summary.citations?.first(where: { $0.kind == .actionItem && $0.text == item.task }) else {
-            return []
-        }
-        return citation.sourceSegmentIDs.map { segmentID in
-            let segment = transcript.first { $0.id == segmentID }
-            return MeetingEvidence(
-                segmentID: segmentID,
-                startMs: Int(((segment?.startTime ?? 0) * 1000).rounded()),
-                endMs: Int(((segment?.endTime ?? 0) * 1000).rounded()),
-                quote: segment?.text ?? item.task
-            )
-        }
-    }
 }
 
 enum MeetingTranscriptConsent {
@@ -996,7 +836,6 @@ struct MeetingTranscriptionTrack: Sendable {
 struct MeetingTranscriptionResult: Sendable {
     var speakers: [MeetingSpeaker]
     var segments: [MeetingTranscriptSegment]
-    var speakerTurns: [MeetingSpeakerTurnRecord]
     var diarizationDegraded: Bool
     var diarizationDegradeReason: String?
     var estimatedSpeakerCount: Int
@@ -1005,7 +844,6 @@ struct MeetingTranscriptionResult: Sendable {
     init(
         speakers: [MeetingSpeaker],
         segments: [MeetingTranscriptSegment],
-        speakerTurns: [MeetingSpeakerTurnRecord] = [],
         diarizationDegraded: Bool = false,
         diarizationDegradeReason: String? = nil,
         estimatedSpeakerCount: Int = 0,
@@ -1013,7 +851,6 @@ struct MeetingTranscriptionResult: Sendable {
     ) {
         self.speakers = speakers
         self.segments = segments
-        self.speakerTurns = speakerTurns
         self.diarizationDegraded = diarizationDegraded
         self.diarizationDegradeReason = diarizationDegradeReason
         self.estimatedSpeakerCount = estimatedSpeakerCount

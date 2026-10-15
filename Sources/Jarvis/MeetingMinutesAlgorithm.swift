@@ -187,7 +187,6 @@ enum MeetingMinutesAlgorithm {
         transcript: [MeetingTranscriptSegment],
         speakers: [MeetingSpeaker],
         meetingDate: Date,
-        generation: MeetingMinutesGeneration,
         calendar: Calendar = .current
     ) -> ValidationResult {
         let index = TranscriptIndex(transcript: transcript)
@@ -232,12 +231,8 @@ enum MeetingMinutesAlgorithm {
         return ValidationResult(
             summary: MeetingSummary(
                 overview: overview,
-                keyPoints: [],
-                decisions: [],
                 actionItems: actionItems,
-                openQuestions: [],
-                points: points,
-                generation: generation
+                points: points
             ),
             log: ValidationLog(droppedPointIDs: droppedPoints, droppedTodoIDs: droppedTodos),
             summaryCharacterCount: characterCount,
@@ -332,12 +327,8 @@ enum MeetingMinutesAlgorithm {
         guard !overview.isEmpty || !points.isEmpty || !actionItems.isEmpty else { return nil }
         return MeetingSummary(
             overview: overview,
-            keyPoints: [],
-            decisions: [],
             actionItems: actionItems,
-            openQuestions: [],
-            points: points,
-            generation: usable.compactMap(\.generation).last
+            points: points
         )
     }
 

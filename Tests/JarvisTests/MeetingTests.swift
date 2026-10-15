@@ -120,10 +120,10 @@ final class MeetingTests: XCTestCase {
             ],
             summary: MeetingSummary(
                 overview: "确认范围",
-                keyPoints: ["范围已对齐"],
-                decisions: [],
                 actionItems: [],
-                openQuestions: []
+                points: [
+                    MeetingDiscussionPoint(id: "P1", title: "范围已对齐", detail: "", evidence: [])
+                ]
             )
         )
         try repository.save(record)
@@ -157,10 +157,16 @@ final class MeetingTests: XCTestCase {
             ],
             summary: MeetingSummary(
                 overview: "本周给出方案",
-                keyPoints: ["需要接口清单"],
-                decisions: ["先做录音"],
                 actionItems: [MeetingActionItem(task: "整理接口", owner: "小王", dueDate: "周五")],
-                openQuestions: ["是否采集系统音频"]
+                points: [
+                    MeetingDiscussionPoint(id: "P1", title: "先做录音", detail: "", evidence: []),
+                    MeetingDiscussionPoint(
+                        id: "P2",
+                        title: "是否采集系统音频",
+                        detail: "需要接口清单",
+                        evidence: []
+                    )
+                ]
             )
         )
         let markdown = record.markdownDocument()
@@ -414,7 +420,6 @@ final class MeetingTests: XCTestCase {
             transcript: [segment],
             speakers: [MeetingSpeaker(id: "S1", name: "说话人 1", colorIndex: 0)],
             meetingDate: meetingDate,
-            generation: sampleGeneration,
             calendar: calendar
         )
         XCTAssertEqual(
@@ -428,12 +433,9 @@ final class MeetingTests: XCTestCase {
         let evidence = MeetingEvidence(segmentID: segmentID, startMs: 0, endMs: 1000, quote: "原文")
         let generated = MeetingSummary(
             overview: paddedSummary("新概要"),
-            keyPoints: [],
-            decisions: [],
             actionItems: [
                 MeetingActionItem(task: "发送文档", owner: "说话人 1", dueDate: "", evidence: [evidence])
             ],
-            openQuestions: [],
             points: [
                 MeetingDiscussionPoint(id: "P1", title: "新要点", detail: "新说明", evidence: [evidence])
             ]
@@ -742,8 +744,6 @@ final class MeetingTests: XCTestCase {
             transcript: [segment],
             summary: MeetingSummary(
                 overview: "先做首版。",
-                keyPoints: [],
-                decisions: [],
                 actionItems: [
                     MeetingActionItem(
                         task: "完成首版",
@@ -759,7 +759,6 @@ final class MeetingTests: XCTestCase {
                         dueMissing: "未提及"
                     )
                 ],
-                openQuestions: [],
                 points: [
                     MeetingDiscussionPoint(
                         id: "P1",
@@ -888,12 +887,9 @@ extension MeetingTests {
         let todoID = UUID()
         let first = MeetingSummary(
             overview: "第一段概要",
-            keyPoints: [],
-            decisions: [],
             actionItems: [
                 MeetingActionItem(id: todoID, task: "整理发布说明", evidence: [firstEvidence])
             ],
-            openQuestions: [],
             points: [
                 MeetingDiscussionPoint(
                     id: "P1",
@@ -905,12 +901,9 @@ extension MeetingTests {
         )
         let second = MeetingSummary(
             overview: "第二段概要",
-            keyPoints: [],
-            decisions: [],
             actionItems: [
                 MeetingActionItem(task: "整理发布说明", evidence: [secondEvidence])
             ],
-            openQuestions: [],
             points: [
                 MeetingDiscussionPoint(
                     id: "P1",
@@ -928,17 +921,11 @@ extension MeetingTests {
         )
         let blank = MeetingSummary(
             overview: "  ",
-            keyPoints: [],
-            decisions: [],
-            actionItems: [],
-            openQuestions: []
+            actionItems: []
         )
         let repeated = MeetingSummary(
             overview: "第二段概要",
-            keyPoints: [],
-            decisions: [],
-            actionItems: [],
-            openQuestions: []
+            actionItems: []
         )
 
         let combined = MeetingMinutesAlgorithm.combiningWindows([blank, first, second, repeated])
@@ -1124,26 +1111,26 @@ extension MeetingTests {
             audioFileName: "meeting-\(UUID().uuidString).m4a",
             summary: MeetingSummary(
                 overview: "本周交付首版",
-                keyPoints: ["优先完成登录流程"],
-                decisions: ["先支持 macOS"],
                 actionItems: [MeetingActionItem(task: "整理接口清单")],
-                openQuestions: ["是否支持离线模式"]
+                points: [
+                    MeetingDiscussionPoint(id: "P1", title: "离线模式", detail: "断网也能用", evidence: [])
+                ]
             )
         )
 
         XCTAssertTrue(record.matchesSearch("首版"))
         XCTAssertTrue(record.matchesSearch("接口清单"))
         XCTAssertTrue(record.matchesSearch("离线模式"))
+        XCTAssertTrue(record.matchesSearch("断网也能用"), "要点的正文也要能搜到")
     }
 
     func testLegacyMeetingSummaryAndActionItemDecodeNewFieldsWithDefaults() throws {
         let data = Data(
-            #"{"overview":"已完成","keyPoints":[],"decisions":[],"actionItems":[{"id":"00000000-0000-0000-0000-000000000001","task":"发送纪要","owner":"","dueDate":""}],"openQuestions":[]}"#.utf8
+            #"{"overview":"已完成","actionItems":[{"id":"00000000-0000-0000-0000-000000000001","task":"发送纪要","owner":"","dueDate":""}]}"#.utf8
         )
 
         let summary = try JSONDecoder().decode(MeetingSummary.self, from: data)
 
-        XCTAssertNil(summary.citations)
         XCTAssertTrue(summary.points.isEmpty)
         XCTAssertEqual(try XCTUnwrap(summary.actionItems.first).ownerLabel, "未指定")
         XCTAssertEqual(try XCTUnwrap(summary.actionItems.first).dueLabel, "未提及")
@@ -1160,8 +1147,6 @@ extension MeetingTests {
         XCTAssertEqual(record.title, "旧会议")
         XCTAssertEqual(record.audioChunks, [])
         XCTAssertTrue(record.audioEvents.isEmpty)
-        XCTAssertTrue(record.speakerTurns.isEmpty)
-        XCTAssertTrue(record.segmentSpeakerOverrides.isEmpty)
         XCTAssertTrue(record.minutesVersions.isEmpty)
         XCTAssertNil(record.captureMode)
         XCTAssertNil(record.awaitingAssets)
@@ -1242,67 +1227,6 @@ extension MeetingTests {
         XCTAssertEqual(dropped, [closed])
         let kept = MeetingAudioChunkFile.recoverableChunks([closed, open]) { $0.index == 1 }
         XCTAssertEqual(kept, [closed, open])
-    }
-
-    func testRemergeKeepsAnOverrideAndDoesNotNumberTheUncertainSpeaker() {
-        let keptID = UUID()
-        let assignedID = UUID()
-        let shortID = UUID()
-        let segments = [
-            MeetingTranscriptSegment(
-                id: assignedID,
-                startTime: 0,
-                endTime: 2,
-                speakerID: "old",
-                text: "先说范围"
-            ),
-            MeetingTranscriptSegment(
-                id: keptID,
-                startTime: 3,
-                endTime: 5,
-                speakerID: "old",
-                text: "这句保持原说话人"
-            ),
-            MeetingTranscriptSegment(
-                id: shortID,
-                startTime: 10,
-                endTime: 10.2,
-                speakerID: "old",
-                text: "嗯"
-            )
-        ]
-        let turns = [
-            MeetingSpeakerTurnRecord(startTime: 0, endTime: 2.5, clusterID: "mic:0")
-        ]
-        let overrides = [
-            MeetingSegmentSpeakerOverride(segmentID: keptID, speakerID: "kept")
-        ]
-        let speakers = [
-            MeetingSpeaker(id: "mic:0", name: "说话人 1", colorIndex: 0),
-            MeetingSpeaker(id: "kept", name: "主持人", colorIndex: 1)
-        ]
-
-        let merged = MeetingSpeakerRemerge.apply(
-            segments: segments,
-            turns: turns,
-            overrides: overrides,
-            speakers: speakers
-        )
-
-        XCTAssertEqual(merged.segments[0].speakerID, "mic:0")
-        XCTAssertEqual(merged.segments[1].speakerID, "kept")
-        XCTAssertEqual(merged.segments[2].speakerID, MeetingMinutesAlgorithm.uncertainSpeakerID)
-        XCTAssertEqual(
-            merged.speakers.first { $0.id == "kept" }?.name,
-            "主持人"
-        )
-        XCTAssertEqual(
-            merged.speakers.first { $0.id == MeetingMinutesAlgorithm.uncertainSpeakerID }?.name,
-            MeetingMinutesAlgorithm.uncertainSpeakerName
-        )
-        XCTAssertFalse(
-            merged.speakers.contains { $0.name == "说话人 3" }
-        )
     }
 
     func testCanonicalAssemblyKeepsAFinishedTrackAndRebuildsTheMissingOne() {
@@ -1534,10 +1458,3 @@ private func minutesJSON(
     ])
     return String(decoding: data, as: UTF8.self)
 }
-
-private let sampleGeneration = MeetingMinutesGeneration(
-    modelName: "test",
-    promptVersion: MeetingMinutesAlgorithm.promptVersion,
-    generatedAt: Date(timeIntervalSince1970: 0),
-    transcriptFingerprint: "test"
-)

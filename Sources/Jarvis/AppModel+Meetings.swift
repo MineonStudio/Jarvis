@@ -632,27 +632,6 @@ extension AppModel {
         persistMeeting(meetingRecords[index])
     }
 
-    func remergeMeetingSpeakers(recordID: UUID) {
-        ensureMeetingDetailLoaded(recordID)
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }) else { return }
-        let merged = MeetingSpeakerRemerge.apply(
-            segments: meetingRecords[index].transcript,
-            turns: meetingRecords[index].speakerTurns,
-            overrides: meetingRecords[index].segmentSpeakerOverrides,
-            speakers: meetingRecords[index].speakers
-        )
-        meetingRecords[index].transcript = merged.segments
-        meetingRecords[index].speakers = merged.speakers
-        // The diarization summary describes the assignment that just changed.
-        let uncertainCount = merged.segments.count(where: \.isUncertainSpeaker)
-        meetingRecords[index].uncertainSegmentRatio = merged.segments.isEmpty
-            ? 0
-            : Double(uncertainCount) / Double(merged.segments.count)
-        meetingRecords[index].estimatedSpeakerCount = merged.speakers
-            .count { $0.id != MeetingMinutesAlgorithm.uncertainSpeakerID }
-        persistMeeting(meetingRecords[index])
-    }
-
     func restoreMeetingMinutesVersion(recordID: UUID, versionID: UUID) {
         ensureMeetingDetailLoaded(recordID)
         guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }),
@@ -802,7 +781,6 @@ extension AppModel {
                 var updatedRecord = meetingRecords[currentIndex]
                 updatedRecord.speakers = transcription.speakers
                 updatedRecord.transcript = transcription.segments
-                updatedRecord.speakerTurns = transcription.speakerTurns
                 updatedRecord.diarizationDegraded = transcription.diarizationDegraded
                 updatedRecord.diarizationDegradeReason = transcription.diarizationDegradeReason
                 updatedRecord.estimatedSpeakerCount = transcription.estimatedSpeakerCount
@@ -943,8 +921,7 @@ extension AppModel {
                         "meetingID": record.id.uuidString,
                         "stage": checkpoint.stage.rawValue,
                         "completedChunks": String(checkpoint.completedChunkCount),
-                        "totalChunks": String(checkpoint.totalChunkCount),
-                        "factCount": String(checkpoint.facts.count)
+                        "totalChunks": String(checkpoint.totalChunkCount)
                     ]
                 )
             },
@@ -979,10 +956,7 @@ extension AppModel {
             result: "success",
             fields: [
                 "meetingID": record.id.uuidString,
-                "keyPoints": String(summary.keyPoints.count),
-                "decisions": String(summary.decisions.count),
-                "actionItems": String(summary.actionItems.count),
-                "openQuestions": String(summary.openQuestions.count)
+                "actionItems": String(summary.actionItems.count)
             ]
         )
         meetingProcessingState = .ready
@@ -1119,7 +1093,6 @@ extension AppModel {
             meetingRecords[index].errorMessage = message
             if var checkpoint = meetingRecords[index].summaryCheckpoint {
                 checkpoint.stage = .failed
-                checkpoint.errorMessage = message
                 checkpoint.updatedAt = Date()
                 meetingRecords[index].summaryCheckpoint = checkpoint
             }

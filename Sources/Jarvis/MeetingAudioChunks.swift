@@ -57,25 +57,6 @@ struct MeetingAudioEvent: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct MeetingSpeakerTurnRecord: Codable, Equatable, Identifiable, Sendable {
-    var id: UUID
-    var startTime: TimeInterval
-    var endTime: TimeInterval
-    var clusterID: String
-
-    init(id: UUID = UUID(), startTime: TimeInterval, endTime: TimeInterval, clusterID: String) {
-        self.id = id
-        self.startTime = startTime
-        self.endTime = endTime
-        self.clusterID = clusterID
-    }
-}
-
-struct MeetingSegmentSpeakerOverride: Codable, Equatable, Sendable {
-    var segmentID: UUID
-    var speakerID: String
-}
-
 struct MeetingMinutesVersion: Codable, Equatable, Identifiable, Sendable {
     var id: UUID
     var savedAt: Date
@@ -303,79 +284,5 @@ enum MeetingAudioAssembler {
             throw MeetingAudioMixer.Error.noAudioTrack
         }
         return Double(frames) / rate
-    }
-}
-
-enum MeetingSpeakerRemerge {
-    static func apply(
-        segments: [MeetingTranscriptSegment],
-        turns: [MeetingSpeakerTurnRecord],
-        overrides: [MeetingSegmentSpeakerOverride],
-        speakers: [MeetingSpeaker]
-    ) -> (segments: [MeetingTranscriptSegment], speakers: [MeetingSpeaker]) {
-        let overrideMap = Dictionary(overrides.map { ($0.segmentID, $0.speakerID) }, uniquingKeysWith: { _, latest in latest })
-        let algorithmTurns = turns.map {
-            MeetingMinutesAlgorithm.SpeakerTurn(
-                speakerID: $0.clusterID,
-                startTime: $0.startTime,
-                endTime: $0.endTime
-            )
-        }
-        var names = Dictionary(uniqueKeysWithValues: speakers.map { ($0.id, $0.name) })
-        var updated = segments
-        for index in updated.indices {
-            let segment = updated[index]
-            let speakerID: String = if let override = overrideMap[segment.id] {
-                override
-            } else if algorithmTurns.isEmpty {
-                segment.speakerID
-            } else {
-                MeetingMinutesAlgorithm.assignedSpeakerID(
-                    startTime: segment.startTime,
-                    endTime: segment.endTime,
-                    turns: algorithmTurns
-                )
-            }
-            updated[index].speakerID = speakerID
-            updated[index].isUncertainSpeaker = speakerID == MeetingMinutesAlgorithm.uncertainSpeakerID
-            if names[speakerID] == nil {
-                if speakerID == MeetingMinutesAlgorithm.uncertainSpeakerID {
-                    names[speakerID] = MeetingMinutesAlgorithm.uncertainSpeakerName
-                } else {
-                    names[speakerID] = Self.nextAutoName(taken: Set(names.values))
-                }
-            }
-        }
-        var ordered: [String] = []
-        for segment in updated where !ordered.contains(segment.speakerID) {
-            ordered.append(segment.speakerID)
-        }
-        // Rebuilding the list is not a tidy-up: a name the user typed, and the colour a
-        // speaker already had, both survive even when the re-run leaves a speaker with no
-        // segments. Otherwise pressing this button reshuffles rows for no reason.
-        var rebuilt: [MeetingSpeaker] = []
-        for id in ordered + speakers.map(\.id) where !rebuilt.contains(where: { $0.id == id }) {
-            let existing = speakers.first { $0.id == id }
-            rebuilt.append(
-                MeetingSpeaker(
-                    id: id,
-                    name: names[id]
-                        ?? existing?.name
-                        ?? Self.nextAutoName(taken: Set(rebuilt.map(\.name))),
-                    colorIndex: existing?.colorIndex ?? rebuilt.count
-                )
-            )
-        }
-        return (updated, rebuilt)
-    }
-
-    /// "说话人 N" with a number nobody is using: two speakers sharing a name would make the
-    /// minutes' 负责人 ambiguous, and no later rename would be able to follow it.
-    private static func nextAutoName(taken: Set<String>) -> String {
-        var index = taken.count { $0.hasPrefix("说话人 ") } + 1
-        while taken.contains("说话人 \(index)") {
-            index += 1
-        }
-        return "说话人 \(index)"
     }
 }

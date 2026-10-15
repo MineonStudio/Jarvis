@@ -164,16 +164,11 @@ final class MeetingRepository: @unchecked Sendable {
         return searchableText.contains { $0.meetingSearchContains(normalizedQuery) }
     }
 
-    /// 与 detailMatchesSearch 原来的拼接顺序完全一致，保证语义不变。
     private static func searchableTexts(for detail: MeetingRecordDetail) -> [String] {
-        let points = detail.summary?.renderedPoints.flatMap { [$0.title, $0.detail] } ?? []
-        return [detail.summary?.overview ?? ""]
-            + (detail.summary?.keyPoints ?? [])
-            + (detail.summary?.decisions ?? [])
-            + (detail.summary?.actionItems.map(\.task) ?? [])
-            + (detail.summary?.openQuestions ?? [])
-            + points
-            + detail.transcript.map(\.text)
+        let transcript = detail.transcript.map(\.text)
+        guard let summary = detail.summary else { return transcript }
+        let points = summary.points.flatMap { [$0.title, $0.detail] }
+        return [summary.overview] + summary.actionItems.map(\.task) + points + transcript
     }
 
     func recordingsUsageBytes() -> Int64 {

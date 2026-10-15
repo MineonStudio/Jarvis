@@ -119,12 +119,6 @@ struct MeetingSummaryService: Sendable {
             record: record,
             configuration: configuration,
             index: TranscriptIndex(transcript: record.transcript),
-            generation: MeetingMinutesGeneration(
-                modelName: configuration.model,
-                promptVersion: MeetingMinutesAlgorithm.promptVersion,
-                generatedAt: Date(),
-                transcriptFingerprint: fingerprint
-            ),
             fingerprint: fingerprint,
             speakerNames: record.speakers.map(\.name)
         )
@@ -510,7 +504,7 @@ struct MeetingSummaryService: Sendable {
     ) async throws -> ReduceOutcome {
         guard summaries.count > 1 else {
             let only = summaries.first
-                ?? MeetingSummary(overview: "", keyPoints: [], decisions: [], actionItems: [], openQuestions: [])
+                ?? MeetingSummary(overview: "", actionItems: [])
             return ReduceOutcome(summary: only, isStitched: false)
         }
         var level = summaries.map { ReduceOutcome(summary: $0, isStitched: false) }
@@ -670,8 +664,7 @@ struct MeetingSummaryService: Sendable {
             draft,
             transcript: context.record.transcript,
             speakers: context.record.speakers,
-            meetingDate: context.record.createdAt,
-            generation: context.generation
+            meetingDate: context.record.createdAt
         )
     }
 
@@ -857,8 +850,7 @@ struct MeetingSummaryService: Sendable {
             transcriptFingerprint: fingerprint,
             stage: .completed,
             completedChunkCount: chunkCount,
-            totalChunkCount: chunkCount,
-            directSummary: chunkCount == 1
+            totalChunkCount: chunkCount
         )
         checkpoint.windowSummaries = windows
         checkpoint.finishedSummary = finished
@@ -922,7 +914,6 @@ struct SummaryContext: Sendable {
     var record: MeetingRecord
     var configuration: AIAPIConfiguration
     var index: TranscriptIndex
-    var generation: MeetingMinutesGeneration
     var fingerprint: String
     var speakerNames: [String]
 }
@@ -1024,12 +1015,8 @@ private final class MinutesStreamAssembler: @unchecked Sendable {
     private func snapshot() -> MeetingSummary {
         MeetingSummary(
             overview: overview,
-            keyPoints: [],
-            decisions: [],
             actionItems: actionItems,
-            openQuestions: [],
-            points: points,
-            generation: context.generation
+            points: points
         )
     }
 

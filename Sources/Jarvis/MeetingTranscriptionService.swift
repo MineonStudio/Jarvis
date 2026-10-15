@@ -249,13 +249,6 @@ actor FluidAudioMeetingTranscriptionService: MeetingTranscribing {
         return MeetingTranscriptionResult(
             speakers: speakers,
             segments: utterances.sorted { $0.startTime < $1.startTime },
-            speakerTurns: turns.map {
-                MeetingSpeakerTurnRecord(
-                    startTime: $0.startTime,
-                    endTime: $0.endTime,
-                    clusterID: $0.speakerID
-                )
-            },
             estimatedSpeakerCount: estimated,
             uncertainSegmentRatio: ratio
         )

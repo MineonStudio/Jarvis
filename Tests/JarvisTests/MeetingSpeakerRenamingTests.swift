@@ -62,13 +62,10 @@ final class MeetingSpeakerRenamingTests: XCTestCase {
         let evidence = MeetingEvidence(segmentID: UUID(), startMs: 0, endMs: 1000, quote: "原文")
         return MeetingSummary(
             overview: "概要",
-            keyPoints: [],
-            decisions: [],
             actionItems: [
                 MeetingActionItem(task: "发文档", owner: "", evidence: [evidence]),
                 MeetingActionItem(task: "排期", owner: "", evidence: [evidence])
-            ],
-            openQuestions: []
+            ]
         )
     }
 }

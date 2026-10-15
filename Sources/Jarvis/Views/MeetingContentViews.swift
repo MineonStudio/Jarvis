@@ -393,20 +393,6 @@ private struct MeetingSpeakerSection: View {
                                 .font(JarvisTypography.caption)
                                 .foregroundStyle(Color.jarvisTextSecondary)
                         }
-                        if !record.speakerTurns.isEmpty {
-                            Divider()
-                            HStack {
-                                Text("用已保存的时段按当前算法重算归属")
-                                    .font(JarvisTypography.caption)
-                                    .foregroundStyle(Color.jarvisTextSecondary)
-                                Spacer(minLength: 8)
-                                Button("重新合并") {
-                                    app.remergeMeetingSpeakers(recordID: record.id)
-                                }
-                                .buttonStyle(.borderless)
-                                .help("录音时保存了每个说话人的发言时段，这里用现在的算法重新划分一次")
-                            }
-                        }
                     }
                 }
             }
@@ -1655,18 +1641,18 @@ private struct MeetingDiscussionPointsSection: View {
     let onToggleCitation: (TimeInterval, UUID?) -> Void
 
     var body: some View {
-        if !summary.renderedPoints.isEmpty {
+        if !summary.points.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     MeetingSectionHeader(title: "讨论要点", systemImage: "list.bullet")
                     Spacer()
-                    Text("\(summary.renderedPoints.count)")
+                    Text("\(summary.points.count)")
                         .font(JarvisTypography.captionEmphasis)
                         .foregroundStyle(Color.jarvisTextSecondary)
                 }
                 JarvisCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        ForEach(summary.renderedPoints) { point in
+                        ForEach(summary.points) { point in
                             pointRow(point)
                         }
                     }
@@ -1752,7 +1738,7 @@ private struct MeetingActionItemsPanel: View {
     private func actionRow(
         _ item: MeetingActionItem,
         record: MeetingRecord,
-        summary: MeetingSummary
+        summary _: MeetingSummary
     ) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Button {
@@ -1770,7 +1756,7 @@ private struct MeetingActionItemsPanel: View {
             .accessibilityLabel(item.isCompleted ? "标记待办为未完成" : "标记待办为已完成：\(item.task)")
 
             VStack(alignment: .leading, spacing: 4) {
-                let target = meetingActionTarget(item: item, record: record, summary: summary)
+                let target = meetingActionTarget(item: item, record: record)
                 MeetingCitedSentence(
                     text: item.task,
                     isStrikethrough: item.isCompleted,
@@ -1810,17 +1796,9 @@ private func meetingEvidenceTarget(
 
 private func meetingActionTarget(
     item: MeetingActionItem,
-    record: MeetingRecord,
-    summary: MeetingSummary
+    record: MeetingRecord
 ) -> MeetingPlayTarget? {
-    if let target = meetingEvidenceTarget(evidence: item.evidence, record: record) {
-        return target
-    }
-    guard let citation = summary.citations?.first(where: { $0.kind == .actionItem && $0.text == item.task }),
-          let segmentID = citation.sourceSegmentIDs.first,
-          let segment = record.transcript.first(where: { $0.id == segmentID })
-    else { return nil }
-    return MeetingPlayTarget(time: segment.startTime, segmentID: segment.id)
+    meetingEvidenceTarget(evidence: item.evidence, record: record)
 }
 
 private func formatMeetingDuration(_ duration: TimeInterval) -> String {
