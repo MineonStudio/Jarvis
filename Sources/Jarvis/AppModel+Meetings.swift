@@ -217,8 +217,6 @@ extension AppModel {
             meetingElapsedOrigin = Date()
             meetingElapsedAccumulated = 0
             meetingRecoverySnapshotBucket = -1
-            meetingMicrophoneSilentSince = nil
-            meetingDidWarnAboutSilence = false
             meetingSystemSilentSince = nil
             meetingDidWarnAboutSystemSilence = false
             meetingRecordingPaused = false
@@ -279,12 +277,6 @@ extension AppModel {
             let stopResult = await meetingRecorder.stop()
             finishStoppedMeeting(recordID: id, result: stopResult, processAfterStop: true)
         }
-    }
-
-    func handleUnexpectedMeetingStop() {
-        guard meetingCurrentRecordingID != nil else { return }
-        showToast(JarvisFeedbackCopy.recordingInterrupted)
-        stopMeetingRecording()
     }
 
     func cancelMeetingRecording() {
@@ -532,10 +524,6 @@ extension AppModel {
 
     func meetingAudioURL(for record: MeetingRecord) -> URL? {
         try? meetingRepository.audioURL(for: record)
-    }
-
-    func meetingMicrophoneAudioURL(for record: MeetingRecord) -> URL? {
-        try? meetingRepository.microphoneAudioURL(for: record)
     }
 
     func updateMeetingTitle(recordID: UUID, title: String) {
@@ -1018,7 +1006,7 @@ extension AppModel {
         var record = meetingRecords[index]
         record.duration = result.duration
         record.audioChunks = result.chunks
-        record.systemAudioStartOffset = result.systemAudioStartOffset
+        record.systemAudioStartOffset = 0
         if result.systemAudioStarted,
            let systemAudioURL = try? meetingRepository.systemAudioURL(for: record),
            !isReadyAudioFile(at: systemAudioURL)
@@ -1181,7 +1169,6 @@ extension AppModel {
     }
 
     private func refreshMeetingRecordingMeters() {
-        meetingMicrophonePower = meetingRecorder.microphoneAveragePower()
         meetingSystemPower = meetingRecorder.systemAveragePower()
         meetingBytesWritten = meetingRecorder.writtenByteCount()
     }
@@ -1349,21 +1336,6 @@ extension AppModel {
         guard let index = meetingRecords.firstIndex(where: { $0.id == id }) else { return }
         meetingRecords[index].duration = meetingElapsed
         persistMeeting(meetingRecords[index])
-    }
-
-    private func warnIfMicrophoneStaysSilent() {
-        guard !meetingDidWarnAboutSilence else { return }
-        guard let power = meetingRecorder.microphoneAveragePower() else { return }
-        if power < -45 {
-            if meetingMicrophoneSilentSince == nil {
-                meetingMicrophoneSilentSince = Date()
-            } else if let since = meetingMicrophoneSilentSince, Date().timeIntervalSince(since) >= 30 {
-                meetingDidWarnAboutSilence = true
-                showToast("麦克风已连续 30 秒没有声音，录音仍在继续")
-            }
-        } else {
-            meetingMicrophoneSilentSince = nil
-        }
     }
 
     private func persistMeeting(_ record: MeetingRecord) {

@@ -251,15 +251,8 @@ private struct MeetingEmptyState: View {
                 .frame(width: 76, height: 76)
                 .background(Color.jarvisAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: 22))
 
-            VStack(spacing: 8) {
-                Text("把一次会议，变成可执行的结论")
-                    .font(JarvisTypography.pageTitle)
-                Text("录音留在本机。系统中文转写和说话人分段也在本机完成，只有生成纪要时才发送逐字稿文本。")
-                    .font(JarvisTypography.secondary)
-                    .foregroundStyle(Color.jarvisTextSecondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
-            }
+            Text("把一次会议，变成可执行的结论")
+                .font(JarvisTypography.pageTitle)
 
             if !app.meetingModelsReady {
                 MeetingModelDownloadPrompt()
@@ -274,12 +267,6 @@ private struct MeetingEmptyState: View {
             .buttonStyle(JarvisPrimaryButtonStyle())
             .disabled(!app.meetingModelsReady)
 
-            HStack(spacing: 6) {
-                Image(systemName: "lock.shield")
-                Text("原始录音与逐字稿保存在本机；总结使用设置中的 AI 服务")
-            }
-            .font(JarvisTypography.caption)
-            .foregroundStyle(Color.jarvisTextSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)

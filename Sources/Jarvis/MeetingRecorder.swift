@@ -1,61 +1,37 @@
 import AVFoundation
-import CoreAudio
 import CoreGraphics
 import CoreMedia
 import Foundation
 import ScreenCaptureKit
 
-struct MeetingRecordingSources: Sendable {
-    let systemAudioStarted: Bool
-    let systemAudioErrorMessage: String?
-}
-
 struct MeetingRecordingStopResult: Sendable {
     let duration: TimeInterval
     let systemAudioStarted: Bool
-    let microphoneStartedAt: Date
-    let systemAudioStartedAt: Date?
     let systemAudioErrorMessage: String?
     /// Slices finalized before the session state is cleared. Files may already be concatenated.
     let chunks: [MeetingAudioChunk]
-
-    var systemAudioStartOffset: TimeInterval {
-        MeetingAudioMixer.systemAudioInsertionDelay(
-            microphoneStartedAt: microphoneStartedAt,
-            systemAudioStartedAt: systemAudioStartedAt
-        )
-    }
 }
 
 @MainActor
 final class MeetingRecorder {
-    private var microphoneCapture: MeetingMicrophoneCapture?
-    private var startedAt: Date?
     private let systemAudioRecorder = MeetingSystemAudioRecorder()
     private var systemAudioStarted = false
-    private var systemAudioStartedAt: Date?
     /// 上一次 stop() 的异步收尾是否在途。App 层在发起 stop 时同步立起（Task 调度有窗口），
     /// stop() 返回时由 defer 落下。start 前必须检查：否则旧 stop 恢复后会清掉新会话的
     /// 采集状态，新录音收不到系统音频但 UI 显示正常（S-3）。
     private(set) var isStopping = false
     private(set) var isPaused = false
-    var onUnexpectedStop: (@MainActor () -> Void)?
     var onAudioEvent: (@MainActor (MeetingAudioEvent) -> Void)?
 
     private var meetingID: UUID?
     private var directoryURL: URL?
-    private var canonicalMicrophoneURL: URL?
     private var canonicalSystemURL: URL?
-    private var capturesSystemAudio = true
     private var closedChunks: [MeetingAudioChunk] = []
-    private var microphoneChunkIndex = 0
     private var systemChunkIndex = 0
-    private var microphoneChunkOpenedAt: Date?
     private var wallAnchor = Date()
     private var pausedDuration: TimeInterval = 0
     private var pauseBegan: Date?
     private var accountedGap: TimeInterval = 0
-    private var inputDeviceListener: MeetingInputDeviceListener?
 
     var isRecording: Bool {
         systemAudioStarted && isSessionOpen && !isPaused
@@ -65,18 +41,13 @@ final class MeetingRecorder {
         meetingID != nil
     }
 
-    /// dBFS of the live microphone. Nil when capture is not running.
-    func microphoneAveragePower() -> Float? {
-        microphoneCapture?.averagePower()
-    }
-
     func systemAveragePower() -> Float? {
         systemAudioRecorder.latestPower
     }
 
     func writtenByteCount() -> Int64 {
         guard let directoryURL, meetingID != nil else { return 0 }
-        let names = closedChunks.map(\.fileName) + [currentMicrophoneFileName, currentSystemFileName].compactMap { $0 }
+        let names = closedChunks.map(\.fileName) + [currentSystemFileName].compactMap { $0 }
         return names.reduce(into: Int64(0)) { total, name in
             let url = directoryURL.appendingPathComponent(name)
             let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
@@ -86,9 +57,6 @@ final class MeetingRecorder {
 
     func snapshotChunks() -> [MeetingAudioChunk] {
         var chunks = closedChunks
-        if let open = openMicrophoneChunk() {
-            chunks.append(open)
-        }
         if let open = openSystemChunk() {
             chunks.append(open)
         }
@@ -110,24 +78,19 @@ final class MeetingRecorder {
 
         self.meetingID = meetingID
         directoryURL = systemAudioURL.deletingLastPathComponent()
-        canonicalMicrophoneURL = nil
         canonicalSystemURL = systemAudioURL
-        capturesSystemAudio = true
         closedChunks = []
-        microphoneChunkIndex = 0
         systemChunkIndex = 0
         pausedDuration = 0
         pauseBegan = nil
         accountedGap = 0
         isPaused = false
         wallAnchor = Date()
-        startedAt = Date()
 
         do {
-            let chunkURL = try chunkURL(kind: .system, index: 0)
+            let chunkURL = try systemChunkURL(index: 0)
             try await systemAudioRecorder.start(to: chunkURL)
             systemAudioStarted = true
-            systemAudioStartedAt = Date()
         } catch {
             await discard()
             throw error
@@ -144,17 +107,6 @@ final class MeetingRecorder {
     func rotateIfDue() -> [MeetingAudioChunk] {
         guard isSessionOpen, !isPaused else { return [] }
         var closed: [MeetingAudioChunk] = []
-        let micDuration = microphoneCapture?.currentDuration ?? 0
-        if micDuration >= MeetingAudioChunkFile.sliceDuration {
-            let finished = finalizeMicrophoneChunk(duration: micDuration)
-            closedChunks.append(contentsOf: finished)
-            closed.append(contentsOf: finished)
-            do {
-                try beginMicrophoneChunk()
-            } catch {
-                onUnexpectedStop?()
-            }
-        }
         if systemAudioStarted, systemAudioRecorder.currentDuration >= MeetingAudioChunkFile.sliceDuration {
             if let chunk = finalizeSystemChunk() {
                 closedChunks.append(chunk)
@@ -169,12 +121,6 @@ final class MeetingRecorder {
 
     func pauseRecording() {
         guard isSessionOpen, !isPaused else { return }
-        let micDuration = microphoneCapture?.currentDuration ?? 0
-        if micDuration > 0.2 {
-            closedChunks.append(contentsOf: finalizeMicrophoneChunk(duration: micDuration))
-        } else {
-            stopOpenMicrophoneRecorder()
-        }
         if systemAudioStarted, let chunk = finalizeSystemChunk() {
             closedChunks.append(chunk)
         }
@@ -196,13 +142,6 @@ final class MeetingRecorder {
     func stop() async -> MeetingRecordingStopResult {
         isStopping = true
         defer { isStopping = false }
-        let microphoneStartedAt = startedAt ?? Date()
-        let micDuration = microphoneCapture?.currentDuration ?? 0
-        if MeetingMicrophoneRotation.keepsOpenSlice(micDuration) {
-            closedChunks.append(contentsOf: finalizeMicrophoneChunk(duration: micDuration))
-        } else {
-            stopOpenMicrophoneRecorder()
-        }
         let stats = await systemAudioRecorder.stop()
         if systemAudioStarted, stats.didWriteAudio, let chunk = takeOpenSystemChunk(duration: stats.duration) {
             closedChunks.append(chunk)
@@ -211,16 +150,6 @@ final class MeetingRecorder {
         let capturedSystemAudio = systemAudioStarted && stats.didWriteAudio
             && finishedChunks.contains { $0.kind == .system }
         var duration = finishedChunks.filter { $0.kind == .system }.reduce(0) { $0 + $1.duration }
-        if duration == 0 {
-            duration = finishedChunks.filter { $0.kind == .microphone }.reduce(0) { $0 + $1.duration }
-        }
-        if let microphoneURL = canonicalMicrophoneURL {
-            let micURLs = chunkURLs(kind: .microphone)
-            if let assembled = try? await MeetingAudioAssembler.concatenate(urls: micURLs, outputURL: microphoneURL) {
-                duration = max(duration, assembled)
-                removeChunkFiles(kind: .microphone)
-            }
-        }
         if capturedSystemAudio, let systemURL = canonicalSystemURL {
             let systemURLs = chunkURLs(kind: .system)
             if let assembled = try? await MeetingAudioAssembler.concatenate(urls: systemURLs, outputURL: systemURL) {
@@ -231,8 +160,6 @@ final class MeetingRecorder {
         let result = MeetingRecordingStopResult(
             duration: max(duration, 0),
             systemAudioStarted: capturedSystemAudio,
-            microphoneStartedAt: microphoneStartedAt,
-            systemAudioStartedAt: capturedSystemAudio ? stats.firstBufferAt : nil,
             systemAudioErrorMessage: stats.failureMessage,
             chunks: finishedChunks
         )
@@ -244,8 +171,6 @@ final class MeetingRecorder {
     func discard() async {
         isStopping = true
         defer { isStopping = false }
-        _ = microphoneCapture?.finish()
-        microphoneCapture = nil
         _ = await systemAudioRecorder.stop()
         if let directoryURL, let meetingID {
             let prefix = "meeting-\(meetingID.uuidString)."
@@ -257,68 +182,15 @@ final class MeetingRecorder {
                 try? FileManager.default.removeItem(at: url)
             }
         }
-        if let canonicalMicrophoneURL {
-            try? FileManager.default.removeItem(at: canonicalMicrophoneURL)
-        }
         if let canonicalSystemURL {
             try? FileManager.default.removeItem(at: canonicalSystemURL)
         }
         resetSession()
     }
 
-    private var currentMicrophoneFileName: String? {
-        guard let meetingID else { return nil }
-        return MeetingAudioChunkFile.microphoneName(meetingID: meetingID, index: microphoneChunkIndex)
-    }
-
     private var currentSystemFileName: String? {
         guard let meetingID, systemAudioStarted || systemChunkIndex > 0 else { return nil }
         return MeetingAudioChunkFile.systemName(meetingID: meetingID, index: systemChunkIndex)
-    }
-
-    private func beginMicrophoneChunk() throws {
-        guard let meetingID, let directoryURL else { throw MeetingRecorderError.cannotStart }
-        let name = MeetingAudioChunkFile.microphoneName(meetingID: meetingID, index: microphoneChunkIndex)
-        let url = directoryURL.appendingPathComponent(name)
-        let capture = MeetingMicrophoneCapture()
-        try capture.start(
-            url: url,
-            gateSpeech: systemAudioStarted,
-            systemPower: { [systemAudioRecorder] in
-                systemAudioRecorder.latestPower
-            }
-        )
-        microphoneCapture = capture
-        microphoneChunkOpenedAt = Date()
-    }
-
-    private func finalizeMicrophoneChunk(duration _: TimeInterval) -> [MeetingAudioChunk] {
-        guard let meetingID, microphoneCapture != nil else { return [] }
-        let duration = microphoneCapture?.finish() ?? 0
-        microphoneCapture = nil
-        let chunk = MeetingAudioChunk(
-            kind: .microphone,
-            index: microphoneChunkIndex,
-            fileName: MeetingAudioChunkFile.microphoneName(meetingID: meetingID, index: microphoneChunkIndex),
-            startOffset: closedChunks.filter { $0.kind == .microphone }.reduce(0) { $0 + $1.duration },
-            duration: duration,
-            closed: true
-        )
-        microphoneChunkIndex += 1
-        microphoneChunkOpenedAt = nil
-        return [chunk]
-    }
-
-    private func openMicrophoneChunk() -> MeetingAudioChunk? {
-        guard let meetingID, let capture = microphoneCapture, capture.isRunning else { return nil }
-        return MeetingAudioChunk(
-            kind: .microphone,
-            index: microphoneChunkIndex,
-            fileName: MeetingAudioChunkFile.microphoneName(meetingID: meetingID, index: microphoneChunkIndex),
-            startOffset: closedChunks.filter { $0.kind == .microphone }.reduce(0) { $0 + $1.duration },
-            duration: capture.currentDuration,
-            closed: false
-        )
     }
 
     private func finalizeSystemChunk() -> MeetingAudioChunk? {
@@ -380,17 +252,15 @@ final class MeetingRecorder {
         closedChunks.removeAll { $0.kind == kind }
     }
 
-    private func chunkURL(kind: MeetingAudioChunkKind, index: Int) throws -> URL {
+    private func systemChunkURL(index: Int) throws -> URL {
         guard let meetingID, let directoryURL else { throw MeetingRecorderError.cannotStart }
-        let name = kind == .microphone
-            ? MeetingAudioChunkFile.microphoneName(meetingID: meetingID, index: index)
-            : MeetingAudioChunkFile.systemName(meetingID: meetingID, index: index)
+        let name = MeetingAudioChunkFile.systemName(meetingID: meetingID, index: index)
         return directoryURL.appendingPathComponent(name)
     }
 
     private func gapEventIfNeeded() -> MeetingAudioEvent? {
-        let recorded = closedChunks.filter { $0.kind == .microphone }.reduce(0) { $0 + $1.duration }
-            + (microphoneCapture?.currentDuration ?? 0)
+        let recorded = closedChunks.filter { $0.kind == .system }.reduce(0) { $0 + $1.duration }
+            + (systemAudioStarted ? systemAudioRecorder.currentDuration : 0)
         var wall = Date().timeIntervalSince(wallAnchor) - pausedDuration
         if let pauseBegan {
             wall -= Date().timeIntervalSince(pauseBegan)
@@ -405,61 +275,13 @@ final class MeetingRecorder {
         )
     }
 
-    private func installInputDeviceListener() {
-        inputDeviceListener = MeetingInputDeviceListener { [weak self] in
-            self?.handleInputDeviceChange()
-        }
-    }
-
-    private func handleInputDeviceChange() {
-        guard isSessionOpen, !isPaused, !isStopping else { return }
-        let duration = microphoneCapture?.currentDuration ?? 0
-        if MeetingMicrophoneRotation.keepsOpenSlice(duration) {
-            closedChunks.append(contentsOf: finalizeMicrophoneChunk(duration: duration))
-        } else {
-            stopOpenMicrophoneRecorder()
-        }
-        do {
-            try beginMicrophoneChunk()
-        } catch {
-            onUnexpectedStop?()
-        }
-        onAudioEvent?(
-            MeetingAudioEvent(
-                at: closedChunks.filter { $0.kind == .microphone }.reduce(0) { $0 + $1.duration },
-                kind: .deviceChange,
-                message: "输入设备变了，录音已跟着切换"
-            )
-        )
-    }
-
-    private func stopOpenMicrophoneRecorder() {
-        _ = microphoneCapture?.finish()
-        microphoneCapture = nil
-    }
-
     private func resetSession() {
-        inputDeviceListener = nil
-        microphoneCapture = nil
-        startedAt = nil
         meetingID = nil
         directoryURL = nil
-        canonicalMicrophoneURL = nil
         canonicalSystemURL = nil
         closedChunks = []
         systemAudioStarted = false
-        systemAudioStartedAt = nil
         isPaused = false
-    }
-}
-
-enum MeetingMicrophoneRotation {
-    /// Same floor `stop()` uses. A device change keeps a slice that already has audio
-    /// instead of deleting the open file. Pause still drops slices of 0.2 seconds or less.
-    static let minimumKeptSlice: TimeInterval = 0.05
-
-    static func keepsOpenSlice(_ duration: TimeInterval) -> Bool {
-        duration > minimumKeptSlice
     }
 }
 
@@ -518,7 +340,6 @@ private final class MeetingSystemAudioRecorder: NSObject, SCStreamOutput, SCStre
     private var outputURL: URL?
     private var audioFile: AVAudioFile?
     private var didWriteAudio = false
-    private var firstBufferAt: Date?
     private var failureMessage: String?
     private var stopRequested = false
     private var levelState = MeetingSystemLevelState()
@@ -575,7 +396,6 @@ private final class MeetingSystemAudioRecorder: NSObject, SCStreamOutput, SCStre
 
     struct CaptureStats: Sendable {
         let didWriteAudio: Bool
-        let firstBufferAt: Date?
         let failureMessage: String?
         let duration: TimeInterval
     }
@@ -640,7 +460,6 @@ private final class MeetingSystemAudioRecorder: NSObject, SCStreamOutput, SCStre
         defer { stateLock.unlock() }
         return CaptureStats(
             didWriteAudio: didWriteAudio,
-            firstBufferAt: firstBufferAt,
             failureMessage: failureMessage,
             duration: sampleRate > 0 ? Double(framesWritten) / sampleRate : 0
         )
@@ -702,9 +521,6 @@ private final class MeetingSystemAudioRecorder: NSObject, SCStreamOutput, SCStre
             do {
                 try audioFile?.write(from: buffer)
                 self.stateLock.lock()
-                if !didWriteAudio {
-                    firstBufferAt = Date()
-                }
                 didWriteAudio = true
                 framesWritten += AVAudioFramePosition(buffer.frameLength)
                 self.stateLock.unlock()
@@ -764,7 +580,6 @@ private final class MeetingSystemAudioRecorder: NSObject, SCStreamOutput, SCStre
         self.outputURL = outputURL
         audioFile = nil
         didWriteAudio = false
-        firstBufferAt = nil
         failureMessage = nil
         framesWritten = 0
         stopRequested = false
@@ -923,53 +738,13 @@ enum MeetingAudioMixer {
     }
 }
 
-private final class MeetingInputDeviceListener {
-    private final class Box: @unchecked Sendable {
-        var fire: (@MainActor () -> Void)?
-    }
-
-    private let box = Box()
-    private var address = AudioObjectPropertyAddress(
-        mSelector: kAudioHardwarePropertyDefaultInputDevice,
-        mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain
-    )
-    private let listener: AudioObjectPropertyListenerBlock
-
-    init(onChange: @escaping @MainActor () -> Void) {
-        box.fire = onChange
-        let captured = box
-        let listener: AudioObjectPropertyListenerBlock = { _, _ in
-            Task { @MainActor in
-                captured.fire?()
-            }
-        }
-        self.listener = listener
-        AudioObjectAddPropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            DispatchQueue.main,
-            listener
-        )
-    }
-
-    deinit {
-        AudioObjectRemovePropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            DispatchQueue.main,
-            listener
-        )
-    }
-}
-
 enum MeetingRecorderError: LocalizedError {
     case cannotStart
     case stopInProgress
 
     var errorDescription: String? {
         switch self {
-        case .cannotStart: "无法开始录音，请检查麦克风权限和输入设备"
+        case .cannotStart: "无法开始系统音频录音，请检查屏幕录制权限和系统音频采集状态"
         case .stopInProgress: "上一次录音正在收尾，请稍后再试"
         }
     }

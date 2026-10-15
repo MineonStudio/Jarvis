@@ -116,13 +116,9 @@ final class AppModel {
     var meetingElapsedAccumulated: TimeInterval = 0
     var meetingTranscriptConsentRecordID: UUID?
     var meetingRecoverySnapshotBucket = -1
-    var meetingMicrophoneSilentSince: Date?
-    var meetingDidWarnAboutSilence = false
     var meetingSystemSilentSince: Date?
     var meetingDidWarnAboutSystemSilence = false
-    var meetingCaptureMode: MeetingCaptureMode = .system
     var meetingRecordingPaused = false
-    var meetingMicrophonePower: Float?
     var meetingSystemPower: Float?
     var meetingBytesWritten: Int64 = 0
     var meetingModelDownloadCompletedBytes: Int64 = 0
@@ -306,9 +302,6 @@ final class AppModel {
         }
         meetingRecords = loadedMeetingRecords
         meetingRecorder = MeetingRecorder()
-        meetingRecorder.onUnexpectedStop = { [weak self] in
-            self?.handleUnexpectedMeetingStop()
-        }
         meetingRecorder.onAudioEvent = { [weak self] event in
             self?.appendMeetingAudioEvent(event)
         }

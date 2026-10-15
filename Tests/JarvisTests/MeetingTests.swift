@@ -568,66 +568,6 @@ final class MeetingTests: XCTestCase {
         )
     }
 
-    func testDeviceChangeKeepsAShortMicrophoneSlice() {
-        XCTAssertTrue(MeetingMicrophoneRotation.keepsOpenSlice(0.2))
-        XCTAssertTrue(MeetingMicrophoneRotation.keepsOpenSlice(1))
-        XCTAssertFalse(MeetingMicrophoneRotation.keepsOpenSlice(0.05))
-        XCTAssertFalse(MeetingMicrophoneRotation.keepsOpenSlice(0))
-    }
-
-    func testMicrophoneGateKeepsCloseSpeechAndDropsSpeakerBleed() {
-        let rate = 100.0
-        var gated = MeetingMicrophoneSpeechGate(enabled: true)
-        let closeSpeech = gateSamples(decibels: -20, count: 8)
-        XCTAssertEqual(
-            gated.consume(samples: closeSpeech, sampleRate: rate, systemPower: -10),
-            closeSpeech
-        )
-
-        var playback = MeetingMicrophoneSpeechGate(enabled: true)
-        let bleed = gateSamples(decibels: -34, count: 30)
-        let dropped = playback.consume(samples: bleed, sampleRate: rate, systemPower: -10)
-        XCTAssertEqual(dropped, [Float](repeating: 0, count: 10))
-
-        var quietRoom = MeetingMicrophoneSpeechGate(enabled: true)
-        let softSpeech = gateSamples(decibels: -38, count: 8)
-        XCTAssertEqual(
-            quietRoom.consume(samples: softSpeech, sampleRate: rate, systemPower: -60),
-            softSpeech
-        )
-
-        var passthrough = MeetingMicrophoneSpeechGate(enabled: false)
-        let quiet = gateSamples(decibels: -50, count: 30)
-        XCTAssertEqual(
-            passthrough.consume(samples: quiet, sampleRate: rate, systemPower: -10),
-            quiet
-        )
-    }
-
-    func testMicrophoneGateKeepsTheWordOnsetAndAShortTail() {
-        let rate = 10.0
-        var gate = MeetingMicrophoneSpeechGate(enabled: true)
-        let quiet = gateSamples(decibels: -50, count: 1)
-        XCTAssertEqual(gate.consume(samples: quiet, sampleRate: rate, systemPower: -10), [])
-        XCTAssertEqual(gate.consume(samples: quiet, sampleRate: rate, systemPower: -10), [])
-
-        let speech = gateSamples(decibels: -20, count: 1)
-        XCTAssertEqual(
-            gate.consume(samples: speech, sampleRate: rate, systemPower: -10),
-            quiet + quiet + speech
-        )
-
-        XCTAssertEqual(gate.consume(samples: quiet, sampleRate: rate, systemPower: -10), quiet)
-        XCTAssertEqual(gate.consume(samples: quiet, sampleRate: rate, systemPower: -10), quiet)
-        XCTAssertEqual(gate.consume(samples: quiet, sampleRate: rate, systemPower: -10), quiet)
-        XCTAssertEqual(gate.consume(samples: quiet, sampleRate: rate, systemPower: -10), quiet)
-        XCTAssertEqual(gate.consume(samples: quiet, sampleRate: rate, systemPower: -10), [])
-
-        var ending = MeetingMicrophoneSpeechGate(enabled: true)
-        XCTAssertEqual(ending.consume(samples: quiet, sampleRate: rate, systemPower: -60), [])
-        XCTAssertEqual(ending.flush(), [Float](repeating: 0, count: 1))
-    }
-
     func testFailedTranscriptionDropsOnlyTheTurnsAddedForThatTrack() {
         let turns = [
             MeetingMinutesAlgorithm.SpeakerTurn(speakerID: "system:0", startTime: 0, endTime: 2),
@@ -1404,10 +1344,6 @@ extension MeetingTests {
     }
 }
 
-private func gateSamples(decibels: Float, count: Int) -> [Float] {
-    let amplitude = pow(10, decibels / 20)
-    return Array(repeating: amplitude, count: count)
-}
 
 private func writeSilentCAF(to url: URL, seconds: Double) throws {
     let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1))
