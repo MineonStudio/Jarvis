@@ -46,14 +46,24 @@ final class MeetingAudioWaveformTests: XCTestCase {
     }
 
     func testTheCacheKeyFollowsTheFileNotJustItsName() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jarvis-waveform-\(UUID().uuidString)", isDirectory: true)
         let url = try writeTestAudio(loudFraction: nil)
-        // Rewriting the file in place must not keep the old envelope.
-        let rewritten = try writeTestAudio(loudFraction: 0.2 ... 0.8, at: url)
-        XCTAssertEqual(url, rewritten)
+        let store = MeetingAudioWaveformStore(cacheDirectory: directory)
 
-        let waveform = await store().waveform(for: url)
-        let peaks = try XCTUnwrap(waveform).peaks
-        XCTAssertGreaterThan(peaks.max() ?? 0, 0.5, "改过的文件要重新解码")
+        let silent = await store.waveform(for: url)
+        XCTAssertLessThan(try XCTUnwrap(silent).peaks.max() ?? 1, 0.05)
+
+        // Same path, same length, new content — a re-mixed recording.
+        try writeTestAudio(loudFraction: 0.2 ... 0.8, at: url)
+        let loud = await store.waveform(for: url)
+        XCTAssertGreaterThan(try XCTUnwrap(loud).peaks.max() ?? 0, 0.5, "改写过的文件要重新解码")
+
+        // And a store that only has the cache directory must agree with it.
+        let reopened = await MeetingAudioWaveformStore(cacheDirectory: directory).waveform(for: url)
+        XCTAssertGreaterThan(try XCTUnwrap(reopened).peaks.max() ?? 0, 0.5, "磁盘上不能留下旧包络")
+
+        try? FileManager.default.removeItem(at: directory)
     }
 
     func testDecibelsBecomeBarHeights() {

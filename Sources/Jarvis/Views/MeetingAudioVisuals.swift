@@ -20,12 +20,16 @@ struct MeetingWaveformView: View {
                 let peaks = waveform.peaks
                 guard !peaks.isEmpty, canvasSize.width > 0 else { return }
                 let slot = canvasSize.width / CGFloat(peaks.count)
-                let barWidth = max(1, slot * 0.62)
+                // Never wider than the slot, or a narrow card draws the bars over each other.
+                let barWidth = min(slot, max(0.8, slot * 0.62))
                 let played = canvasSize.width * shownProgress
                 let accent = Color.jarvisAccent
                 let rest = Color.jarvisTextSecondary.opacity(0.35)
                 for (index, peak) in peaks.enumerated() {
-                    let height = max(2, CGFloat(peak) * canvasSize.height)
+                    // A silent stretch stays empty: the envelope is scaled to its own
+                    // loudest moment, so zero really does mean nothing was said.
+                    guard peak > 0.001 else { continue }
+                    let height = max(1, CGFloat(peak) * canvasSize.height)
                     let x = CGFloat(index) * slot
                     let rect = CGRect(
                         x: x,
@@ -33,14 +37,14 @@ struct MeetingWaveformView: View {
                         width: barWidth,
                         height: height
                     )
-                    context.fill(
-                        Path(roundedRect: rect, cornerRadius: barWidth / 2),
-                        with: .color(x + barWidth / 2 <= played ? accent : rest)
-                    )
+                    let shape = barWidth >= 2
+                        ? Path(roundedRect: rect, cornerRadius: barWidth / 2)
+                        : Path(rect)
+                    context.fill(shape, with: .color(x + barWidth / 2 <= played ? accent : rest))
                 }
                 if shownProgress > 0 {
                     let head = CGRect(
-                        x: min(canvasSize.width - 1.5, played),
+                        x: min(max(0, played), max(0, canvasSize.width - 1.5)),
                         y: 0,
                         width: 1.5,
                         height: canvasSize.height
@@ -104,40 +108,59 @@ struct MeetingAudioLevelBars: View {
             }
         }
         .frame(height: 28)
-        .accessibilityHidden(true)
+        .accessibilityElement()
+        .accessibilityLabel("系统音频电平")
+        .accessibilityValue(
+            isPaused ? "已暂停" : "\(Int((levels.last ?? 0) * 100))%"
+        )
     }
 }
 
-/// The placeholder shown before a recording's waveform is ready. Decoding runs in the
-/// background, and the bar it leaves behind is honest about that rather than empty.
+/// The placeholder shown before a recording's waveform is ready. Decoding runs off the main
+/// actor, and the bar it leaves behind is honest about that rather than empty. It seeks like
+/// the real one, so the control is never missing while the envelope is being built.
 struct MeetingWaveformPlaceholder: View {
+    let onSeek: (Double) -> Void
+
     @State private var phase: Double = 0
 
     var body: some View {
-        Canvas { context, size in
-            let bars = 64
-            let slot = size.width / CGFloat(bars)
-            let barWidth = max(1, slot * 0.62)
-            for index in 0 ..< bars {
-                let wave = sin((Double(index) / Double(bars) * 3 + phase) * .pi * 2)
-                let height = max(3, (0.25 + 0.2 * wave) * size.height)
-                let rect = CGRect(
-                    x: CGFloat(index) * slot,
-                    y: (size.height - height) / 2,
-                    width: barWidth,
-                    height: height
-                )
-                context.fill(
-                    Path(roundedRect: rect, cornerRadius: barWidth / 2),
-                    with: .color(Color.jarvisTextSecondary.opacity(0.28))
-                )
+        GeometryReader { geometry in
+            Canvas { context, size in
+                let bars = 64
+                let slot = size.width / CGFloat(bars)
+                let barWidth = min(slot, max(0.8, slot * 0.62))
+                for index in 0 ..< bars {
+                    let wave = sin((Double(index) / Double(bars) * 3 + phase) * .pi * 2)
+                    let height = max(3, (0.25 + 0.2 * wave) * size.height)
+                    let rect = CGRect(
+                        x: CGFloat(index) * slot,
+                        y: (size.height - height) / 2,
+                        width: barWidth,
+                        height: height
+                    )
+                    context.fill(
+                        Path(roundedRect: rect, cornerRadius: barWidth / 2),
+                        with: .color(Color.jarvisTextSecondary.opacity(0.28))
+                    )
+                }
             }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onEnded { value in
+                        guard geometry.size.width > 0 else { return }
+                        onSeek(min(1, max(0, value.location.x / geometry.size.width)))
+                    }
+            )
         }
         .onAppear {
             withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
                 phase = 1
             }
         }
-        .accessibilityHidden(true)
+        .accessibilityElement()
+        .accessibilityLabel("录音波形（正在生成）")
+        .accessibilityHint("拖动可定位")
     }
 }

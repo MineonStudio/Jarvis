@@ -29,7 +29,6 @@ actor MeetingAudioWaveformStore {
 
     private let cacheDirectory: URL?
     private var memory: [String: MeetingAudioWaveform] = [:]
-    private var inFlight: [String: Task<MeetingAudioWaveform?, Never>] = [:]
 
     /// `cacheDirectory` is injectable so a test can keep its decoded envelopes to itself.
     init(cacheDirectory: URL? = nil) {
@@ -42,38 +41,34 @@ actor MeetingAudioWaveformStore {
         return memory[Self.identifier(for: url)]
     }
 
+    /// Decodes on the caller's task rather than on a detached one: the decode is long, and
+    /// this way leaving the meeting abandons it instead of burning a core for a view that
+    /// is gone. Nothing is cached for a recording that was never read to the end.
     func waveform(for url: URL) async -> MeetingAudioWaveform? {
         let key = Self.identifier(for: url)
         if let ready = memory[key] {
             return ready
         }
-        if let running = inFlight[key] {
-            return await running.value
-        }
         let directory = cacheDirectory ?? Self.defaultCacheDirectory
-        let task = Task<MeetingAudioWaveform?, Never>.detached(priority: .utility) {
-            if let stored = Self.readFromCache(key: key, directory: directory), !stored.peaks.isEmpty {
-                return stored
-            }
-            guard let built = Self.decode(url: url), !built.peaks.isEmpty else { return nil }
-            Self.writeToCache(built, key: key, directory: directory)
-            return built
+        if let stored = Self.readFromCache(key: key, directory: directory), !stored.peaks.isEmpty {
+            memory[key] = stored
+            return stored
         }
-        inFlight[key] = task
-        let result = await task.value
-        inFlight[key] = nil
-        if let result {
-            memory[key] = result
-        }
-        return result
+        guard let built = Self.decode(url: url), !built.peaks.isEmpty else { return nil }
+        guard !Task.isCancelled else { return nil }
+        memory[key] = built
+        Self.writeToCache(built, key: key, directory: directory)
+        return built
     }
 
     /// The file's identity, so a re-encoded recording does not keep an old envelope.
     private static func identifier(for url: URL) -> String {
         let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
         let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+        // Sub-second precision on purpose: re-mixing a recording can produce the same
+        // number of bytes a moment later, and the envelope must not survive that.
         let modified = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-        return "\(url.lastPathComponent)-\(size)-\(Int(modified))"
+        return "\(url.lastPathComponent)-\(size)-\(Int(modified * 1000))"
     }
 
     // MARK: - Decoding
@@ -93,6 +88,10 @@ actor MeetingAudioWaveformStore {
         var peaks = [Float](repeating: 0, count: bucketCount)
         var processed: AVAudioFramePosition = 0
         while processed < total {
+            // Checked per chunk: the caller may have moved to another meeting.
+            if Task.isCancelled {
+                return nil
+            }
             buffer.frameLength = 0
             guard (try? file.read(into: buffer, frameCount: chunk)) != nil else { break }
             guard let channels = buffer.floatChannelData, buffer.frameLength > 0 else { break }
@@ -143,5 +142,24 @@ actor MeetingAudioWaveformStore {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         guard let data = try? JSONEncoder().encode(waveform) else { return }
         try? data.write(to: directory.appendingPathComponent("\(key).json"), options: .atomic)
+        pruneCache(directory: directory)
+    }
+
+    /// Deleting a meeting removes its recording but not this file, and a re-encode adds
+    /// another, so the directory is capped rather than left to grow.
+    private static func pruneCache(directory: URL, limit: Int = 200) {
+        let fileManager = FileManager.default
+        guard let names = try? fileManager.contentsOfDirectory(atPath: directory.path),
+              names.count > limit
+        else { return }
+        let entries = names.compactMap { name -> (URL, Date)? in
+            let url = directory.appendingPathComponent(name)
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            return (url, modified)
+        }
+        for (url, _) in entries.sorted(by: { $0.1 < $1.1 }).prefix(entries.count - limit) {
+            try? fileManager.removeItem(at: url)
+        }
     }
 }

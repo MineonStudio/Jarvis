@@ -1020,7 +1020,6 @@ private struct MeetingRecordingCard: View {
                         levels: app.meetingLevelHistory,
                         isPaused: app.meetingRecordingPaused
                     )
-                    .accessibilityLabel("系统音频电平")
                     Text("已写入 \(byteText)")
                         .font(JarvisTypography.caption)
                         .foregroundStyle(Color.jarvisTextSecondary)
@@ -1099,15 +1098,19 @@ private struct MeetingAudioPlayer: View {
                 }
             }
         }
-        .task(id: audioURL) {
+        // The key is not just the path: a meeting that has only this moment stopped
+        // recording has no mixed file yet, and the path stays the same when it appears.
+        .task(id: waveformKey) {
             guard let audioURL else {
                 waveform = nil
                 return
             }
-            // A waveform already built is shown at once; a new one is decoded in the
-            // background, because that takes seconds and must never block drawing.
+            // A waveform already built is shown at once; a new one is decoded off the main
+            // actor, because that takes seconds and must never block drawing.
             waveform = await MeetingAudioWaveformStore.shared.cached(for: audioURL)
-            waveform = await MeetingAudioWaveformStore.shared.waveform(for: audioURL)
+            let built = await MeetingAudioWaveformStore.shared.waveform(for: audioURL)
+            guard !Task.isCancelled, built != nil else { return }
+            waveform = built
         }
         .onAppear {
             controller.load(url: audioURL)
@@ -1141,20 +1144,28 @@ private struct MeetingAudioPlayer: View {
         }
     }
 
+    /// Reloads when the recording becomes readable, which is not when the path changes.
+    private var waveformKey: String {
+        "\(audioURL?.path ?? "none")|\(controller.isAvailable)|\(Int(controller.duration))"
+    }
+
     @ViewBuilder
     private var waveformBar: some View {
+        let seek = { (fraction: Double) in
+            controller.seek(to: fraction * controller.duration)
+            citedPlayback.activeTime = nil
+        }
         if let waveform, !waveform.peaks.isEmpty {
             MeetingWaveformView(
                 waveform: waveform,
                 progress: controller.duration > 0 ? controller.currentTime / controller.duration : 0,
-                onSeek: { fraction in
-                    controller.seek(to: fraction * controller.duration)
-                    citedPlayback.activeTime = nil
-                }
+                onSeek: seek
             )
             .frame(height: 56)
         } else {
-            MeetingWaveformPlaceholder()
+            // Still decoding, or the file is not there yet: the bar is a plan, but it
+            // still seeks, so losing the old slider does not lose the control.
+            MeetingWaveformPlaceholder(onSeek: seek)
                 .frame(height: 56)
         }
     }
