@@ -126,6 +126,9 @@ final class AppModel {
     /// Recent input levels, newest last, for the live meter. Sampled far faster than the
     /// once-a-second bookkeeping because the drawing has to move.
     var meetingLevelHistory: [Double] = []
+    /// Bumped whenever a meeting's mixed recording is written again over the old one. The
+    /// path does not change, so this is how a player already open learns to reload.
+    var meetingAudioRevisions: [UUID: Int] = [:]
     var meetingBytesWritten: Int64 = 0
     var meetingModelDownloadCompletedBytes: Int64 = 0
     var meetingModelDownloadTotalBytes: Int64 = 0

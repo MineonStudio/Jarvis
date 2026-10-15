@@ -999,6 +999,12 @@ extension AppModel {
         startNextMeetingProcessingIfNeeded()
     }
 
+    /// The mixed recording was written over the one that was there before. Anyone already
+    /// showing or playing that file has to be told, because its path never changes.
+    private func markMeetingAudioRewritten(_ recordID: UUID) {
+        meetingAudioRevisions[recordID, default: 0] += 1
+    }
+
     private func prepareAudioForTranscription(
         _ record: MeetingRecord
     ) async throws -> (mixedURL: URL, systemAudioFileName: String?) {
@@ -1037,6 +1043,7 @@ extension AppModel {
                     outputURL: audioURL,
                     systemAudioDelay: source.resolvedSystemAudioStartOffset
                 )
+                markMeetingAudioRewritten(source.id)
                 return (audioURL, systemAudioFileName)
             }
         }
@@ -1047,6 +1054,7 @@ extension AppModel {
             outputURL: audioURL,
             systemAudioDelay: source.resolvedSystemAudioStartOffset
         )
+        markMeetingAudioRewritten(source.id)
         MeetingAudioMixer.removeFileIfExists(at: recordingURLs.system)
         return (audioURL, systemAudioFileName)
     }

@@ -7,6 +7,8 @@ private enum MeetingDetailTypography {
     static let h2 = Font.system(size: 20, weight: .semibold)
     static let h3 = Font.system(size: 16, weight: .semibold)
     static let body = Font.system(size: 15)
+    /// A point's heading, as opposed to the explanation under it.
+    static let pointTitle = Font.system(size: 15, weight: .semibold)
 }
 
 private enum MeetingPaneMetrics {
@@ -28,6 +30,9 @@ struct MeetingView: View {
                 }
             },
             trailingToolbar: {
+                ToolbarItem(id: "meeting.speakers", placement: .automatic) {
+                    MeetingSpeakerToolbar(record: selectedRecord)
+                }
                 ToolbarItem(id: "meeting.copy", placement: .automatic) {
                     MeetingCopyToolbar(record: selectedRecord)
                 }
@@ -349,6 +354,146 @@ private struct MeetingStorageErrorBanner: View {
         .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .padding(.top, 12)
         .padding(.bottom, 12)
+    }
+}
+
+private struct MeetingSpeakerToolbar: View {
+    let record: MeetingRecord?
+    @State private var isPresented = false
+
+    private var canEdit: Bool {
+        !(record?.speakers.isEmpty ?? true)
+    }
+
+    var body: some View {
+        Button {
+            isPresented = true
+        } label: {
+            Image(systemName: "person.2.wave.2")
+                .font(.system(size: JarvisToolbarMetrics.iconSize, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(JarvisToolbarIconButtonStyle())
+        .disabled(!canEdit)
+        .accessibilityLabel("说话人")
+        .help("重命名说话人")
+        .padding(4)
+        .frame(height: JarvisToolbarMetrics.controlSize)
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            if let record {
+                MeetingSpeakerEditor(record: record)
+            }
+        }
+    }
+}
+
+/// Renaming belongs here now that the transcript is not shown: the names are what the
+/// minutes use for 负责人, and they are the only part of the transcript worth editing
+/// without reading it.
+private struct MeetingSpeakerEditor: View {
+    @Environment(AppModel.self) private var app
+    let record: MeetingRecord
+
+    @State private var drafts: [String: String] = [:]
+    @FocusState private var focusedSpeakerID: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("说话人")
+                .font(JarvisTypography.bodyEmphasis)
+
+            if let detail = diarizationDetail {
+                Text(detail)
+                    .font(JarvisTypography.caption)
+                    .foregroundStyle(Color.jarvisTextSecondary)
+            }
+
+            VStack(spacing: 8) {
+                ForEach(record.speakers) { speaker in
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(speakerColor(speaker.colorIndex))
+                            .frame(width: 8, height: 8)
+                        TextField("说话人名称", text: binding(for: speaker))
+                            .textFieldStyle(.roundedBorder)
+                            .focused($focusedSpeakerID, equals: speaker.id)
+                            .onSubmit { commit(speaker) }
+                        Text("\(segmentCount(of: speaker)) 段")
+                            .font(JarvisTypography.caption)
+                            .foregroundStyle(Color.jarvisTextSecondary)
+                            .frame(width: 46, alignment: .trailing)
+                    }
+                }
+            }
+
+            Text("改名会同步更新纪要里的负责人。")
+                .font(JarvisTypography.caption)
+                .foregroundStyle(Color.jarvisTextSecondary)
+
+            if !record.speakerTurns.isEmpty {
+                Divider()
+                HStack {
+                    Text("按说话人时段重新划分逐字稿")
+                        .font(JarvisTypography.caption)
+                        .foregroundStyle(Color.jarvisTextSecondary)
+                    Spacer(minLength: 8)
+                    Button("重新合并") {
+                        app.remergeMeetingSpeakers(recordID: record.id)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 360)
+        .onAppear {
+            drafts = Dictionary(
+                uniqueKeysWithValues: record.speakers.map { ($0.id, $0.name) }
+            )
+        }
+        .onChange(of: focusedSpeakerID) { previous, _ in
+            guard let previous,
+                  let speaker = record.speakers.first(where: { $0.id == previous })
+            else { return }
+            commit(speaker)
+        }
+        .onDisappear {
+            for speaker in record.speakers {
+                commit(speaker)
+            }
+        }
+    }
+
+    private var diarizationDetail: String? {
+        var parts: [String] = []
+        if let count = record.estimatedSpeakerCount {
+            parts.append("识别出 \(count) 位说话人")
+        }
+        if let ratio = record.uncertainSegmentRatio {
+            parts.append("其中 \(Int((ratio * 100).rounded()))% 的片段说话人不确定")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "，") + "。"
+    }
+
+    private func segmentCount(of speaker: MeetingSpeaker) -> Int {
+        record.transcript.count { $0.speakerID == speaker.id }
+    }
+
+    private func binding(for speaker: MeetingSpeaker) -> Binding<String> {
+        Binding(
+            get: { drafts[speaker.id] ?? speaker.name },
+            set: { drafts[speaker.id] = $0 }
+        )
+    }
+
+    private func commit(_ speaker: MeetingSpeaker) {
+        guard let draft = drafts[speaker.id] else { return }
+        app.renameMeetingSpeaker(recordID: record.id, speakerID: speaker.id, name: draft)
+    }
+
+    private func speakerColor(_ index: Int) -> Color {
+        let palette: [Color] = [.blue, .purple, .teal, .orange, .pink, .green, .indigo, .brown]
+        return palette[abs(index) % palette.count]
     }
 }
 
@@ -834,6 +979,7 @@ private struct MeetingAudioSection: View {
             } else {
                 MeetingAudioPlayer(
                     audioURL: app.meetingAudioURL(for: record),
+                    revision: app.meetingAudioRevisions[record.id] ?? 0,
                     pendingSeekTime: $pendingSeekTime,
                     citedPlayback: $citedPlayback
                 )
@@ -1040,6 +1186,8 @@ private struct MeetingRecordingCard: View {
 
 private struct MeetingAudioPlayer: View {
     let audioURL: URL?
+    /// Increases when the recording was written again under the same path.
+    let revision: Int
     @Binding var pendingSeekTime: TimeInterval?
     @Binding var citedPlayback: CitedAudioPlayback
     @StateObject private var controller = MeetingAudioPlaybackController()
@@ -1118,6 +1266,12 @@ private struct MeetingAudioPlayer: View {
         .onChange(of: audioURL) { _, newValue in
             controller.load(url: newValue)
         }
+        .onChange(of: revision) { _, _ in
+            // 重新处理 wrote a new recording over the old one. A player keeps the file it
+            // opened, so it has to be told; so does the envelope, which is drawn from it.
+            waveform = nil
+            controller.load(url: audioURL, force: true)
+        }
         .onChange(of: pendingSeekTime) { _, newValue in
             guard let newValue else { return }
             controller.seek(to: newValue)
@@ -1144,9 +1298,10 @@ private struct MeetingAudioPlayer: View {
         }
     }
 
-    /// Reloads when the recording becomes readable, which is not when the path changes.
+    /// Reloads when the recording becomes readable — which is not when the path changes —
+    /// and when it is written again under the same path.
     private var waveformKey: String {
-        "\(audioURL?.path ?? "none")|\(controller.isAvailable)|\(Int(controller.duration))"
+        "\(audioURL?.path ?? "none")|\(controller.isAvailable)|\(Int(controller.duration))|\(revision)"
     }
 
     @ViewBuilder
@@ -1309,23 +1464,20 @@ private struct MeetingMinutesSection: View {
                 .accessibilityHint("根据当前逐字稿重新生成会议纪要")
             }
             JarvisCard {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Label("概要", systemImage: "text.alignleft")
-                            .font(MeetingDetailTypography.h3)
-                            .foregroundStyle(Color.jarvisAccent)
-                            .accessibilityAddTraits(.isHeader)
-                        TextField("概要", text: $overviewDraft, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 16, weight: .medium))
-                            .focused($isOverviewFocused)
-                            .onChange(of: isOverviewFocused) { _, isFocused in
-                                if !isFocused {
-                                    commitOverview()
-                                }
-                            }
+                // No 概要 heading: the section is the summary, and the body reads the same
+                // as the body of a discussion point.
+                TextField("概要", text: $overviewDraft, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(MeetingDetailTypography.body)
+                    .foregroundStyle(Color.jarvisTextSecondary)
+                    .lineSpacing(3)
+                    .focused($isOverviewFocused)
+                    .onChange(of: isOverviewFocused) { _, isFocused in
+                        if !isFocused {
+                            commitOverview()
+                        }
                     }
-                }
+                    .accessibilityLabel("会议纪要概要")
             }
             if !record.minutesVersions.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -1413,14 +1565,14 @@ private struct MeetingDiscussionPointsSection: View {
 
     private func pointRow(_ point: MeetingDiscussionPoint) -> some View {
         let target = meetingEvidenceTarget(evidence: point.evidence, record: record)
-        let text = point.detail.isEmpty ? point.title : "\(point.title)\n\(point.detail)"
         return HStack(alignment: .top, spacing: 8) {
             Circle()
                 .fill(Color.jarvisAccent)
                 .frame(width: 5, height: 5)
                 .padding(.top, 8)
             MeetingCitedSentence(
-                text: text,
+                text: point.title,
+                secondaryText: point.detail,
                 playTime: target?.time,
                 isPlaying: target.map { citedPlayback.isPlayingCitation($0.time) } ?? false,
                 onToggle: { time in
@@ -1605,6 +1757,8 @@ private func formatMeetingTimestamp(_ time: TimeInterval) -> String {
 
 private struct MeetingCitedSentence: View {
     let text: String
+    /// A second line in a lighter style, for when `text` is a heading rather than prose.
+    var secondaryText: String?
     var isStrikethrough = false
     var playTime: TimeInterval?
     var isPlaying = false
@@ -1622,27 +1776,44 @@ private struct MeetingCitedSentence: View {
             }
             .buttonStyle(.plain)
             .help(isPlaying ? "停止播放" : "播放原文 \(formatMeetingTimestamp(playTime))")
-            .accessibilityLabel(text)
+            .accessibilityLabel(accessibilityText)
             .accessibilityHint(isPlaying ? "停止播放" : "从对应位置播放录音")
         } else {
-            Text(text)
-                .font(MeetingDetailTypography.body)
-                .foregroundStyle(Color.primary)
-                .strikethrough(isStrikethrough)
+            sentenceText
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(accessibilityText)
         }
     }
 
-    private var citationText: Text {
-        let sentence = Text(text)
-            .font(MeetingDetailTypography.body)
+    private var accessibilityText: String {
+        guard let secondaryText, !secondaryText.isEmpty else { return text }
+        return "\(text)，\(secondaryText)"
+    }
+
+    /// A heading and its body read as one sentence, but not in one style: the heading is
+    /// what the point is, the line under it is the explanation.
+    private var sentenceText: Text {
+        let heading = Text(text)
+            .font(hasSecondaryText ? MeetingDetailTypography.pointTitle : MeetingDetailTypography.body)
             .foregroundStyle(Color.primary)
             .strikethrough(isStrikethrough)
+        guard let secondaryText, !secondaryText.isEmpty else { return heading }
+        return heading + Text("\n" + secondaryText)
+            .font(MeetingDetailTypography.body)
+            .foregroundStyle(Color.jarvisTextSecondary)
+            .strikethrough(isStrikethrough)
+    }
+
+    private var hasSecondaryText: Bool {
+        !(secondaryText ?? "").isEmpty
+    }
+
+    private var citationText: Text {
         let symbol = Text(Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill"))
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(Color.jarvisAccent)
             .baselineOffset(-1)
-        return Text("\(sentence)\u{00A0}\(symbol)")
+        return Text("\(sentenceText)\u{00A0}\(symbol)")
     }
 }
