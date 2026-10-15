@@ -410,6 +410,17 @@ private struct MeetingSpeakerSection: View {
                     }
                 }
             }
+            .onChange(of: citedPlayback.isPlaying) { _, isPlaying in
+                // The meeting's own recording takes over; two files never sound at once.
+                if isPlaying {
+                    clips.stop()
+                }
+            }
+            .onChange(of: citedPlayback.activeTime) { _, activeTime in
+                if activeTime != nil {
+                    clips.stop()
+                }
+            }
             .task(id: record.id) {
                 clips.stop()
                 drafts = Dictionary(
@@ -454,7 +465,7 @@ private struct MeetingSpeakerSection: View {
                     Image(systemName: clips.playingSpeakerID == speaker.id ? "stop.fill" : "play.fill")
                 }
                 .buttonStyle(.borderless)
-                .disabled(app.meetingAudioURL(for: record) == nil)
+                .disabled(!hasPlayableAudio)
                 .help("试听这个人第一次说的话")
                 .accessibilityLabel(
                     clips.playingSpeakerID == speaker.id
@@ -483,15 +494,27 @@ private struct MeetingSpeakerSection: View {
             .min { $0.startTime < $1.startTime }
     }
 
+    /// Existence, not just a name: a meeting whose recording is missing, or still being
+    /// written, offers no preview at all rather than a button that plays silence.
+    private var hasPlayableAudio: Bool {
+        guard let url = app.meetingAudioURL(for: record) else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
     private func preview(_ speaker: MeetingSpeaker, from segment: MeetingTranscriptSegment) {
-        // Two recordings never play at once: the meeting's own player stands down.
-        citedPlayback.stopRequest += 1
-        clips.toggle(
+        if clips.playingSpeakerID == speaker.id {
+            clips.stop()
+            return
+        }
+        let started = clips.start(
             speakerID: speaker.id,
             url: app.meetingAudioURL(for: record),
             start: segment.startTime,
             length: min(max(segment.endTime - segment.startTime, 2.5), 8)
         )
+        // Only a preview that really started stands the meeting's player down.
+        guard started else { return }
+        citedPlayback.stopRequest += 1
     }
 
     private func segmentCount(of speaker: MeetingSpeaker) -> Int {
@@ -514,6 +537,7 @@ private struct MeetingSpeakerSection: View {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             drafts[draftKey(for: speaker)] = speaker.name
+            collisionName = nil
             return
         }
         guard !MeetingSpeakerRenaming.isTaken(trimmed, by: speaker, among: record.speakers) else {
@@ -534,20 +558,26 @@ private struct MeetingSpeakerSection: View {
 /// Plays a few seconds from one moment in the recording, so a speaker can be identified by
 /// ear without the transcript being on screen.
 @MainActor
-private final class MeetingSpeakerClipPlayer: ObservableObject {
+private final class MeetingSpeakerClipPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published private(set) var playingSpeakerID: String?
 
     private var player: AVAudioPlayer?
     private var stopTask: Task<Void, Never>?
 
-    func toggle(speakerID: String, url: URL?, start: TimeInterval, length: TimeInterval) {
-        if playingSpeakerID == speakerID {
-            stop()
-            return
-        }
+    /// Starts a clip, stopping whatever was playing. Returns false when there is nothing to
+    /// play — no file, or a moment past the end of it — so the caller can leave the rest of
+    /// the screen alone instead of stopping playback in exchange for silence.
+    @discardableResult
+    func start(speakerID: String, url: URL?, start: TimeInterval, length: TimeInterval) -> Bool {
         stop()
-        guard let url, let player = try? AVAudioPlayer(contentsOf: url) else { return }
-        player.currentTime = min(max(0, start), player.duration)
+        guard let url,
+              FileManager.default.fileExists(atPath: url.path),
+              let player = try? AVAudioPlayer(contentsOf: url),
+              player.duration > 0,
+              start < player.duration
+        else { return false }
+        player.delegate = self
+        player.currentTime = max(0, start)
         player.prepareToPlay()
         player.play()
         self.player = player
@@ -556,6 +586,15 @@ private final class MeetingSpeakerClipPlayer: ObservableObject {
             try? await Task.sleep(for: .seconds(length))
             guard !Task.isCancelled else { return }
             self?.stop()
+        }
+        return true
+    }
+
+    /// The clip ran out before its timer did. Without this the row would keep showing stop
+    /// over silence until the timer caught up with it.
+    nonisolated func audioPlayerDidFinishPlaying(_: AVAudioPlayer, successfully _: Bool) {
+        Task { @MainActor in
+            self.stop()
         }
     }
 

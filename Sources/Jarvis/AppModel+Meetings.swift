@@ -643,6 +643,13 @@ extension AppModel {
         )
         meetingRecords[index].transcript = merged.segments
         meetingRecords[index].speakers = merged.speakers
+        // The diarization summary describes the assignment that just changed.
+        let uncertainCount = merged.segments.count(where: \.isUncertainSpeaker)
+        meetingRecords[index].uncertainSegmentRatio = merged.segments.isEmpty
+            ? 0
+            : Double(uncertainCount) / Double(merged.segments.count)
+        meetingRecords[index].estimatedSpeakerCount = merged.speakers
+            .count { $0.id != MeetingMinutesAlgorithm.uncertainSpeakerID }
         persistMeeting(meetingRecords[index])
     }
 

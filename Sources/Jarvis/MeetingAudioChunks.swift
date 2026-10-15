@@ -342,8 +342,7 @@ enum MeetingSpeakerRemerge {
                 if speakerID == MeetingMinutesAlgorithm.uncertainSpeakerID {
                     names[speakerID] = MeetingMinutesAlgorithm.uncertainSpeakerName
                 } else {
-                    let numbered = names.values.filter { $0.hasPrefix("说话人 ") }.count
-                    names[speakerID] = "说话人 \(numbered + 1)"
+                    names[speakerID] = Self.nextAutoName(taken: Set(names.values))
                 }
             }
         }
@@ -351,9 +350,32 @@ enum MeetingSpeakerRemerge {
         for segment in updated where !ordered.contains(segment.speakerID) {
             ordered.append(segment.speakerID)
         }
-        let rebuilt = ordered.enumerated().map { index, id in
-            MeetingSpeaker(id: id, name: names[id] ?? "说话人 \(index + 1)", colorIndex: index)
+        // Rebuilding the list is not a tidy-up: a name the user typed, and the colour a
+        // speaker already had, both survive even when the re-run leaves a speaker with no
+        // segments. Otherwise pressing this button reshuffles rows for no reason.
+        var rebuilt: [MeetingSpeaker] = []
+        for id in ordered + speakers.map(\.id) where !rebuilt.contains(where: { $0.id == id }) {
+            let existing = speakers.first { $0.id == id }
+            rebuilt.append(
+                MeetingSpeaker(
+                    id: id,
+                    name: names[id]
+                        ?? existing?.name
+                        ?? Self.nextAutoName(taken: Set(rebuilt.map(\.name))),
+                    colorIndex: existing?.colorIndex ?? rebuilt.count
+                )
+            )
         }
         return (updated, rebuilt)
+    }
+
+    /// "说话人 N" with a number nobody is using: two speakers sharing a name would make the
+    /// minutes' 负责人 ambiguous, and no later rename would be able to follow it.
+    private static func nextAutoName(taken: Set<String>) -> String {
+        var index = taken.count { $0.hasPrefix("说话人 ") } + 1
+        while taken.contains("说话人 \(index)") {
+            index += 1
+        }
+        return "说话人 \(index)"
     }
 }
