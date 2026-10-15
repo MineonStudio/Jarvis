@@ -389,18 +389,83 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
         if options.responseFormat == .jsonObject {
             body["response_format"] = ["type": "json_object"]
         }
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let requestBody = try JSONSerialization.data(withJSONObject: body)
+        request.httpBody = requestBody
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIAPIError.invalidTransportResponse
+        let requestID = JarvisLog.operationID()
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        let requestFields = [
+            "task": options.task,
+            "provider": configuration.provider.rawValue,
+            "model": configuration.model,
+            "requestBytes": String(requestBody.count),
+            "timeoutSeconds": String(Int(request.timeoutInterval))
+        ]
+        JarvisLog.notice(
+            category: .network,
+            event: "ai.completion.request",
+            operationID: requestID,
+            result: "started",
+            fields: requestFields
+        )
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let elapsedMilliseconds = (ProcessInfo.processInfo.systemUptime - startedAt) * 1000
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AIAPIError.invalidTransportResponse
+            }
+
+            let succeeded = (200 ..< 300).contains(httpResponse.statusCode)
+            JarvisLog.info(
+                category: .network,
+                event: "ai.completion.response",
+                operationID: requestID,
+                durationMilliseconds: elapsedMilliseconds,
+                result: succeeded ? "success" : "failure",
+                fields: [
+                    "task": options.task,
+                    "provider": configuration.provider.rawValue,
+                    "model": configuration.model,
+                    "httpStatus": String(httpResponse.statusCode),
+                    "responseBytes": String(data.count)
+                ].merging(Self.completionResponseMetrics(from: data), uniquingKeysWith: { _, new in new })
+            )
+            guard succeeded else {
+                let message = Self.serverMessage(from: data)
+                    ?? "AI 服务请求失败（\(httpResponse.statusCode)）"
+                throw AIAPIError.server(message)
+            }
+
+            let content = try Self.chatCompletionContent(from: data)
+            JarvisLog.notice(
+                category: .network,
+                event: "ai.completion.complete",
+                operationID: requestID,
+                durationMilliseconds: (ProcessInfo.processInfo.systemUptime - startedAt) * 1000,
+                result: "success",
+                fields: [
+                    "task": options.task,
+                    "provider": configuration.provider.rawValue,
+                    "model": configuration.model,
+                    "contentCharacters": String(content.count)
+                ]
+            )
+            return content
+        } catch {
+            let nsError = error as NSError
+            JarvisLog.error(
+                category: .network,
+                event: "ai.completion.failed",
+                operationID: requestID,
+                durationMilliseconds: (ProcessInfo.processInfo.systemUptime - startedAt) * 1000,
+                fields: requestFields.merging([
+                    "errorDomain": nsError.domain,
+                    "errorCode": String(nsError.code)
+                ], uniquingKeysWith: { _, new in new })
+            )
+            throw error
         }
-        guard (200 ..< 300).contains(httpResponse.statusCode) else {
-            let message = Self.serverMessage(from: data)
-                ?? "AI 服务请求失败（\(httpResponse.statusCode)）"
-            throw AIAPIError.server(message)
-        }
-        return try Self.chatCompletionContent(from: data)
     }
 
     func fetchModels(configuration: AIAPIConfiguration) async throws -> [String] {
@@ -542,6 +607,31 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
             return content
         }
         throw AIAPIError.invalidCompletionEnvelope("缺少 choices[0].message.content，或 content 类型不受支持")
+    }
+
+    private static func completionResponseMetrics(from data: Data) -> [String: String] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        var metrics: [String: String] = [:]
+        if let choices = root["choices"] as? [[String: Any]],
+           let choice = choices.first,
+           let finishReason = choice["finish_reason"] as? String
+        {
+            metrics["finishReason"] = finishReason
+        }
+        if let usage = root["usage"] as? [String: Any] {
+            if let promptTokens = usage["prompt_tokens"] {
+                metrics["promptTokens"] = String(describing: promptTokens)
+            }
+            if let completionTokens = usage["completion_tokens"] {
+                metrics["completionTokens"] = String(describing: completionTokens)
+            }
+            if let totalTokens = usage["total_tokens"] {
+                metrics["totalTokens"] = String(describing: totalTokens)
+            }
+        }
+        return metrics
     }
 
     static func validateConnectionEnvelope(from data: Data) throws {
