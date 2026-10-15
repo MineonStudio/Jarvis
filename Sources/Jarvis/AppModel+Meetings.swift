@@ -536,6 +536,9 @@ extension AppModel {
         do {
             try meetingRepository.delete(record)
             meetingRecords.removeAll { $0.id == record.id }
+            // Per-meeting state that lives outside the records goes with it.
+            meetingLiveSummaries[record.id] = nil
+            meetingAudioRevisions[record.id] = nil
             if selectedMeetingID == record.id {
                 selectedMeetingID = meetingRecords.first?.id
             }
@@ -617,11 +620,14 @@ extension AppModel {
         let oldName = meetingRecords[index].speakers[speakerIndex].name
         guard oldName != trimmed else { return }
         meetingRecords[index].speakers[speakerIndex].name = trimmed
-        if var summary = meetingRecords[index].summary {
-            for itemIndex in summary.actionItems.indices where summary.actionItems[itemIndex].owner == oldName {
-                summary.actionItems[itemIndex].owner = trimmed
-            }
-            meetingRecords[index].summary = summary
+        if MeetingSpeakerRenaming.isUnambiguous(oldName, among: meetingRecords[index].speakers),
+           let summary = meetingRecords[index].summary
+        {
+            meetingRecords[index].summary = MeetingSpeakerRenaming.relabeling(
+                summary,
+                from: oldName,
+                to: trimmed
+            )
         }
         persistMeeting(meetingRecords[index])
     }
@@ -1005,6 +1011,16 @@ extension AppModel {
         meetingAudioRevisions[recordID, default: 0] += 1
     }
 
+    /// What a file looks like right now, or nil when there is no such file. Used to tell a
+    /// real rewrite from a mixing pass that had nothing to do.
+    private func recordingIdentity(_ url: URL) -> String? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber,
+              let modified = attributes[.modificationDate] as? Date
+        else { return nil }
+        return "\(size.int64Value)-\(modified.timeIntervalSince1970)"
+    }
+
     private func prepareAudioForTranscription(
         _ record: MeetingRecord
     ) async throws -> (mixedURL: URL, systemAudioFileName: String?) {
@@ -1037,24 +1053,30 @@ extension AppModel {
                 }
                 MeetingAudioMixer.removeFileIfExists(at: currentSystemURL)
             } catch {
+                let before = recordingIdentity(audioURL)
                 try await MeetingAudioMixer.makeMixedAudio(
                     microphoneURL: microphoneURL,
                     systemAudioURL: currentSystemURL,
                     outputURL: audioURL,
                     systemAudioDelay: source.resolvedSystemAudioStartOffset
                 )
-                markMeetingAudioRewritten(source.id)
+                if recordingIdentity(audioURL) != before {
+                    markMeetingAudioRewritten(source.id)
+                }
                 return (audioURL, systemAudioFileName)
             }
         }
 
+        let identityBefore = recordingIdentity(audioURL)
         try await MeetingAudioMixer.makeMixedAudio(
             microphoneURL: microphoneURL,
             systemAudioURL: systemAudioURL,
             outputURL: audioURL,
             systemAudioDelay: source.resolvedSystemAudioStartOffset
         )
-        markMeetingAudioRewritten(source.id)
+        if recordingIdentity(audioURL) != identityBefore {
+            markMeetingAudioRewritten(source.id)
+        }
         MeetingAudioMixer.removeFileIfExists(at: recordingURLs.system)
         return (audioURL, systemAudioFileName)
     }

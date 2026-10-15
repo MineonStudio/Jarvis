@@ -395,7 +395,8 @@ private struct MeetingSpeakerEditor: View {
     let record: MeetingRecord
 
     @State private var drafts: [String: String] = [:]
-    @FocusState private var focusedSpeakerID: String?
+    @State private var collisionName: String?
+    @FocusState private var focusedKey: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -416,7 +417,7 @@ private struct MeetingSpeakerEditor: View {
                             .frame(width: 8, height: 8)
                         TextField("说话人名称", text: binding(for: speaker))
                             .textFieldStyle(.roundedBorder)
-                            .focused($focusedSpeakerID, equals: speaker.id)
+                            .focused($focusedKey, equals: draftKey(for: speaker))
                             .onSubmit { commit(speaker) }
                         Text("\(segmentCount(of: speaker)) 段")
                             .font(JarvisTypography.caption)
@@ -426,9 +427,15 @@ private struct MeetingSpeakerEditor: View {
                 }
             }
 
-            Text("改名会同步更新纪要里的负责人。")
-                .font(JarvisTypography.caption)
-                .foregroundStyle(Color.jarvisTextSecondary)
+            if let collisionName {
+                Text("已经有说话人叫「\(collisionName)」，没有保存。请换一个名字。")
+                    .font(JarvisTypography.caption)
+                    .foregroundStyle(.orange)
+            } else {
+                Text("改名会同步更新纪要里的负责人。")
+                    .font(JarvisTypography.caption)
+                    .foregroundStyle(Color.jarvisTextSecondary)
+            }
 
             if !record.speakerTurns.isEmpty {
                 Divider()
@@ -446,14 +453,15 @@ private struct MeetingSpeakerEditor: View {
         }
         .padding(16)
         .frame(width: 360)
-        .onAppear {
+        .task(id: record.id) {
             drafts = Dictionary(
-                uniqueKeysWithValues: record.speakers.map { ($0.id, $0.name) }
+                uniqueKeysWithValues: record.speakers.map { (draftKey(for: $0), $0.name) }
             )
+            collisionName = nil
         }
-        .onChange(of: focusedSpeakerID) { previous, _ in
+        .onChange(of: focusedKey) { previous, _ in
             guard let previous,
-                  let speaker = record.speakers.first(where: { $0.id == previous })
+                  let speaker = record.speakers.first(where: { draftKey(for: $0) == previous })
             else { return }
             commit(speaker)
         }
@@ -479,16 +487,37 @@ private struct MeetingSpeakerEditor: View {
         record.transcript.count { $0.speakerID == speaker.id }
     }
 
+    /// Speaker ids repeat between meetings — `mic:0` is the first voice in every one of
+    /// them — so a draft is only ever addressed through its own recording.
+    private func draftKey(for speaker: MeetingSpeaker) -> String {
+        "\(record.id.uuidString)|\(speaker.id)"
+    }
+
     private func binding(for speaker: MeetingSpeaker) -> Binding<String> {
         Binding(
-            get: { drafts[speaker.id] ?? speaker.name },
-            set: { drafts[speaker.id] = $0 }
+            get: { drafts[draftKey(for: speaker)] ?? speaker.name },
+            set: { drafts[draftKey(for: speaker)] = $0 }
         )
     }
 
     private func commit(_ speaker: MeetingSpeaker) {
-        guard let draft = drafts[speaker.id] else { return }
-        app.renameMeetingSpeaker(recordID: record.id, speakerID: speaker.id, name: draft)
+        guard let draft = drafts[draftKey(for: speaker)] else { return }
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            // An empty name is refused, so the field goes back to the name in use rather
+            // than showing something that was never saved.
+            drafts[draftKey(for: speaker)] = speaker.name
+            return
+        }
+        // Two speakers with one name make the minutes' 负责人 ambiguous, and the rename
+        // would follow the wrong items.
+        guard !MeetingSpeakerRenaming.isTaken(trimmed, by: speaker, among: record.speakers) else {
+            collisionName = trimmed
+            drafts[draftKey(for: speaker)] = speaker.name
+            return
+        }
+        collisionName = nil
+        app.renameMeetingSpeaker(recordID: record.id, speakerID: speaker.id, name: trimmed)
     }
 
     private func speakerColor(_ index: Int) -> Color {
