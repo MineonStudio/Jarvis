@@ -21,10 +21,14 @@ DIRECT_ZIP="$OUTPUT_DIR/Jarvis-$VERSION-macos.zip"
 UPDATE_ZIP="$OUTPUT_DIR/Jarvis-update.zip"
 MANIFEST="$OUTPUT_DIR/Jarvis-update-manifest.json"
 SIGNATURE="$OUTPUT_DIR/Jarvis-update-manifest.sig"
+DIRECT_STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jarvis-direct.XXXXXX")"
 UPDATE_STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jarvis-update.XXXXXX")"
-trap 'find "$UPDATE_STAGING_DIR" -depth -delete' EXIT
+trap 'find "$DIRECT_STAGING_DIR" "$UPDATE_STAGING_DIR" -depth -delete' EXIT
 
-ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$DIRECT_ZIP"
+ditto "$APP_DIR" "$DIRECT_STAGING_DIR/Jarvis.app"
+xattr -cr "$DIRECT_STAGING_DIR/Jarvis.app"
+codesign --verify --deep --strict "$DIRECT_STAGING_DIR/Jarvis.app"
+ditto -c -k --sequesterRsrc --keepParent "$DIRECT_STAGING_DIR/Jarvis.app" "$DIRECT_ZIP"
 ditto "$APP_DIR" "$UPDATE_STAGING_DIR/Jarvis.app"
 /usr/libexec/PlistBuddy -c 'Set :JarvisInstallSource unknown' "$UPDATE_STAGING_DIR/Jarvis.app/Contents/Info.plist"
 xattr -cr "$UPDATE_STAGING_DIR/Jarvis.app"
