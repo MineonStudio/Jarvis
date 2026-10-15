@@ -19,8 +19,6 @@ struct MeetingView: View {
     @State private var searchMatchedRecordIDs: Set<UUID>?
     @State private var pendingSeekTime: TimeInterval?
     @State private var citedPlayback = CitedAudioPlayback()
-    @State private var highlightedSegmentID: UUID?
-    @State private var isTranscriptExpanded = false
 
     var body: some View {
         JarvisContentArea(
@@ -74,8 +72,6 @@ struct MeetingView: View {
                                 MeetingDetailPane(
                                     pendingSeekTime: $pendingSeekTime,
                                     citedPlayback: $citedPlayback,
-                                    highlightedSegmentID: $highlightedSegmentID,
-                                    isTranscriptExpanded: $isTranscriptExpanded,
                                     record: selectedRecord,
                                     isSearchEmpty: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                         && filteredRecords.isEmpty,
@@ -134,8 +130,6 @@ struct MeetingView: View {
         .onChange(of: app.selectedMeetingID) { _, newValue in
             pendingSeekTime = nil
             citedPlayback = CitedAudioPlayback()
-            highlightedSegmentID = nil
-            isTranscriptExpanded = false
             if let newValue {
                 app.ensureMeetingDetailLoaded(newValue)
             }
@@ -180,11 +174,7 @@ struct MeetingView: View {
         )
     }
 
-    private func toggleCitation(at time: TimeInterval, segmentID: UUID?) {
-        highlightedSegmentID = segmentID
-        if segmentID != nil {
-            isTranscriptExpanded = true
-        }
+    private func toggleCitation(at time: TimeInterval, segmentID _: UUID?) {
         if citedPlayback.isPlaying, citedPlayback.activeTime == time {
             citedPlayback.stopRequest += 1
         } else {
@@ -582,8 +572,6 @@ private struct MeetingDetailPane: View {
     @State private var draftTitle = ""
     @Binding var pendingSeekTime: TimeInterval?
     @Binding var citedPlayback: CitedAudioPlayback
-    @Binding var highlightedSegmentID: UUID?
-    @Binding var isTranscriptExpanded: Bool
     let record: MeetingRecord?
     let isSearchEmpty: Bool
     let onToggleCitation: (TimeInterval, UUID?) -> Void
@@ -623,7 +611,11 @@ private struct MeetingDetailPane: View {
                         }
 
                         if let summary = app.displayedMeetingSummary(for: record) {
-                            MeetingSummarySection(
+                            MeetingMinutesSection(
+                                record: record,
+                                summary: summary
+                            )
+                            MeetingDiscussionPointsSection(
                                 record: record,
                                 summary: summary,
                                 citedPlayback: citedPlayback,
@@ -635,15 +627,6 @@ private struct MeetingDetailPane: View {
                                   record.status != .summaryFailed
                         {
                             MeetingNeedsSummaryCard(record: record)
-                        }
-
-                        if !record.transcript.isEmpty {
-                            MeetingTranscriptSection(
-                                record: record,
-                                highlightedSegmentID: highlightedSegmentID,
-                                isExpanded: $isTranscriptExpanded,
-                                onPlay: onToggleCitation
-                            )
                         }
                     }
                     .frame(maxWidth: 860, alignment: .leading)
@@ -869,121 +852,6 @@ private struct MeetingAudioSection: View {
     }
 }
 
-private struct MeetingTranscriptSection: View {
-    @Environment(AppModel.self) private var app
-    let record: MeetingRecord
-    let highlightedSegmentID: UUID?
-    @Binding var isExpanded: Bool
-    let onPlay: (TimeInterval, UUID?) -> Void
-    @State private var speakerDrafts: [String: String] = [:]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if record.estimatedSpeakerCount != nil || !record.speakerTurns.isEmpty {
-                HStack(spacing: 12) {
-                    if let count = record.estimatedSpeakerCount {
-                        let percent = Int(((record.uncertainSegmentRatio ?? 0) * 100).rounded())
-                        Text("预计 \(count) 位说话人，不确定片段 \(percent)%")
-                            .font(JarvisTypography.caption)
-                            .foregroundStyle(Color.jarvisTextSecondary)
-                    }
-                    Spacer(minLength: 8)
-                    if !record.speakerTurns.isEmpty {
-                        Button("按已保存时段重新合并") {
-                            app.remergeMeetingSpeakers(recordID: record.id)
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                }
-            }
-            DisclosureGroup(isExpanded: $isExpanded) {
-                ScrollViewReader { proxy in
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(record.transcript) { segment in
-                            transcriptRow(segment)
-                                .id(segment.id)
-                        }
-                    }
-                    .padding(.top, 6)
-                    .onChange(of: highlightedSegmentID) { _, segmentID in
-                        guard let segmentID else { return }
-                        withAnimation {
-                            proxy.scrollTo(segmentID, anchor: .center)
-                        }
-                    }
-                }
-            } label: {
-                MeetingSectionHeader(
-                    title: "逐字稿（\(record.transcript.count)）",
-                    systemImage: "text.quote"
-                )
-            }
-        }
-    }
-
-    private func transcriptRow(_ segment: MeetingTranscriptSegment) -> some View {
-        let speakerName = record.speakers.first { $0.id == segment.speakerID }?.name ?? segment.speakerID
-        let isHighlighted = highlightedSegmentID == segment.id
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Text(formatMeetingTimestamp(segment.startTime))
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(Color.jarvisTextSecondary)
-                    .frame(width: 52, alignment: .leading)
-                TextField(
-                    "说话人",
-                    text: speakerNameBinding(speakerID: segment.speakerID, current: speakerName)
-                )
-                .textFieldStyle(.plain)
-                .font(JarvisTypography.captionEmphasis)
-                .frame(maxWidth: 140, alignment: .leading)
-                .onSubmit {
-                    app.renameMeetingSpeaker(
-                        recordID: record.id,
-                        speakerID: segment.speakerID,
-                        name: speakerDrafts[segment.speakerID] ?? speakerName
-                    )
-                }
-                Menu("改分段") {
-                    ForEach(record.speakers) { speaker in
-                        Button(speaker.name) {
-                            app.reassignMeetingSegment(
-                                recordID: record.id,
-                                segmentID: segment.id,
-                                speakerID: speaker.id
-                            )
-                        }
-                    }
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                Button {
-                    onPlay(segment.startTime, segment.id)
-                } label: {
-                    Image(systemName: "play.circle")
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("播放这一段")
-            }
-            Text(segment.text)
-                .font(MeetingDetailTypography.body)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(6)
-                .background(
-                    isHighlighted ? Color.jarvisAccent.opacity(0.16) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
-        }
-    }
-
-    private func speakerNameBinding(speakerID: String, current: String) -> Binding<String> {
-        Binding(
-            get: { speakerDrafts[speakerID] ?? current },
-            set: { speakerDrafts[speakerID] = $0 }
-        )
-    }
-}
-
 private struct CitedAudioPlayback: Equatable {
     var activeTime: TimeInterval?
     var isPlaying = false
@@ -1148,7 +1016,11 @@ private struct MeetingRecordingCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    labeledMeter("系统音频", level: meterLevel(app.meetingSystemPower))
+                    MeetingAudioLevelBars(
+                        levels: app.meetingLevelHistory,
+                        isPaused: app.meetingRecordingPaused
+                    )
+                    .accessibilityLabel("系统音频电平")
                     Text("已写入 \(byteText)")
                         .font(JarvisTypography.caption)
                         .foregroundStyle(Color.jarvisTextSecondary)
@@ -1165,25 +1037,6 @@ private struct MeetingRecordingCard: View {
     private var byteText: String {
         ByteCountFormatter.string(fromByteCount: app.meetingBytesWritten, countStyle: .file)
     }
-
-    private func meterLevel(_ power: Float?) -> Double {
-        guard let power else { return 0 }
-        let clamped = min(0, max(-60, power))
-        return Double((clamped + 60) / 60)
-    }
-
-    private func labeledMeter(_ title: String, level: Double) -> some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(JarvisTypography.caption)
-                .foregroundStyle(Color.jarvisTextSecondary)
-                .frame(width: 64, alignment: .leading)
-            ProgressView(value: level)
-                .tint(Color.jarvisAccent)
-        }
-        .accessibilityLabel(title)
-        .accessibilityValue("\(Int((level * 100).rounded()))%")
-    }
 }
 
 private struct MeetingAudioPlayer: View {
@@ -1191,6 +1044,7 @@ private struct MeetingAudioPlayer: View {
     @Binding var pendingSeekTime: TimeInterval?
     @Binding var citedPlayback: CitedAudioPlayback
     @StateObject private var controller = MeetingAudioPlaybackController()
+    @State private var waveform: MeetingAudioWaveform?
     private let playbackTimer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -1208,22 +1062,6 @@ private struct MeetingAudioPlayer: View {
                         .buttonStyle(JarvisPrimaryButtonStyle())
                         .accessibilityLabel(controller.isPlaying ? "暂停原始录音" : "播放原始录音")
 
-                        Slider(
-                            value: Binding(
-                                get: { controller.currentTime },
-                                set: { newValue in
-                                    controller.seek(to: newValue)
-                                    citedPlayback.activeTime = nil
-                                }
-                            ),
-                            in: 0 ... max(controller.duration, 1)
-                        )
-                        .accessibilityLabel("原始录音进度")
-                        .accessibilityValue(
-                            "\(formatMeetingDuration(controller.currentTime)) / "
-                                + formatMeetingDuration(controller.duration)
-                        )
-
                         Text(formatMeetingDuration(controller.currentTime))
                             .font(JarvisTypography.monospaced)
                             .foregroundStyle(Color.jarvisTextSecondary)
@@ -1232,6 +1070,8 @@ private struct MeetingAudioPlayer: View {
                             .font(JarvisTypography.caption)
                             .foregroundStyle(Color.jarvisTextSecondary)
                     }
+
+                    waveformBar
                 }
             } else if controller.isChecking {
                 HStack(spacing: 10) {
@@ -1258,6 +1098,16 @@ private struct MeetingAudioPlayer: View {
                     }
                 }
             }
+        }
+        .task(id: audioURL) {
+            guard let audioURL else {
+                waveform = nil
+                return
+            }
+            // A waveform already built is shown at once; a new one is decoded in the
+            // background, because that takes seconds and must never block drawing.
+            waveform = await MeetingAudioWaveformStore.shared.cached(for: audioURL)
+            waveform = await MeetingAudioWaveformStore.shared.waveform(for: audioURL)
         }
         .onAppear {
             controller.load(url: audioURL)
@@ -1288,6 +1138,24 @@ private struct MeetingAudioPlayer: View {
         }
         .onDisappear {
             controller.stop()
+        }
+    }
+
+    @ViewBuilder
+    private var waveformBar: some View {
+        if let waveform, !waveform.peaks.isEmpty {
+            MeetingWaveformView(
+                waveform: waveform,
+                progress: controller.duration > 0 ? controller.currentTime / controller.duration : 0,
+                onSeek: { fraction in
+                    controller.seek(to: fraction * controller.duration)
+                    citedPlayback.activeTime = nil
+                }
+            )
+            .frame(height: 56)
+        } else {
+            MeetingWaveformPlaceholder()
+                .frame(height: 56)
         }
     }
 }
@@ -1409,15 +1277,13 @@ private struct MeetingNeedsSummaryCard: View {
     }
 }
 
-private struct MeetingSummarySection: View {
+private struct MeetingMinutesSection: View {
     @Environment(AppModel.self) private var app
     @State private var isRegenerationConfirmationPresented = false
     @State private var overviewDraft = ""
     @FocusState private var isOverviewFocused: Bool
     let record: MeetingRecord
     let summary: MeetingSummary
-    let citedPlayback: CitedAudioPlayback
-    let onToggleCitation: (TimeInterval, UUID?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1447,16 +1313,6 @@ private struct MeetingSummarySection: View {
                                     commitOverview()
                                 }
                             }
-                    }
-                    if !summary.renderedPoints.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label("讨论要点", systemImage: "list.bullet")
-                                .font(MeetingDetailTypography.h3)
-                                .accessibilityAddTraits(.isHeader)
-                            ForEach(summary.renderedPoints) { point in
-                                pointRow(point)
-                            }
-                        }
                     }
                 }
             }
@@ -1512,6 +1368,36 @@ private struct MeetingSummarySection: View {
         let trimmed = overviewDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed != summary.overview else { return }
         app.updateMeetingOverview(recordID: record.id, overview: trimmed)
+    }
+}
+
+/// 讨论要点 has its own section: it is read on its own, and it is the part people quote
+/// from, so it no longer sits under the summary as a sub-block of it.
+private struct MeetingDiscussionPointsSection: View {
+    let record: MeetingRecord
+    let summary: MeetingSummary
+    let citedPlayback: CitedAudioPlayback
+    let onToggleCitation: (TimeInterval, UUID?) -> Void
+
+    var body: some View {
+        if !summary.renderedPoints.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    MeetingSectionHeader(title: "讨论要点", systemImage: "list.bullet")
+                    Spacer()
+                    Text("\(summary.renderedPoints.count)")
+                        .font(JarvisTypography.captionEmphasis)
+                        .foregroundStyle(Color.jarvisTextSecondary)
+                }
+                JarvisCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(summary.renderedPoints) { point in
+                            pointRow(point)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func pointRow(_ point: MeetingDiscussionPoint) -> some View {

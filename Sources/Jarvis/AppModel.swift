@@ -123,6 +123,9 @@ final class AppModel {
     var meetingDidWarnAboutSystemSilence = false
     var meetingRecordingPaused = false
     var meetingSystemPower: Float?
+    /// Recent input levels, newest last, for the live meter. Sampled far faster than the
+    /// once-a-second bookkeeping because the drawing has to move.
+    var meetingLevelHistory: [Double] = []
     var meetingBytesWritten: Int64 = 0
     var meetingModelDownloadCompletedBytes: Int64 = 0
     var meetingModelDownloadTotalBytes: Int64 = 0

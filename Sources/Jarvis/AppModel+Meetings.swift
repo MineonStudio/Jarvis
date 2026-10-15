@@ -223,10 +223,16 @@ extension AppModel {
             updateMeetingMenuBarState()
             meetingProcessingState = .recording
             meetingRecordingTimer?.cancel()
+            meetingLevelHistory = []
             meetingRecordingTimer = Task { @MainActor [weak self] in
+                var tick = 0
                 while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(500))
+                    try? await Task.sleep(for: .milliseconds(80))
                     guard let self, self.meetingCurrentRecordingID == id else { return }
+                    self.sampleMeetingLevel()
+                    tick += 1
+                    // The bookkeeping below only has to happen twice a second.
+                    guard tick % 6 == 0 else { continue }
                     if !self.meetingRecordingPaused {
                         self.meetingElapsed = self.meetingElapsedAccumulated
                             + Date().timeIntervalSince(self.meetingElapsedOrigin)
@@ -1216,6 +1222,21 @@ extension AppModel {
         else { return nil }
         return record
     }
+
+    /// One bar of the live meter. Reads the recorder directly: the once-a-second mirror in
+    /// `meetingSystemPower` is too coarse to draw with.
+    private func sampleMeetingLevel() {
+        let level = meetingRecordingPaused
+            ? 0
+            : MeetingAudioLevel.normalized(meetingRecorder.systemAveragePower())
+        meetingLevelHistory.append(level)
+        let limit = Self.meetingLevelHistoryLimit
+        if meetingLevelHistory.count > limit {
+            meetingLevelHistory.removeFirst(meetingLevelHistory.count - limit)
+        }
+    }
+
+    private static let meetingLevelHistoryLimit = 96
 
     private func refreshMeetingRecordingMeters() {
         meetingSystemPower = meetingRecorder.systemAveragePower()
