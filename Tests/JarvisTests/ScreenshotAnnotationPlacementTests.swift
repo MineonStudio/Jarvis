@@ -67,6 +67,17 @@ final class ScreenshotAnnotationPlacementTests: XCTestCase {
         )
     }
 
+    /// 边框是强调色画在白色画布上，还带一点透明度，所以按通道给一点容差。
+    private func accentMatcher(tolerance: CGFloat = 0.14) -> (NSColor) -> Bool {
+        let accent = JarvisAccentColorStore.shared.preference.nsColor.usingColorSpace(.deviceRGB)
+        return { color in
+            guard let accent else { return false }
+            return abs(color.redComponent - accent.redComponent) < tolerance
+                && abs(color.greenComponent - accent.greenComponent) < tolerance
+                && abs(color.blueComponent - accent.blueComponent) < tolerance
+        }
+    }
+
     func testRectangleIsDrawnAtItsCanvasPosition() throws {
         let annotation = makeAnnotation(
             kind: .rectangle,
@@ -132,17 +143,17 @@ final class ScreenshotAnnotationPlacementTests: XCTestCase {
 
 extension ScreenshotAnnotationPlacementTests {
     /// 马赛克用的是「整幅过滤图 + 遮罩」的路径（和矢量的 Canvas 不同），草稿态画出
-    /// 的是青色边框，用它来验证这条路径的平移也对。
+    /// 的是强调色边框，用它来验证这条路径的平移也对。
+    ///
+    /// 边框用的是应用当前强调色（`jarvisCyan` 只是它的别名，跟随系统设置），所以这里
+    /// 按实际强调色匹配：写死「青色」的测试在强调色不是青色的机器上永远找不到像素。
     func testDraftMosaicOutlineIsDrawnAtItsCanvasPosition() throws {
         let annotation = makeAnnotation(
             kind: .mosaic,
             points: [CGPoint(x: 120, y: 90), CGPoint(x: 260, y: 180)]
         )
 
-        let ink = try inkBounds(of: annotation, isDraft: true) { color in
-            // 青色：绿蓝高、红低
-            color.redComponent < 0.5 && color.greenComponent > 0.5 && color.blueComponent > 0.5
-        }
+        let ink = try inkBounds(of: annotation, isDraft: true, matches: accentMatcher())
 
         XCTAssertEqual(ink.minX, 120, accuracy: 6, "马赛克框左边画错位置")
         XCTAssertEqual(ink.minY, 90, accuracy: 6, "马赛克框上边画错位置")
