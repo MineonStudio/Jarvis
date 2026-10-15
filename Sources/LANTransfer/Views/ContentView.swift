@@ -120,33 +120,32 @@ struct ContentView: View {
         return String(format: "%02d:%02d:%02d", seconds / 3600, (seconds / 60) % 60, seconds % 60)
     }
 
+    @ViewBuilder
     private var connectedDevicesRow: some View {
-        Group {
-            if store.connectedDevices.isEmpty {
-                Text("暂无已连接设备")
-                    .foregroundStyle(.tertiary)
-                    .font(.system(size: 11, weight: .medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 12) {
-                        ForEach(Array(store.connectedDevices.enumerated()), id: \.element.id) { index, device in
-                            HStack(spacing: 5) {
-                                Circle()
-                                    .fill(Color(hue: device.colorHue, saturation: 0.68, brightness: 0.82))
-                                    .frame(width: 7, height: 7)
-                                Text("设备\(index + 1)(\(device.ipAddress))")
-                                    .lineLimit(1)
-                                    .fixedSize()
-                            }
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
+        if store.connectedDevices.isEmpty {
+            Text("暂无已连接设备")
+                .foregroundStyle(.tertiary)
+                .font(.system(size: 11, weight: .medium))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            ScrollView(.horizontal) {
+                HStack(spacing: 12) {
+                    ForEach(Array(store.connectedDevices.enumerated()), id: \.element.id) { index, device in
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(Color(hue: device.colorHue, saturation: 0.68, brightness: 0.82))
+                                .frame(width: 7, height: 7)
+                            Text("设备\(index + 1)(\(device.ipAddress))")
+                                .lineLimit(1)
+                                .fixedSize()
                         }
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
                     }
                 }
-                .scrollIndicators(.hidden)
-                .frame(height: 18)
             }
+            .scrollIndicators(.hidden)
+            .frame(height: 18)
         }
     }
 

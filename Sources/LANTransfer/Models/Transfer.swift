@@ -71,7 +71,10 @@ public struct Transfer: Identifiable, Codable {
     public var resourceURL: URL?
     public var textContent: String?
     public var targetDeviceIP: String?
-    public var isText: Bool { textContent != nil }
+    public var isText: Bool {
+        textContent != nil
+    }
+
     public var isInProgress: Bool {
         status == .pending || status == .accepted || status == .active
     }

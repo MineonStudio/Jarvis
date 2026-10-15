@@ -68,7 +68,7 @@ final class HTTPServerTests: XCTestCase {
     private func offer(_ server: HTTPServer, name: String) -> Bool {
         let done = expectation(description: "Mac offer")
         var result = false
-        Task { result = await server.offerDownload(name: name); done.fulfill() }
+        Task { result = await server.offerDownload(name: name, to: "127.0.0.1"); done.fulfill() }
         wait(for: [done], timeout: 5)
         return result
     }
@@ -163,19 +163,18 @@ final class HTTPServerTests: XCTestCase {
     }
 
     func testInterruptedPrefixIsRetainedWhenDownloadResumes() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let url = root.appendingPathComponent("file.bin")
+        let harness = try makeHarness()
+        defer { harness.server.stop(); try? FileManager.default.removeItem(at: harness.root) }
+        let url = harness.shared.appendingPathComponent("file.bin")
         FileManager.default.createFile(atPath: url.path, contents: nil)
         let file = try FileHandle(forWritingTo: url)
         let total: Int64 = 75_420_323
         let prefix: Int64 = 4 * 1024 * 1024
         try file.truncate(atOffset: UInt64(total))
         try file.close()
-        let server = HTTPServer(ip: "127.0.0.1", token: "test", sharedDirectory: root, receivedDirectory: root, maxBytes: total)
+        let server = harness.server
         XCTAssertTrue(offer(server, name: "file.bin"))
-        let task = try XCTUnwrap(server.currentDownloadOffer())
+        let task = try XCTUnwrap(server.currentDownloadOffer(for: "127.0.0.1"))
         let first = UUID(), second = UUID()
         XCTAssertTrue(server.beginDownload(id: task.id, connectionID: first, name: task.name, total: total, start: 0))
         server.updateDownload(id: task.id, connectionID: first, start: 0, sent: prefix, bytesPerSecond: 1)

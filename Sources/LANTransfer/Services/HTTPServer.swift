@@ -22,6 +22,7 @@ final class HTTPServer: @unchecked Sendable {
         let connectedAt: Date
         let colorHue: Double
     }
+
     private var sessions: [String: DeviceSession] = [:]
     private var nextDeviceColorIndex = 0
     private var transferRecords: [UUID: Transfer] = [:]
@@ -171,7 +172,9 @@ final class HTTPServer: @unchecked Sendable {
             $0.direction == .download && $0.status == .pending && ($0.targetDeviceIP == nil || $0.targetDeviceIP == deviceIP)
         }) else { return nil }
         // Text offers are carried in the task record and do not have a file URL.
-        if task.isText { return task }
+        if task.isText {
+            return task
+        }
         guard let url = task.resourceURL,
               let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]),
               values.isRegularFile == true, values.isSymbolicLink != true,
@@ -390,7 +393,9 @@ final class HTTPServer: @unchecked Sendable {
         let now = Date()
         let oldCount = sessions.count
         sessions = sessions.filter { now.timeIntervalSince($0.value.lastSeen) < 1800 }
-        if sessions.count != oldCount { publishDevices() }
+        if sessions.count != oldCount {
+            publishDevices()
+        }
         guard let cookie = headers["cookie"]?.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { $0.hasPrefix("lan_session=") }) else { return nil }
         let key = String(cookie.dropFirst("lan_session=".count))
         guard var session = sessions[key] else { return nil }
@@ -414,7 +419,9 @@ final class HTTPServer: @unchecked Sendable {
             let now = Date()
             let oldCount = self.sessions.count
             self.sessions = self.sessions.filter { now.timeIntervalSince($0.value.lastSeen) < 1800 }
-            if self.sessions.count != oldCount { self.publishDevices() }
+            if self.sessions.count != oldCount {
+                self.publishDevices()
+            }
         }
     }
 
@@ -429,7 +436,10 @@ final class HTTPServer: @unchecked Sendable {
     }
 
     private func publishDevices() {
-        let devices = Dictionary(grouping: sessions, by: { $0.value.ipAddress })
+        // A browser opened on this Mac can connect to the server through its
+        // own LAN address. Keep that web session usable, but don't list the
+        // Mac itself as a connected peer.
+        let devices = Dictionary(grouping: sessions.filter { $0.value.ipAddress != ip }, by: { $0.value.ipAddress })
             .compactMap { ipAddress, matchingSessions -> LANConnectedDevice? in
                 guard let firstSession = matchingSessions.min(by: { $0.value.connectedAt < $1.value.connectedAt }) else { return nil }
                 return LANConnectedDevice(id: ipAddress, ipAddress: ipAddress, connectedAt: firstSession.value.connectedAt, colorHue: firstSession.value.colorHue)
@@ -467,11 +477,18 @@ final class HTTPConnection: @unchecked Sendable {
     private var rejectionResponseSent = false
     private var pendingTextBody: Data?
     private var pendingTextLength = 0
+    private struct RequestHead {
+        let method: String
+        let components: URLComponents
+        let headers: [String: String]
+    }
+
     private var clientIPAddress: String {
         guard case let .hostPort(host, _) = connection.endpoint else { return "未知 IP" }
         let value = host.debugDescription
         return value.isEmpty ? "未知 IP" : value
     }
+
     fileprivate var transferID: UUID? {
         downloadRequest?.id ?? transfer?.id
     }
@@ -570,42 +587,100 @@ final class HTTPConnection: @unchecked Sendable {
         let headData = headerBuffer.subdata(in: 0 ..< range.lowerBound)
         let body = headerBuffer.subdata(in: range.upperBound ..< headerBuffer.count)
         headerBuffer.removeAll(keepingCapacity: false)
-        guard let head = String(data: headData, encoding: .utf8) else { respond(400, "无效请求"); return }
-        let lines = head.components(separatedBy: "\r\n")
-        let first = lines[0].split(separator: " ")
-        guard first.count == 3, first[2].hasPrefix("HTTP/1."),
-              let components = URLComponents(string: "http://localhost" + first[1]) else { respond(400, "无效请求"); return }
-        var headers: [String: String] = [:]
-        for line in lines.dropFirst() {
-            guard let colon = line.firstIndex(of: ":") else { respond(400, "无效请求头"); return }
-            let name = line[..<colon].lowercased()
-            if headers[name] != nil {
-                respond(400, "重复请求头"); return
-            }
-            headers[name] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-        }
+
+        guard let request = parseRequestHead(headData) else { return }
         requestHandled = true
-        let method = String(first[0])
-        let query = Dictionary((components.queryItems ?? []).compactMap { item -> (String, String)? in item.value.map { (item.name, $0) } }, uniquingKeysWith: { first, _ in first })
-        if method == "GET", components.path == "/" {
-            guard query["t"] == server.token else { respond(403, "链接缺少有效访问令牌"); return }
-            let session = server.session(for: headers, clientIP: clientIPAddress) ?? server.newSession(clientIP: clientIPAddress)
-            let safeIP = server.ipAddress(for: session)
-                .replacingOccurrences(of: "&", with: "&amp;")
-                .replacingOccurrences(of: "<", with: "&lt;")
-                .replacingOccurrences(of: ">", with: "&gt;")
-            let html = WebPage.html.replacingOccurrences(of: "{{DEVICE_IP}}", with: safeIP).data(using: .utf8)!
-            sendHeaders(200, extra: ["Content-Type: text/html; charset=utf-8", "Set-Cookie: lan_session=\(session); HttpOnly; SameSite=Strict; Path=/", "Cache-Control: no-store"], length: Int64(html.count)) { [weak self] in self?.send(html) }
+        let query = Dictionary(
+            (request.components.queryItems ?? []).compactMap { item -> (String, String)? in
+                item.value.map { (item.name, $0) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        if serveRootPageIfRequested(request, query: query) {
             return
         }
-        let session = server.session(for: headers, clientIP: clientIPAddress)
-        let downloadTokenIsValid = (method == "GET" || method == "HEAD")
-            && components.path == "/api/file" && query["t"] == server.token
-        guard session != nil || downloadTokenIsValid else {
+
+        let session = server.session(for: request.headers, clientIP: clientIPAddress)
+        guard isAuthorized(request, query: query, hasSession: session != nil) else {
             respond(401, "会话已过期，请重新扫描二维码")
             return
         }
-        switch (method, components.path) {
+        routeRequest(request, query: query, body: body, session: session)
+    }
+
+    private func parseRequestHead(_ data: Data) -> RequestHead? {
+        guard let head = String(data: data, encoding: .utf8) else {
+            respond(400, "无效请求")
+            return nil
+        }
+        let lines = head.components(separatedBy: "\r\n")
+        guard let firstLine = lines.first else {
+            respond(400, "无效请求")
+            return nil
+        }
+        let first = firstLine.split(separator: " ")
+        guard first.count == 3, first[2].hasPrefix("HTTP/1."),
+              let components = URLComponents(string: "http://localhost" + first[1])
+        else {
+            respond(400, "无效请求")
+            return nil
+        }
+        var headers: [String: String] = [:]
+        for line in lines.dropFirst() {
+            guard let colon = line.firstIndex(of: ":") else {
+                respond(400, "无效请求头")
+                return nil
+            }
+            let name = line[..<colon].lowercased()
+            if headers[name] != nil {
+                respond(400, "重复请求头")
+                return nil
+            }
+            headers[name] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        }
+        return RequestHead(method: String(first[0]), components: components, headers: headers)
+    }
+
+    private func serveRootPageIfRequested(_ request: RequestHead, query: [String: String]) -> Bool {
+        guard request.method == "GET", request.components.path == "/" else { return false }
+        guard query["t"] == server.token else {
+            respond(403, "链接缺少有效访问令牌")
+            return true
+        }
+        let session = server.session(for: request.headers, clientIP: clientIPAddress)
+            ?? server.newSession(clientIP: clientIPAddress)
+        let safeIP = server.ipAddress(for: session)
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+        let html = WebPage.html.replacingOccurrences(of: "{{DEVICE_IP}}", with: safeIP).data(using: .utf8)!
+        sendHeaders(
+            200,
+            extra: [
+                "Content-Type: text/html; charset=utf-8",
+                "Set-Cookie: lan_session=\(session); HttpOnly; SameSite=Strict; Path=/",
+                "Cache-Control: no-store"
+            ],
+            length: Int64(html.count)
+        ) { [weak self] in self?.send(html) }
+        return true
+    }
+
+    private func isAuthorized(_ request: RequestHead, query: [String: String], hasSession: Bool) -> Bool {
+        let isFileDownload = (request.method == "GET" || request.method == "HEAD")
+            && request.components.path == "/api/file" && query["t"] == server.token
+        return hasSession || isFileDownload
+    }
+
+    private func routeRequest(
+        _ request: RequestHead,
+        query: [String: String],
+        body: Data,
+        session: String?
+    ) {
+        let method = request.method
+        let headers = request.headers
+        switch (method, request.components.path) {
         case ("GET", "/api/offer"):
             guard let session else { respond(401, "会话已过期，请重新扫描二维码"); return }
             downloadOffer(for: session)

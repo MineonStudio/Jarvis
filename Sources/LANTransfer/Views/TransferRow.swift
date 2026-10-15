@@ -62,7 +62,9 @@ public struct TransferRow: View {
 
     private var resourceMissing: Bool {
         _ = resourceCheck
-        if transfer.isText { return false }
+        if transfer.isText {
+            return false
+        }
         guard let url = transfer.resourceURL else { return transfer.status == .completed }
         guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]) else { return true }
         return values.isRegularFile != true || values.isSymbolicLink == true
@@ -72,7 +74,9 @@ public struct TransferRow: View {
         transfer.resourceURL != nil && !resourceMissing
     }
 
-    private var canCopy: Bool { transfer.isText || hasFile }
+    private var canCopy: Bool {
+        transfer.isText || hasFile
+    }
 
     private var showsStatus: Bool {
         resourceMissing || transfer.status == .failed || transfer.status == .cancelled
