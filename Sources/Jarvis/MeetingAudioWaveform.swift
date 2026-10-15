@@ -3,7 +3,9 @@ import Foundation
 
 /// The loudness envelope of a recording: one value per drawn bar, 0...1.
 struct MeetingAudioWaveform: Codable, Equatable, Sendable {
-    static let bucketCount = 480
+    /// Few and thick on purpose. A bar per few milliseconds reads as noise across a card;
+    /// this is the shape of the meeting, not its waveform.
+    static let bucketCount = 140
 
     var peaks: [Float]
 }
@@ -68,7 +70,9 @@ actor MeetingAudioWaveformStore {
         // Sub-second precision on purpose: re-mixing a recording can produce the same
         // number of bytes a moment later, and the envelope must not survive that.
         let modified = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-        return "\(url.lastPathComponent)-\(size)-\(Int(modified * 1000))"
+        // The bar count is part of the identity, so a cached envelope drawn for a different
+        // resolution is never reused after the drawing changes.
+        return "\(url.lastPathComponent)-\(size)-\(Int(modified * 1000))-\(MeetingAudioWaveform.bucketCount)"
     }
 
     // MARK: - Decoding

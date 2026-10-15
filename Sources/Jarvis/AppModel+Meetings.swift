@@ -227,12 +227,12 @@ extension AppModel {
             meetingRecordingTimer = Task { @MainActor [weak self] in
                 var tick = 0
                 while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(80))
+                    try? await Task.sleep(for: .milliseconds(120))
                     guard let self, self.meetingCurrentRecordingID == id else { return }
                     self.sampleMeetingLevel()
                     tick += 1
                     // The bookkeeping below only has to happen twice a second.
-                    guard tick % 6 == 0 else { continue }
+                    guard tick % 4 == 0 else { continue }
                     if !self.meetingRecordingPaused {
                         self.meetingElapsed = self.meetingElapsedAccumulated
                             + Date().timeIntervalSince(self.meetingElapsedOrigin)
@@ -1236,7 +1236,7 @@ extension AppModel {
         }
     }
 
-    private static let meetingLevelHistoryLimit = 96
+    private static let meetingLevelHistoryLimit = 48
 
     private func refreshMeetingRecordingMeters() {
         meetingSystemPower = meetingRecorder.systemAveragePower()

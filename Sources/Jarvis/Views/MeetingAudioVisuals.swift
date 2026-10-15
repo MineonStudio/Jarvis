@@ -20,8 +20,9 @@ struct MeetingWaveformView: View {
                 let peaks = waveform.peaks
                 guard !peaks.isEmpty, canvasSize.width > 0 else { return }
                 let slot = canvasSize.width / CGFloat(peaks.count)
-                // Never wider than the slot, or a narrow card draws the bars over each other.
-                let barWidth = min(slot, max(0.8, slot * 0.62))
+                // Half the slot: the gaps are what make the shape readable, and a narrow
+                // card must not draw the bars over each other.
+                let barWidth = min(slot, max(0.8, slot * 0.5))
                 let played = canvasSize.width * shownProgress
                 let accent = Color.jarvisAccent
                 let rest = Color.jarvisTextSecondary.opacity(0.35)
@@ -89,25 +90,30 @@ struct MeetingAudioLevelBars: View {
         Canvas { context, size in
             let slots = max(levels.count, 1)
             let slot = size.width / CGFloat(slots)
-            let barWidth = max(1, slot * 0.55)
+            let barWidth = min(slot, max(1, slot * 0.5))
             let accent = isPaused ? Color.jarvisTextSecondary : Color.jarvisAccent
             for (index, level) in levels.enumerated() {
-                // Older bars fade out, so the newest reading reads as the live one.
+                // Older bars fade out, so the newest reading reads as the live one. A floor
+                // on the height would turn silence into a solid block of bars.
                 let age = Double(levels.count - index) / Double(slots)
-                let height = max(2, min(1, max(0, level)) * size.height)
+                let height = min(1, max(0, level)) * size.height
+                guard height > 0.5 else { continue }
                 let rect = CGRect(
                     x: CGFloat(index) * slot,
                     y: (size.height - height) / 2,
                     width: barWidth,
                     height: height
                 )
+                let shape = barWidth >= 2
+                    ? Path(roundedRect: rect, cornerRadius: barWidth / 2)
+                    : Path(rect)
                 context.fill(
-                    Path(roundedRect: rect, cornerRadius: barWidth / 2),
-                    with: .color(accent.opacity(isPaused ? 0.5 : 1 - age * 0.65))
+                    shape,
+                    with: .color(accent.opacity(isPaused ? 0.45 : 0.9 - age * 0.55))
                 )
             }
         }
-        .frame(height: 28)
+        .frame(height: 26)
         .accessibilityElement()
         .accessibilityLabel("系统音频电平")
         .accessibilityValue(
@@ -127,12 +133,12 @@ struct MeetingWaveformPlaceholder: View {
     var body: some View {
         GeometryReader { geometry in
             Canvas { context, size in
-                let bars = 64
+                let bars = 32
                 let slot = size.width / CGFloat(bars)
-                let barWidth = min(slot, max(0.8, slot * 0.62))
+                let barWidth = min(slot, max(0.8, slot * 0.5))
                 for index in 0 ..< bars {
-                    let wave = sin((Double(index) / Double(bars) * 3 + phase) * .pi * 2)
-                    let height = max(3, (0.25 + 0.2 * wave) * size.height)
+                    let wave = sin((Double(index) / Double(bars) * 2 + phase) * .pi * 2)
+                    let height = max(3, (0.18 + 0.12 * wave) * size.height)
                     let rect = CGRect(
                         x: CGFloat(index) * slot,
                         y: (size.height - height) / 2,
