@@ -17,9 +17,35 @@ enum MeetingSpeakerRenaming {
 
     static func relabeling(_ summary: MeetingSummary, from oldName: String, to newName: String) -> MeetingSummary {
         var renamed = summary
-        for index in renamed.actionItems.indices where renamed.actionItems[index].owner == oldName {
-            renamed.actionItems[index].owner = newName
+        guard !oldName.isEmpty, oldName != newName else { return renamed }
+
+        renamed.overview = replacingSpeakerName(in: renamed.overview, from: oldName, to: newName)
+        for index in renamed.points.indices {
+            renamed.points[index].title = replacingSpeakerName(
+                in: renamed.points[index].title,
+                from: oldName,
+                to: newName
+            )
+            renamed.points[index].detail = replacingSpeakerName(
+                in: renamed.points[index].detail,
+                from: oldName,
+                to: newName
+            )
+        }
+        for index in renamed.actionItems.indices {
+            renamed.actionItems[index].task = replacingSpeakerName(
+                in: renamed.actionItems[index].task,
+                from: oldName,
+                to: newName
+            )
+            if renamed.actionItems[index].owner == oldName {
+                renamed.actionItems[index].owner = newName
+            }
         }
         return renamed
+    }
+
+    private static func replacingSpeakerName(in text: String, from oldName: String, to newName: String) -> String {
+        text.replacingOccurrences(of: oldName, with: newName)
     }
 }

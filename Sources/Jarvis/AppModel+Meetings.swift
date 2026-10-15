@@ -619,17 +619,70 @@ extension AppModel {
         else { return }
         let oldName = meetingRecords[index].speakers[speakerIndex].name
         guard oldName != trimmed else { return }
+        let shouldRelabelOwner = MeetingSpeakerRenaming.isUnambiguous(
+            oldName,
+            among: meetingRecords[index].speakers
+        )
         meetingRecords[index].speakers[speakerIndex].name = trimmed
-        if MeetingSpeakerRenaming.isUnambiguous(oldName, among: meetingRecords[index].speakers),
-           let summary = meetingRecords[index].summary
-        {
+        if shouldRelabelOwner, let summary = meetingRecords[index].summary {
             meetingRecords[index].summary = MeetingSpeakerRenaming.relabeling(
                 summary,
                 from: oldName,
                 to: trimmed
             )
         }
-        persistMeeting(meetingRecords[index])
+        if shouldRelabelOwner, let liveSummary = meetingLiveSummaries[recordID] {
+            meetingLiveSummaries[recordID] = MeetingSpeakerRenaming.relabeling(
+                liveSummary,
+                from: oldName,
+                to: trimmed
+            )
+        }
+        if persistMeeting(meetingRecords[index]) {
+            showToast("说话人名称已保存")
+        }
+    }
+
+    func mergeMeetingSpeakers(recordID: UUID, sourceSpeakerID: String, into targetSpeakerID: String) {
+        guard sourceSpeakerID != targetSpeakerID,
+              let recordIndex = meetingRecords.firstIndex(where: { $0.id == recordID }),
+              let sourceIndex = meetingRecords[recordIndex].speakers.firstIndex(where: { $0.id == sourceSpeakerID }),
+              let target = meetingRecords[recordIndex].speakers.first(where: { $0.id == targetSpeakerID })
+        else { return }
+
+        let source = meetingRecords[recordIndex].speakers[sourceIndex]
+        let shouldRelabelSummary = MeetingSpeakerRenaming.isUnambiguous(
+            source.name,
+            among: meetingRecords[recordIndex].speakers
+        )
+        var movedSegmentCount = 0
+        for segmentIndex in meetingRecords[recordIndex].transcript.indices
+            where meetingRecords[recordIndex].transcript[segmentIndex].speakerID == sourceSpeakerID
+        {
+            meetingRecords[recordIndex].transcript[segmentIndex].speakerID = targetSpeakerID
+            movedSegmentCount += 1
+        }
+        meetingRecords[recordIndex].speakers.remove(at: sourceIndex)
+        meetingRecords[recordIndex].estimatedSpeakerCount = meetingRecords[recordIndex].speakers.count
+
+        if shouldRelabelSummary, let summary = meetingRecords[recordIndex].summary {
+            meetingRecords[recordIndex].summary = MeetingSpeakerRenaming.relabeling(
+                summary,
+                from: source.name,
+                to: target.name
+            )
+        }
+        if shouldRelabelSummary, let liveSummary = meetingLiveSummaries[recordID] {
+            meetingLiveSummaries[recordID] = MeetingSpeakerRenaming.relabeling(
+                liveSummary,
+                from: source.name,
+                to: target.name
+            )
+        }
+
+        if persistMeeting(meetingRecords[recordIndex]) {
+            showToast("已合并说话人，(movedSegmentCount) 段转写归入「\(target.name)」")
+        }
     }
 
     func restoreMeetingMinutesVersion(recordID: UUID, versionID: UUID) {
@@ -1403,9 +1456,11 @@ extension AppModel {
         persistMeeting(meetingRecords[index])
     }
 
-    private func persistMeeting(_ record: MeetingRecord) {
+    @discardableResult
+    private func persistMeeting(_ record: MeetingRecord) -> Bool {
         do {
             try meetingRepository.save(record)
+            return true
         } catch {
             JarvisLog.error(
                 category: .storage,
@@ -1414,6 +1469,7 @@ extension AppModel {
                 fields: ["meetingID": record.id.uuidString]
             )
             showToast(JarvisFeedbackCopy.saveFailed)
+            return false
         }
     }
 

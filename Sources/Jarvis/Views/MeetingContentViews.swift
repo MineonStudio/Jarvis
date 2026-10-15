@@ -210,7 +210,16 @@ struct MeetingView: View {
             app.toggleMeetingRecording()
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "speaker.wave.2.fill")
+                Group {
+                    if isRecording {
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(Color.red)
+                    } else {
+                        Circle()
+                            .fill(Color.red)
+                    }
+                }
+                .frame(width: 9, height: 9)
                 Text(isRecording
                     ? MeetingRecordingStyle.displayTitle(for: app.meetingElapsed)
                     : "开始录制"
@@ -362,6 +371,9 @@ private struct MeetingSpeakerSection: View {
     @StateObject private var clips = MeetingSpeakerClipPlayer()
     @State private var drafts: [String: String] = [:]
     @State private var collisionName: String?
+    @State private var isMergePanelExpanded = false
+    @State private var mergeSourceSpeakerID: String?
+    @State private var mergeTargetSpeakerID: String?
     @FocusState private var focusedKey: String?
 
     var body: some View {
@@ -370,12 +382,33 @@ private struct MeetingSpeakerSection: View {
                 HStack {
                     MeetingSectionHeader(title: "说话人", systemImage: "person.2.wave.2")
                     Spacer()
+                    if record.speakers.count > 1 {
+                        Button {
+                            withAnimation(.snappy(duration: 0.2)) {
+                                isMergePanelExpanded.toggle()
+                                if !isMergePanelExpanded {
+                                    resetMergeSelection()
+                                }
+                            }
+                        } label: {
+                            Label(
+                                isMergePanelExpanded ? "取消合并" : "合并说话人",
+                                systemImage: isMergePanelExpanded ? "xmark" : "arrow.triangle.merge"
+                            )
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(Color.jarvisAccent)
+                        .font(JarvisTypography.captionEmphasis)
+                    }
                     Text("\(record.speakers.count)")
                         .font(JarvisTypography.captionEmphasis)
                         .foregroundStyle(Color.jarvisTextSecondary)
                 }
                 JarvisCard {
                     VStack(alignment: .leading, spacing: 12) {
+                        if isMergePanelExpanded {
+                            mergePanel
+                        }
                         ForEach(record.speakers) { speaker in
                             speakerRow(speaker)
                         }
@@ -384,7 +417,7 @@ private struct MeetingSpeakerSection: View {
                                 .font(JarvisTypography.caption)
                                 .foregroundStyle(.orange)
                         } else {
-                            Text("改名前先听一句他说的话，名字会同步更新纪要里的负责人。")
+                            Text("按 Return 或离开输入框保存说话人名称。")
                                 .font(JarvisTypography.caption)
                                 .foregroundStyle(Color.jarvisTextSecondary)
                         }
@@ -413,6 +446,8 @@ private struct MeetingSpeakerSection: View {
                     uniqueKeysWithValues: record.speakers.map { (draftKey(for: $0), $0.name) }
                 )
                 collisionName = nil
+                isMergePanelExpanded = false
+                resetMergeSelection()
             }
             .onChange(of: focusedKey) { previous, _ in
                 guard let previous,
@@ -427,6 +462,126 @@ private struct MeetingSpeakerSection: View {
                 clips.stop()
             }
         }
+    }
+
+    private var mergePanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("合并误判的说话人")
+                    .font(JarvisTypography.bodyEmphasis)
+                Text("左侧选择误判对象，右侧选择保留身份。左侧说话人会移除，转写和纪要内容归入右侧。")
+                    .font(JarvisTypography.caption)
+                    .foregroundStyle(Color.jarvisTextSecondary)
+            }
+
+            HStack(spacing: 10) {
+                mergeSpeakerPicker(
+                    title: "并入的说话人",
+                    selectedSpeaker: mergeSourceSpeaker,
+                    placeholder: "选择误判对象"
+                ) {
+                    ForEach(record.speakers) { speaker in
+                        Button("\(speaker.name) · \(segmentCount(of: speaker)) 段") {
+                            mergeSourceSpeakerID = speaker.id
+                            if mergeTargetSpeakerID == speaker.id {
+                                mergeTargetSpeakerID = nil
+                            }
+                        }
+                    }
+                }
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.jarvisTextSecondary)
+
+                mergeSpeakerPicker(
+                    title: "保留的说话人",
+                    selectedSpeaker: mergeTargetSpeaker,
+                    placeholder: mergeSourceSpeaker == nil ? "先选择并入对象" : "选择保留对象"
+                ) {
+                    ForEach(record.speakers.filter { $0.id != mergeSourceSpeakerID }) { speaker in
+                        Button("\(speaker.name) · \(segmentCount(of: speaker)) 段") {
+                            mergeTargetSpeakerID = speaker.id
+                        }
+                    }
+                }
+                .disabled(mergeSourceSpeaker == nil)
+            }
+
+            HStack {
+                Spacer()
+                Button {
+                    performSpeakerMerge()
+                } label: {
+                    Label("合并说话人", systemImage: "arrow.right")
+                }
+                .buttonStyle(JarvisPrimaryButtonStyle())
+                .disabled(mergeSourceSpeaker == nil || mergeTargetSpeaker == nil)
+            }
+        }
+        .padding(12)
+        .background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private func mergeSpeakerPicker(
+        title: String,
+        selectedSpeaker: MeetingSpeaker?,
+        placeholder: String,
+        @ViewBuilder options: () -> some View
+    ) -> some View {
+        Menu(content: options) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(JarvisTypography.caption)
+                    .foregroundStyle(Color.jarvisTextSecondary)
+                HStack(spacing: 6) {
+                    Text(selectedSpeaker?.name ?? placeholder)
+                        .font(JarvisTypography.controlEmphasis)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.jarvisTextSecondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.jarvisPanel, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var mergeSourceSpeaker: MeetingSpeaker? {
+        record.speakers.first { $0.id == mergeSourceSpeakerID }
+    }
+
+    private var mergeTargetSpeaker: MeetingSpeaker? {
+        record.speakers.first { $0.id == mergeTargetSpeakerID }
+    }
+
+    private func performSpeakerMerge() {
+        guard let source = mergeSourceSpeaker, let target = mergeTargetSpeaker else { return }
+        clips.stop()
+        app.mergeMeetingSpeakers(recordID: record.id, sourceSpeakerID: source.id, into: target.id)
+        drafts.removeValue(forKey: draftKey(for: source))
+        collisionName = nil
+        withAnimation(.snappy(duration: 0.2)) {
+            isMergePanelExpanded = false
+            resetMergeSelection()
+        }
+    }
+
+    private func resetMergeSelection() {
+        mergeSourceSpeakerID = nil
+        mergeTargetSpeakerID = nil
     }
 
     private func speakerRow(_ speaker: MeetingSpeaker) -> some View {
@@ -1295,28 +1450,16 @@ private struct MeetingAudioPlayer: View {
     var body: some View {
         JarvisCard {
             if controller.isAvailable {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        Button {
-                            controller.togglePlayback()
-                            citedPlayback.isPlaying = controller.isPlaying
-                        } label: {
-                            Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
-                                .frame(width: 28, height: 28)
-                        }
-                        .buttonStyle(JarvisPrimaryButtonStyle())
-                        .accessibilityLabel(controller.isPlaying ? "暂停原始录音" : "播放原始录音")
-
-                        Text(formatMeetingDuration(controller.currentTime))
-                            .font(JarvisTypography.monospaced)
-                            .foregroundStyle(Color.jarvisTextSecondary)
-
-                        Text("/ \(formatMeetingDuration(controller.duration))")
-                            .font(JarvisTypography.caption)
-                            .foregroundStyle(Color.jarvisTextSecondary)
-                    }
-
+                VStack(alignment: .leading, spacing: 6) {
+                    playbackControls
                     waveformBar
+                    HStack {
+                        Text(formatMeetingDuration(controller.currentTime))
+                        Spacer()
+                        Text(formatMeetingDuration(controller.duration))
+                    }
+                    .font(JarvisTypography.monospaced)
+                    .foregroundStyle(Color.jarvisTextSecondary)
                 }
             } else if controller.isChecking {
                 HStack(spacing: 10) {
@@ -1394,6 +1537,48 @@ private struct MeetingAudioPlayer: View {
         .onDisappear {
             controller.stop()
         }
+    }
+
+    private var playbackControls: some View {
+        HStack(spacing: 28) {
+            Button {
+                seek(by: -15)
+            } label: {
+                Image(systemName: "gobackward.15")
+                    .font(.system(size: 27, weight: .regular))
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("倒退 15 秒")
+
+            Button {
+                controller.togglePlayback()
+                citedPlayback.isPlaying = controller.isPlaying
+            } label: {
+                Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 30, weight: .medium))
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(controller.isPlaying ? "暂停原始录音" : "播放原始录音")
+
+            Button {
+                seek(by: 15)
+            } label: {
+                Image(systemName: "goforward.15")
+                    .font(.system(size: 27, weight: .regular))
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("快进 15 秒")
+        }
+        .frame(maxWidth: .infinity)
+        .foregroundStyle(Color.primary)
+    }
+
+    private func seek(by offset: TimeInterval) {
+        controller.seek(to: controller.currentTime + offset)
+        citedPlayback.activeTime = nil
     }
 
     /// Reloads when the recording becomes readable — which is not when the path changes —
