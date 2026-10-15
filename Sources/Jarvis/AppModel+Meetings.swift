@@ -379,6 +379,9 @@ extension AppModel {
         meetingProcessingTask = nil
         let activeID = meetingActiveProcessingID
         meetingActiveProcessingID = nil
+        if let activeID {
+            meetingLiveSummaries[activeID] = nil
+        }
         if let activeID, let index = meetingRecords.firstIndex(where: { $0.id == activeID }) {
             meetingRecords[index].status = meetingRecords[index].transcript.isEmpty ? .failed : .summaryFailed
             meetingRecords[index].errorMessage = JarvisFeedbackCopy.processingStopped
@@ -766,7 +769,6 @@ extension AppModel {
         meetingProcessingTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { completeActiveMeetingProcessing(for: record.id) }
-            let previousSummary = meetingRecords.first { $0.id == record.id }?.summary
             do {
                 let prepared = try await prepareAudioForTranscription(record)
                 try await waitForMeetingAudioFile(at: prepared.mixedURL)
@@ -833,14 +835,11 @@ extension AppModel {
                 try await performSummarize(
                     updatedRecord,
                     configuration: configuration,
-                    preserveUserEdits: true,
-                    previousSummary: previousSummary
+                    preserveUserEdits: true
                 )
             } catch is CancellationError {
-                discardUnfinishedSummary(record.id, previous: previousSummary)
                 return
             } catch {
-                discardUnfinishedSummary(record.id, previous: previousSummary)
                 updateMeetingFailure(recordID: record.id, message: error.localizedDescription)
             }
         }
@@ -877,38 +876,30 @@ extension AppModel {
         meetingProcessingTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { completeActiveMeetingProcessing(for: record.id) }
-            let previousSummary = meetingRecords.first { $0.id == record.id }?.summary
             do {
                 try await performSummarize(
                     record,
                     configuration: configuration,
-                    preserveUserEdits: preserveUserEdits,
-                    previousSummary: previousSummary
+                    preserveUserEdits: preserveUserEdits
                 )
             } catch is CancellationError {
-                discardUnfinishedSummary(record.id, previous: previousSummary)
                 return
             } catch {
-                discardUnfinishedSummary(record.id, previous: previousSummary)
                 updateMeetingFailure(recordID: record.id, message: error.localizedDescription)
             }
         }
     }
 
-    /// A run that did not finish leaves the record holding the minutes it had before, not
-    /// the half-written preview the user watched arrive. Nothing half-baked is stored.
-    private func discardUnfinishedSummary(_ recordID: UUID, previous: MeetingSummary?) {
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }) else { return }
-        guard meetingRecords[index].summary != previous else { return }
-        meetingRecords[index].summary = previous
-        persistMeeting(meetingRecords[index])
+    /// What the meeting view shows right now: the answer still arriving, or the minutes
+    /// that are actually stored.
+    func displayedMeetingSummary(for record: MeetingRecord) -> MeetingSummary? {
+        meetingLiveSummaries[record.id] ?? record.summary
     }
 
     private func performSummarize(
         _ record: MeetingRecord,
         configuration: AIAPIConfiguration,
-        preserveUserEdits: Bool,
-        previousSummary: MeetingSummary?
+        preserveUserEdits: Bool
     ) async throws {
         if let index = meetingRecords.firstIndex(where: { $0.id == record.id }) {
             meetingRecords[index].status = .summarizing
@@ -939,10 +930,7 @@ extension AppModel {
                       let index = self.meetingRecords.firstIndex(where: { $0.id == record.id })
                 else { return }
                 self.meetingRecords[index].summaryCheckpoint = checkpoint
-                // What is on disk is never the text still arriving on screen.
-                var persisted = self.meetingRecords[index]
-                persisted.summary = previousSummary
-                self.persistMeeting(persisted)
+                self.persistMeeting(self.meetingRecords[index])
                 JarvisLog.info(
                     category: .meeting,
                     event: "summary.checkpoint",
@@ -967,12 +955,13 @@ extension AppModel {
                     self.meetingProcessingState = .processing(stage: .thinking, progress: nil)
                 case let .draft(draft):
                     self.meetingProcessingState = .processing(stage: .summarizing, progress: nil)
-                    // Shown while the model is still writing; the finished summary replaces it.
-                    guard let index = self.meetingRecords.firstIndex(where: { $0.id == record.id }) else { return }
-                    self.meetingRecords[index].summary = draft
+                    // Shown while the model is still writing. It lives beside the records,
+                    // not in them, so nothing partial is stored or exported.
+                    self.meetingLiveSummaries[record.id] = draft
                 }
             }
         )
+        meetingLiveSummaries[record.id] = nil
         guard let index = meetingRecords.firstIndex(where: { $0.id == record.id }) else { return }
         meetingRecords[index].summary = summary
         meetingRecords[index].status = .ready
@@ -997,6 +986,7 @@ extension AppModel {
     }
 
     private func completeActiveMeetingProcessing(for recordID: UUID) {
+        meetingLiveSummaries[recordID] = nil
         guard meetingActiveProcessingID == recordID else { return }
         meetingActiveProcessingID = nil
         meetingProcessingTask = nil

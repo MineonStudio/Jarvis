@@ -111,6 +111,9 @@ final class AppModel {
     var meetingRecords: [MeetingRecord] = []
     var selectedMeetingID: UUID?
     var meetingProcessingState: MeetingProcessingState = .idle
+    /// Minutes still arriving from the model, keyed by meeting. Kept out of the records so
+    /// a preview is never stored, exported or searched before the finished answer lands.
+    var meetingLiveSummaries: [UUID: MeetingSummary] = [:]
     var meetingElapsed: TimeInterval = 0
     var meetingElapsedOrigin = Date()
     var meetingElapsedAccumulated: TimeInterval = 0

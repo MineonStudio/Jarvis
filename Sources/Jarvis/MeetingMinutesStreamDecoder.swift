@@ -12,6 +12,9 @@ struct MeetingMinutesStreamDecoder {
         /// Raw JSON text of one finished array element, ready for JSONDecoder.
         case pointCompleted(String)
         case todoCompleted(String)
+        /// The model wrote the overview key again. JSON decoding keeps the last one, so the
+        /// preview throws away what it showed for the earlier one instead of gluing both.
+        case overviewRestarted
     }
 
     private static let overviewKeys: Set<String> = ["summary", "overview"]
@@ -27,6 +30,9 @@ struct MeetingMinutesStreamDecoder {
     private var captureKind: Event?
     /// Set once the first complete object has closed. Anything after it is not the answer.
     private var isClosed = false
+    /// An object with no keys at all is prose that happened to contain braces, not the answer.
+    private var sawRootKey = false
+    private var sawOverviewValue = false
 
     private struct Frame {
         var isObject: Bool
@@ -50,7 +56,14 @@ struct MeetingMinutesStreamDecoder {
         switch token.kind {
         case let .key(name):
             if !stack.isEmpty, stack[stack.count - 1].isObject {
+                if stack.count == 1 {
+                    sawRootKey = true
+                }
                 stack[stack.count - 1].pendingKey = name
+                if stack.count == 1, Self.overviewKeys.contains(name), sawOverviewValue {
+                    sawOverviewValue = false
+                    events.append(.overviewRestarted)
+                }
             }
 
         case .objectStart, .arrayStart:
@@ -70,6 +83,7 @@ struct MeetingMinutesStreamDecoder {
 
         case let .stringDelta(text):
             if isStreamingOverview() {
+                sawOverviewValue = true
                 events.append(.overviewDelta(text))
             }
 
@@ -97,7 +111,9 @@ struct MeetingMinutesStreamDecoder {
         }
         _ = stack.popLast()
         if stack.isEmpty {
-            isClosed = true
+            // `使用 {} 表示对象：{…}` is prose, not an answer. Only a root object that had
+            // keys ends the run.
+            isClosed = sawRootKey
             return
         }
         clearPendingKey()
@@ -210,6 +226,8 @@ struct JSONStreamTokenizer {
             inScalar = false
             inString = true
             escaping = false
+            // A surrogate pair cannot span two strings.
+            highSurrogate = nil
             stringIsKey = expectingKey
         case ":":
             inScalar = false
@@ -262,6 +280,7 @@ struct JSONStreamTokenizer {
             escaping = true
         case "\"":
             inString = false
+            highSurrogate = nil
             let finished = decoded
             decoded = ""
             if stringIsKey {

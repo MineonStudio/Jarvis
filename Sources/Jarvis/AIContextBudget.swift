@@ -45,15 +45,14 @@ final class AIContextBudgetStore: @unchecked Sendable {
     func recordContextWindows(_ windows: [String: Int], providerID: String) {
         guard !windows.isEmpty else { return }
         lock.lock()
+        defer { lock.unlock() }
         for (model, window) in windows where window > 0 {
             budgets["\(providerID)|\(model.lowercased())"] = min(
                 Self.maximumBudget,
                 max(Self.minimumBudget, window * 2 / 5)
             )
         }
-        let snapshot = budgets
-        lock.unlock()
-        defaults.set(snapshot, forKey: Self.key)
+        defaults.set(budgets, forKey: Self.key)
     }
 
     /// The provider rejected a request for being too long. Whatever was sent was too much.
@@ -65,10 +64,9 @@ final class AIContextBudgetStore: @unchecked Sendable {
 
     private func store(_ budget: Int, for configuration: AIAPIConfiguration) {
         lock.lock()
+        defer { lock.unlock() }
         budgets[Self.identifier(for: configuration)] = budget
-        let snapshot = budgets
-        lock.unlock()
-        defaults.set(snapshot, forKey: Self.key)
+        defaults.set(budgets, forKey: Self.key)
     }
 
     private static func identifier(for configuration: AIAPIConfiguration) -> String {

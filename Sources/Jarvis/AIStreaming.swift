@@ -27,7 +27,9 @@ struct AIStreamingPolicy: Equatable, Sendable {
     var firstDeltaTimeout: TimeInterval
     /// Silence allowed between tokens.
     var idleTimeout: TimeInterval
-    /// Hard ceiling for one request, however chatty it is.
+    /// Hard ceiling for one request, however chatty it is. Generous on purpose: a long
+    /// meeting on a slow model is not a fault, and a request that has gone quiet is already
+    /// caught by the idle allowances above.
     var totalTimeout: TimeInterval
 
     static let `default` = Self(
@@ -35,7 +37,7 @@ struct AIStreamingPolicy: Equatable, Sendable {
         hedgeDelay: defaultHedgeDelay,
         firstDeltaTimeout: 60,
         idleTimeout: 25,
-        totalTimeout: 600
+        totalTimeout: 1800
     )
 
     static func load(
@@ -74,15 +76,14 @@ final class AIStreamingLatencyHistory: @unchecked Sendable {
         guard firstTokenSeconds.isFinite, firstTokenSeconds >= 0 else { return }
         let key = Self.identifier(for: configuration)
         lock.lock()
+        defer { lock.unlock() }
         var values = samples[key] ?? []
         values.append(firstTokenSeconds)
         if values.count > Self.sampleLimit {
             values.removeFirst(values.count - Self.sampleLimit)
         }
         samples[key] = values
-        let snapshot = samples
-        lock.unlock()
-        defaults.set(snapshot, forKey: Self.key)
+        defaults.set(samples, forKey: Self.key)
     }
 
     func suggestedHedgeDelay(for configuration: AIAPIConfiguration) -> TimeInterval {

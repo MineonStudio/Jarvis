@@ -622,7 +622,7 @@ private struct MeetingDetailPane: View {
                             )
                         }
 
-                        if let summary = record.summary {
+                        if let summary = app.displayedMeetingSummary(for: record) {
                             MeetingSummarySection(
                                 record: record,
                                 summary: summary,
@@ -1559,7 +1559,7 @@ private struct MeetingActionItemsPanel: View {
                     .foregroundStyle(Color.jarvisTextSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.horizontal, 10)
-            } else if let record, let summary = record.summary {
+            } else if let record, let summary = app.displayedMeetingSummary(for: record) {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(actionItems) { item in
@@ -1579,12 +1579,12 @@ private struct MeetingActionItemsPanel: View {
     }
 
     private var actionItems: [MeetingActionItem] {
-        record?.summary?.actionItems ?? []
+        record.flatMap { app.displayedMeetingSummary(for: $0)?.actionItems } ?? []
     }
 
     private var emptyMessage: String {
-        guard record != nil else { return "选择一条会议" }
-        guard record?.summary != nil else { return "生成总结后，待办会显示在这里" }
+        guard let record else { return "选择一条会议" }
+        guard app.displayedMeetingSummary(for: record) != nil else { return "生成总结后，待办会显示在这里" }
         return "这次会议没有待办"
     }
 

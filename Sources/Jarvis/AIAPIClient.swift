@@ -606,19 +606,34 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
                 }
                 group.addTask {
                     try await Self.watchStream(sink: sink, policy: policy, startedAt: startedAt)
-                    return .skipped
+                    return .watchdog
                 }
 
+                var remainingAttempts = attemptCount
                 var failures: [Error] = []
                 for try await outcome in group {
                     switch outcome {
                     case let .finished(text):
                         group.cancelAll()
                         return text
-                    case .skipped:
+                    case .watchdog:
                         continue
+                    case .skipped:
+                        remainingAttempts -= 1
                     case let .failed(error):
                         failures.append(error)
+                        remainingAttempts -= 1
+                        // A provider that refused will refuse the duplicate too.
+                        if case AIAPIError.server = error {
+                            remainingAttempts = 0
+                        }
+                    }
+                    // Report what actually went wrong as soon as nothing is left running.
+                    // Waiting on the watchdog instead would relabel a refusal, a bad key or
+                    // a truncated answer as a stall a minute later.
+                    guard remainingAttempts > 0 else {
+                        group.cancelAll()
+                        throw failures.first ?? AIAPIError.invalidTransportResponse
                     }
                 }
                 throw failures.first ?? AIAPIError.invalidTransportResponse
@@ -661,6 +676,9 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
         case failed(Error)
         /// The duplicate never had to run, or lost the race and stopped.
         case skipped
+        /// The watchdog itself. It never returns while a request is alive, but it must not
+        /// be counted as an attempt that settled.
+        case watchdog
     }
 
     /// Fails the whole request when the stream goes quiet, so a silent provider cannot
@@ -895,8 +913,9 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard var components = URLComponents(string: trimmed),
-              components.scheme?.lowercased() == "https",
-              let host = components.host, !host.isEmpty
+              let scheme = components.scheme?.lowercased(),
+              let host = components.host, !host.isEmpty,
+              scheme == "https" || (scheme == "http" && isLoopbackHost(host))
         else {
             return nil
         }
@@ -913,6 +932,13 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
                 : path + "/chat/completions"
         }
         return components.url
+    }
+
+    /// Plain http is allowed only for a model running on this Mac (Ollama, LM Studio and
+    /// friends listen there). A key sent to a public host stays https-only.
+    static func isLoopbackHost(_ host: String) -> Bool {
+        let name = host.lowercased()
+        return name == "localhost" || name == "::1" || name == "[::1]" || name.hasPrefix("127.")
     }
 
     static func normalizedModelsURL(

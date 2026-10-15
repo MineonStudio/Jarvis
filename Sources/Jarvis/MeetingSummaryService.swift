@@ -279,22 +279,32 @@ struct MeetingSummaryService: Sendable {
         guard MeetingMinutesAlgorithm.summaryOutsidePreferredRange(summary.overview) else {
             return summary
         }
-        return await repairedOverview(summary, context: context)
+        return try await repairedOverview(summary, context: context)
     }
 
+    /// A repair is cosmetic: if it fails, the minutes that already exist are kept. Cancelling
+    /// is not a failure though — swallowing it would let a stopped run report itself as
+    /// finished and overwrite the state the user just asked for.
     private func repairedOverview(
         _ summary: MeetingSummary,
         context: SummaryContext
-    ) async -> MeetingSummary {
-        let content = try? await api.stream(
-            systemPrompt: Self.overviewRepairSystemPrompt,
-            userPrompt: Self.overviewRepairPrompt(overview: summary.overview),
-            configuration: context.configuration,
-            options: .meetingSummary,
-            policy: policy,
-            onEvent: { _ in }
-        )
-        guard let content, let overview = Self.repairedOverviewText(from: content) else {
+    ) async throws -> MeetingSummary {
+        let content: String
+        do {
+            content = try await api.stream(
+                systemPrompt: Self.overviewRepairSystemPrompt,
+                userPrompt: Self.overviewRepairPrompt(overview: summary.overview),
+                configuration: context.configuration,
+                options: .meetingSummary,
+                policy: policy,
+                onEvent: { _ in }
+            )
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            return summary
+        }
+        guard let overview = Self.repairedOverviewText(from: content) else {
             return summary
         }
         var repaired = summary
@@ -302,20 +312,18 @@ struct MeetingSummaryService: Sendable {
         return repaired
     }
 
+    /// Only a JSON answer counts. An answer that ignored the schema is not an overview, and
+    /// storing it verbatim would put the model's chatter in the meeting's minutes.
     static func repairedOverviewText(from raw: String) -> String? {
         let extracted = extractJSONObject(raw)
-        if let data = extracted.data(using: .utf8),
-           let draft = try? JSONDecoder().decode(MeetingMinutesAlgorithm.DraftMinutes.self, from: data),
-           let text = (draft.summary ?? draft.overview)?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !text.isEmpty
-        {
-            return text
+        guard let data = extracted.data(using: .utf8),
+              let draft = try? JSONDecoder().decode(MeetingMinutesAlgorithm.DraftMinutes.self, from: data),
+              let text = (draft.summary ?? draft.overview)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty
+        else {
+            return nil
         }
-        let text = raw
-            .replacingOccurrences(of: "```json", with: "")
-            .replacingOccurrences(of: "```", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
+        return text
     }
 
     /// One window, with the two retries that are worth paying for: a structurally unusable
@@ -960,6 +968,8 @@ private final class MinutesStreamAssembler: @unchecked Sendable {
                 switch decoded {
                 case let .overviewDelta(chunk):
                     overview += chunk
+                case .overviewRestarted:
+                    overview = ""
                 case let .pointCompleted(json):
                     sawItem = appendPoint(json) || sawItem
                 case let .todoCompleted(json):

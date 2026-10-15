@@ -990,7 +990,7 @@ extension MeetingTests {
             ],
             failMergeWithServerMessage: "Insufficient Balance (request_id: test)"
         )
-        let stitched = try await MeetingSummaryService(api: failingAPI).summarize(
+        let stitched = try await isolatedSummaryService(api: failingAPI).summarize(
             record: record,
             configuration: testSummaryConfiguration,
             onCheckpoint: { box.set($0) }
@@ -1013,7 +1013,7 @@ extension MeetingTests {
         let retryAPI = try MeetingTestAPI(
             summaryResponse: minutesJSON(summary: mergedOverview)
         )
-        let merged = try await MeetingSummaryService(api: retryAPI).summarize(
+        let merged = try await isolatedSummaryService(api: retryAPI).summarize(
             record: record,
             configuration: testSummaryConfiguration,
             checkpoint: saved
@@ -1070,7 +1070,7 @@ extension MeetingTests {
         )
 
         do {
-            _ = try await MeetingSummaryService(api: networkAPI).summarize(
+            _ = try await isolatedSummaryService(api: networkAPI).summarize(
                 record: record,
                 configuration: testSummaryConfiguration
             )
@@ -1086,7 +1086,7 @@ extension MeetingTests {
             scriptedResponses: [window, window, "不是 JSON", "还是不是"]
         )
         do {
-            _ = try await MeetingSummaryService(api: schemaAPI).summarize(
+            _ = try await isolatedSummaryService(api: schemaAPI).summarize(
                 record: record,
                 configuration: testSummaryConfiguration
             )
@@ -1351,6 +1351,16 @@ private func writeSilentCAF(to url: URL, seconds: Double) throws {
     let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
     buffer.frameLength = frames
     try file.write(from: buffer)
+}
+
+/// A service whose context budget starts from the default: the split of a transcript must
+/// not depend on what another run, or another test, has already learned about a model.
+private func isolatedSummaryService(api: any AITextCompletionAPI) -> MeetingSummaryService {
+    var service = MeetingSummaryService(api: api)
+    service.budgets = AIContextBudgetStore(
+        defaults: UserDefaults(suiteName: "jarvis.tests.budget.\(UUID().uuidString)") ?? .standard
+    )
+    return service
 }
 
 private let testSummaryConfiguration = AIAPIConfiguration(

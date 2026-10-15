@@ -119,6 +119,35 @@ final class MeetingMinutesStreamDecoderTests: XCTestCase {
         XCTAssertEqual(overview(of: events).joined(), "完成")
     }
 
+    func testSurrogatesDoNotRunAcrossTwoStrings() {
+        var decoder = MeetingMinutesStreamDecoder()
+        let events = decoder.feed(#"{"note":"\uD83C","summary":"\uDE00 tail"}"#)
+
+        XCTAssertEqual(
+            overview(of: events).joined(),
+            " tail",
+            "半个代理对只属于它自己那个字符串，不该和后面的拼成一个字"
+        )
+    }
+
+    func testBracesInProseDoNotEndTheRun() {
+        var decoder = MeetingMinutesStreamDecoder()
+        var events: [MeetingMinutesStreamDecoder.Event] = []
+        for character in #"使用 {} 表示对象，正文如下：{"summary":"真实的概要"}"# {
+            events += decoder.feed(String(character))
+        }
+
+        XCTAssertEqual(overview(of: events).joined(), "真实的概要")
+    }
+
+    func testARepeatedOverviewKeyRestartsThePreview() {
+        var decoder = MeetingMinutesStreamDecoder()
+        let events = decoder.feed(#"{"summary":"先写的","summary":"后写的"}"#)
+
+        XCTAssertEqual(overview(of: events).joined(), "先写的后写的")
+        XCTAssertEqual(events.filter { $0 == .overviewRestarted }.count, 1, "第二次写概要时预览要重来")
+    }
+
     func testIgnoresEmptyArrays() {
         var decoder = MeetingMinutesStreamDecoder()
         let events = decoder.feed(#"{"summary":"空","points":[],"todos":[]}"#)
