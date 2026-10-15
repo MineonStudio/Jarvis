@@ -18,6 +18,7 @@ trap 'find "$STAGING_DIR" -depth -delete' EXIT
 mkdir -p "$OUTPUT_DIR"
 ditto "$APP_DIR" "$STAGING_DIR/Jarvis.app"
 /usr/libexec/PlistBuddy -c 'Set :JarvisInstallSource dmg' "$STAGING_DIR/Jarvis.app/Contents/Info.plist"
+xattr -cr "$STAGING_DIR/Jarvis.app"
 codesign --force --options runtime \
   --entitlements "$ROOT_DIR/Resources/Jarvis.entitlements" \
   --sign - "$STAGING_DIR/Jarvis.app" >/dev/null
