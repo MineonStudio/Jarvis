@@ -766,6 +766,7 @@ extension AppModel {
         meetingProcessingTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { completeActiveMeetingProcessing(for: record.id) }
+            let previousSummary = meetingRecords.first { $0.id == record.id }?.summary
             do {
                 let prepared = try await prepareAudioForTranscription(record)
                 try await waitForMeetingAudioFile(at: prepared.mixedURL)
@@ -829,10 +830,17 @@ extension AppModel {
                     meetingProcessingState = .idle
                     return
                 }
-                try await performSummarize(updatedRecord, configuration: configuration, preserveUserEdits: true)
+                try await performSummarize(
+                    updatedRecord,
+                    configuration: configuration,
+                    preserveUserEdits: true,
+                    previousSummary: previousSummary
+                )
             } catch is CancellationError {
+                discardUnfinishedSummary(record.id, previous: previousSummary)
                 return
             } catch {
+                discardUnfinishedSummary(record.id, previous: previousSummary)
                 updateMeetingFailure(recordID: record.id, message: error.localizedDescription)
             }
         }
@@ -869,24 +877,38 @@ extension AppModel {
         meetingProcessingTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { completeActiveMeetingProcessing(for: record.id) }
+            let previousSummary = meetingRecords.first { $0.id == record.id }?.summary
             do {
                 try await performSummarize(
                     record,
                     configuration: configuration,
-                    preserveUserEdits: preserveUserEdits
+                    preserveUserEdits: preserveUserEdits,
+                    previousSummary: previousSummary
                 )
             } catch is CancellationError {
+                discardUnfinishedSummary(record.id, previous: previousSummary)
                 return
             } catch {
+                discardUnfinishedSummary(record.id, previous: previousSummary)
                 updateMeetingFailure(recordID: record.id, message: error.localizedDescription)
             }
         }
     }
 
+    /// A run that did not finish leaves the record holding the minutes it had before, not
+    /// the half-written preview the user watched arrive. Nothing half-baked is stored.
+    private func discardUnfinishedSummary(_ recordID: UUID, previous: MeetingSummary?) {
+        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }) else { return }
+        guard meetingRecords[index].summary != previous else { return }
+        meetingRecords[index].summary = previous
+        persistMeeting(meetingRecords[index])
+    }
+
     private func performSummarize(
         _ record: MeetingRecord,
         configuration: AIAPIConfiguration,
-        preserveUserEdits: Bool
+        preserveUserEdits: Bool,
+        previousSummary: MeetingSummary?
     ) async throws {
         if let index = meetingRecords.firstIndex(where: { $0.id == record.id }) {
             meetingRecords[index].status = .summarizing
@@ -917,7 +939,10 @@ extension AppModel {
                       let index = self.meetingRecords.firstIndex(where: { $0.id == record.id })
                 else { return }
                 self.meetingRecords[index].summaryCheckpoint = checkpoint
-                self.persistMeeting(self.meetingRecords[index])
+                // What is on disk is never the text still arriving on screen.
+                var persisted = self.meetingRecords[index]
+                persisted.summary = previousSummary
+                self.persistMeeting(persisted)
                 JarvisLog.info(
                     category: .meeting,
                     event: "summary.checkpoint",

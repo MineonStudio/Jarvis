@@ -626,6 +626,8 @@ struct MeetingSummaryService: Sendable {
         context: SummaryContext,
         onLiveUpdate: LiveHandler?
     ) async throws -> String {
+        // Everything the assembler shows is a preview. What comes back here is parsed in
+        // full and validated again, and that is what ends up stored.
         let assembler = MinutesStreamAssembler(
             context: context,
             onUpdate: onLiveUpdate
@@ -638,7 +640,6 @@ struct MeetingSummaryService: Sendable {
             policy: policy,
             onEvent: { assembler.handle($0) }
         )
-        // The live view is a preview; the finished text is what gets parsed for real.
     }
 
     // MARK: - Validation
