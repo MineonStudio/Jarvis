@@ -13,9 +13,7 @@ struct TransferTaskPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
-                Image(systemName: "arrow.up.arrow.down")
-                    .foregroundStyle(.secondary)
-                Text("传输任务")
+                Text("传输列表")
                     .font(.system(size: 17, weight: .semibold))
                 Spacer(minLength: 8)
                 TransferTaskFilterBar(selection: $filter)

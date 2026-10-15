@@ -13,6 +13,8 @@ import Security
     @Published public private(set) var transfers: [Transfer] = []
     @Published public private(set) var incomingOffer: Transfer?
     @Published var pairedDevices = 0
+    @Published public private(set) var connectedDevices: [LANConnectedDevice] = []
+    @Published public var selectedDeviceIP: String?
     @Published var startedAt: Date?
     @Published private(set) var sharedDirectory: URL
     @Published private(set) var receivedDirectory: URL
@@ -28,7 +30,7 @@ import Security
     private let importer = SharedFileImporter()
     private let historyURL: URL
     public var canStartTask: Bool {
-        running && !isImporting && !transfers.contains(where: \.isInProgress)
+        running && selectedDeviceIP != nil && !isImporting && !transfers.contains(where: \.isInProgress)
     }
 
     init(rootDirectory: URL? = nil, fileManager: FileManager = .default) {
@@ -77,7 +79,14 @@ import Security
             guard let self, let server, self.server === server else { return }; self.errorMessage = message; self.stop()
         }}
         server.onTransfer = { [weak self] transfer in Task { @MainActor in self?.upsert(transfer) } }
-        server.onDevices = { [weak self] count in Task { @MainActor in self?.pairedDevices = count } }
+        server.onDevices = { [weak self, weak server] devices in Task { @MainActor in
+            guard let self, let server, self.server === server else { return }
+            self.connectedDevices = devices
+            self.pairedDevices = devices.count
+            if !devices.contains(where: { $0.id == self.selectedDeviceIP }) {
+                self.selectedDeviceIP = devices.first?.id
+            }
+        }}
         self.server = server
         server.start()
     }
@@ -86,6 +95,7 @@ import Security
         addressTimer?.invalidate(); addressTimer = nil
         server?.stop(); server = nil
         running = false; address = ""; startedAt = nil; pairedDevices = 0; lastIP = nil
+        connectedDevices = []; selectedDeviceIP = nil
         incomingOffer = nil
     }
 
@@ -126,6 +136,12 @@ import Security
     public func acceptIncoming(_ id: UUID) {
         guard incomingOffer?.id == id else { return }
         incomingOffer = nil
+        if let transfer = transfers.first(where: { $0.id == id }), transfer.isText {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(transfer.textContent ?? "", forType: .string)
+            server?.finishText(id, direction: .upload)
+            return
+        }
         server?.acceptUpload(id)
     }
 
@@ -143,6 +159,10 @@ import Security
 
     @discardableResult
     public func copyResource(_ transfer: Transfer) -> Bool {
+        if let text = transfer.textContent {
+            NSPasteboard.general.clearContents()
+            return NSPasteboard.general.setString(text, forType: .string)
+        }
         guard let url = transfer.resourceURL,
               let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
               values.isRegularFile == true, values.isSymbolicLink != true
@@ -153,7 +173,34 @@ import Security
         return NSPasteboard.general.writeObjects([url as NSURL])
     }
 
+    public func sendText(_ text: String) {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canStartTask, let targetDeviceIP = selectedDeviceIP, !value.isEmpty else { return }
+        guard value.utf8.count <= 200_000 else {
+            importMessage = "文本不能超过 20 万字节"
+            importHasErrors = true
+            return
+        }
+        guard let server else { return }
+        importMessage = nil
+        importHasErrors = false
+        isImporting = true
+        Task {
+            let offered = await server.offerDownloadText(value, to: targetDeviceIP)
+            isImporting = false
+            if !offered {
+                importMessage = "当前有传输任务，请稍后发送"
+                importHasErrors = true
+            }
+        }
+    }
+
     public func resend(_ transfer: Transfer) {
+        guard let targetDeviceIP = selectedDeviceIP else { return }
+        if let text = transfer.textContent {
+            sendText(text)
+            return
+        }
         guard canStartTask, let url = transfer.resourceURL,
               let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
               values.isRegularFile == true, values.isSymbolicLink != true
@@ -168,7 +215,7 @@ import Security
             guard let server else { return }
             isImporting = true
             Task {
-                let offered = await server.offerDownload(name: url.lastPathComponent)
+                let offered = await server.offerDownload(name: url.lastPathComponent, to: targetDeviceIP)
                 isImporting = false
                 if !offered {
                     importMessage = "重新发送失败"
@@ -181,6 +228,7 @@ import Security
     }
 
     func chooseSharedFiles() {
+        let targetDeviceIP = selectedDeviceIP
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
@@ -188,12 +236,12 @@ import Security
         panel.prompt = "发送"
         panel.begin { [weak self] response in
             guard response == .OK else { return }
-            Task { @MainActor in self?.importSharedFiles(panel.urls) }
+            Task { @MainActor in self?.importSharedFiles(panel.urls, to: targetDeviceIP) }
         }
     }
 
-    func importSharedFiles(_ urls: [URL]) {
-        guard canStartTask, let url = urls.first else { return }
+    func importSharedFiles(_ urls: [URL], to selectedTargetIP: String? = nil) {
+        guard canStartTask, let targetDeviceIP = selectedTargetIP ?? selectedDeviceIP, let url = urls.first else { return }
         isImporting = true
         importMessage = nil
         importHasErrors = false
@@ -202,7 +250,7 @@ import Security
             isImporting = false
             importHasErrors = !result.failedNames.isEmpty
             if let name = result.importedNames.first {
-                guard let server, running, await server.offerDownload(name: name) else {
+                guard let server, running, await server.offerDownload(name: name, to: targetDeviceIP) else {
                     try? FileManager.default.removeItem(at: sharedDirectory.appendingPathComponent(name))
                     importMessage = "当前有传输任务，请稍后发送"
                     importHasErrors = true

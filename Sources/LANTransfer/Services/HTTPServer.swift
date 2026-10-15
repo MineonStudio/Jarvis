@@ -11,12 +11,19 @@ final class HTTPServer: @unchecked Sendable {
     var onReady: ((UInt16) -> Void)?
     var onFailure: ((String) -> Void)?
     var onTransfer: ((Transfer) -> Void)?
-    var onDevices: ((Int) -> Void)?
+    var onDevices: (([LANConnectedDevice]) -> Void)?
 
     fileprivate let queue = DispatchQueue(label: "com.wesley.LANShare.server")
     private var listener: NWListener?
     private var clients: [UUID: HTTPConnection] = [:]
-    private var sessions: [String: Date] = [:]
+    private struct DeviceSession {
+        var ipAddress: String
+        var lastSeen: Date
+        let connectedAt: Date
+        let colorHue: Double
+    }
+    private var sessions: [String: DeviceSession] = [:]
+    private var nextDeviceColorIndex = 0
     private var transferRecords: [UUID: Transfer] = [:]
     private var transferOrder: [UUID] = []
     private struct DownloadProgress {
@@ -55,6 +62,7 @@ final class HTTPServer: @unchecked Sendable {
                 client.cancel()
             }
             self.clients.removeAll(); self.sessions.removeAll()
+            self.publishDevices()
         }
     }
 
@@ -82,10 +90,10 @@ final class HTTPServer: @unchecked Sendable {
         transferRecords.values.contains(where: \.isInProgress)
     }
 
-    func offerDownload(name: String) async -> Bool {
-        await withCheckedContinuation { continuation in
+    func offerDownload(name: String, to targetDeviceIP: String) async -> Bool {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
             queue.async {
-                guard !self.stopped, !self.hasCurrentTask,
+                guard !self.stopped, !self.hasCurrentTask, self.sessions.values.contains(where: { $0.ipAddress == targetDeviceIP }),
                       !name.isEmpty, !name.hasPrefix("."), name == (name as NSString).lastPathComponent
                 else { continuation.resume(returning: false); return }
                 let url = self.sharedDirectory.appendingPathComponent(name)
@@ -96,6 +104,7 @@ final class HTTPServer: @unchecked Sendable {
                 task.status = .pending
                 task.detail = "等待设备接收"
                 task.resourceURL = url
+                task.targetDeviceIP = targetDeviceIP
                 self.emit(task)
                 self.downloads[task.id] = DownloadProgress(name: name, total: Int64(size))
                 self.armDownloadIdleTimeout(task.id)
@@ -104,10 +113,65 @@ final class HTTPServer: @unchecked Sendable {
         }
     }
 
-    func currentDownloadOffer() -> Transfer? {
+    func offerDownloadText(_ text: String, to targetDeviceIP: String) async -> Bool {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            queue.async {
+                let size = Int64(text.utf8.count)
+                guard !self.stopped, !self.hasCurrentTask, self.sessions.values.contains(where: { $0.ipAddress == targetDeviceIP }), size > 0, size <= 200_000 else {
+                    continuation.resume(returning: false); return
+                }
+                var task = Transfer(id: UUID(), name: "文本消息", direction: .download, total: size)
+                task.status = .pending
+                task.detail = "等待设备接收"
+                task.textContent = text
+                task.targetDeviceIP = targetDeviceIP
+                self.emit(task)
+                let taskID = task.id
+                self.queue.asyncAfter(deadline: .now() + 300) { [weak self] in
+                    guard let self, var current = self.transferRecords[taskID], current.status == .pending else { return }
+                    current.status = .failed
+                    current.detail = "接收等待超时"
+                    self.emit(current)
+                }
+                continuation.resume(returning: true)
+            }
+        }
+    }
+
+    fileprivate func offerUploadText(_ text: String) -> Transfer? {
+        let size = Int64(text.utf8.count)
+        guard !hasCurrentTask, size > 0, size <= 200_000 else { return nil }
+        var task = Transfer(id: UUID(), name: "文本消息", direction: .upload, total: size)
+        task.status = .pending
+        task.detail = "等待 Mac 接收"
+        task.textContent = text
+        emit(task)
+        let taskID = task.id
+        queue.asyncAfter(deadline: .now() + 300) { [weak self] in
+            guard let self, var current = self.transferRecords[taskID], current.status == .pending else { return }
+            current.status = .failed
+            current.detail = "接收等待超时"
+            self.emit(current)
+        }
+        return task
+    }
+
+    func finishText(_ id: UUID, direction: TransferDirection) {
+        queue.async {
+            guard var task = self.transferRecords[id], task.isText, task.direction == direction, task.isInProgress else { return }
+            task.done = task.total
+            task.status = .completed
+            task.detail = "已接收"
+            self.emit(task)
+        }
+    }
+
+    func currentDownloadOffer(for deviceIP: String) -> Transfer? {
         guard let task = transferOrder.compactMap({ transferRecords[$0] }).first(where: {
-            $0.direction == .download && $0.status == .pending
+            $0.direction == .download && $0.status == .pending && ($0.targetDeviceIP == nil || $0.targetDeviceIP == deviceIP)
         }) else { return nil }
+        // Text offers are carried in the task record and do not have a file URL.
+        if task.isText { return task }
         guard let url = task.resourceURL,
               let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]),
               values.isRegularFile == true, values.isSymbolicLink != true,
@@ -322,29 +386,56 @@ final class HTTPServer: @unchecked Sendable {
         return total
     }
 
-    fileprivate func session(for headers: [String: String]) -> String? {
+    fileprivate func session(for headers: [String: String], clientIP: String) -> String? {
         let now = Date()
-        sessions = sessions.filter { now.timeIntervalSince($0.value) < 1800 }
-        onDevices?(sessions.count)
+        let oldCount = sessions.count
+        sessions = sessions.filter { now.timeIntervalSince($0.value.lastSeen) < 1800 }
+        if sessions.count != oldCount { publishDevices() }
         guard let cookie = headers["cookie"]?.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { $0.hasPrefix("lan_session=") }) else { return nil }
         let key = String(cookie.dropFirst("lan_session=".count))
-        guard sessions[key] != nil else { return nil }
-        sessions[key] = now
+        guard var session = sessions[key] else { return nil }
+        session.lastSeen = now
+        if clientIP != "未知 IP", session.ipAddress != clientIP {
+            session.ipAddress = clientIP
+            sessions[key] = session
+            publishDevices()
+        } else {
+            sessions[key] = session
+        }
         return key
+    }
+
+    fileprivate func ipAddress(for sessionID: String) -> String {
+        sessions[sessionID]?.ipAddress ?? "未知 IP"
     }
 
     func reapSessions() {
         queue.async {
             let now = Date()
-            self.sessions = self.sessions.filter { now.timeIntervalSince($0.value) < 1800 }
-            self.onDevices?(self.sessions.count)
+            let oldCount = self.sessions.count
+            self.sessions = self.sessions.filter { now.timeIntervalSince($0.value.lastSeen) < 1800 }
+            if self.sessions.count != oldCount { self.publishDevices() }
         }
     }
 
-    fileprivate func newSession() -> String {
+    fileprivate func newSession(clientIP: String) -> String {
         let id = UUID().uuidString.replacingOccurrences(of: "-", with: "") + UUID().uuidString.replacingOccurrences(of: "-", with: "")
-        sessions[id] = Date(); onDevices?(sessions.count)
+        let now = Date()
+        let hue = (Double(nextDeviceColorIndex) * 0.61803398875).truncatingRemainder(dividingBy: 1)
+        nextDeviceColorIndex += 1
+        sessions[id] = DeviceSession(ipAddress: clientIP, lastSeen: now, connectedAt: now, colorHue: hue)
+        publishDevices()
         return id
+    }
+
+    private func publishDevices() {
+        let devices = Dictionary(grouping: sessions, by: { $0.value.ipAddress })
+            .compactMap { ipAddress, matchingSessions -> LANConnectedDevice? in
+                guard let firstSession = matchingSessions.min(by: { $0.value.connectedAt < $1.value.connectedAt }) else { return nil }
+                return LANConnectedDevice(id: ipAddress, ipAddress: ipAddress, connectedAt: firstSession.value.connectedAt, colorHue: firstSession.value.colorHue)
+            }
+            .sorted { $0.connectedAt < $1.connectedAt }
+        onDevices?(devices)
     }
 }
 
@@ -374,6 +465,13 @@ final class HTTPConnection: @unchecked Sendable {
     private var closed = false
     private var rejectedRemaining: Int64?
     private var rejectionResponseSent = false
+    private var pendingTextBody: Data?
+    private var pendingTextLength = 0
+    private var clientIPAddress: String {
+        guard case let .hostPort(host, _) = connection.endpoint else { return "未知 IP" }
+        let value = host.debugDescription
+        return value.isEmpty ? "未知 IP" : value
+    }
     fileprivate var transferID: UUID? {
         downloadRequest?.id ?? transfer?.id
     }
@@ -419,7 +517,18 @@ final class HTTPConnection: @unchecked Sendable {
             if let data, !data.isEmpty {
                 self.armTimeout()
                 if self.requestHandled {
-                    if let remaining = self.rejectedRemaining {
+                    if var textBody = self.pendingTextBody {
+                        textBody.append(data)
+                        if textBody.count > self.pendingTextLength {
+                            self.pendingTextBody = nil
+                            self.respond(400, "请求内容过长")
+                        } else if textBody.count == self.pendingTextLength {
+                            self.pendingTextBody = nil
+                            self.handleTextOffer(textBody)
+                        } else {
+                            self.pendingTextBody = textBody
+                        }
+                    } else if let remaining = self.rejectedRemaining {
                         self.rejectedRemaining = max(0, remaining - Int64(data.count))
                         if self.rejectedRemaining == 0, self.rejectionResponseSent {
                             self.close()
@@ -444,7 +553,7 @@ final class HTTPConnection: @unchecked Sendable {
                 }
                 return
             }
-            if !self.closed, self.transfer?.direction == .upload || !self.requestHandled || (self.rejectedRemaining ?? 0) > 0 {
+            if !self.closed, self.transfer?.direction == .upload || !self.requestHandled || self.pendingTextBody != nil || (self.rejectedRemaining ?? 0) > 0 {
                 self.read()
             }
         }
@@ -480,12 +589,16 @@ final class HTTPConnection: @unchecked Sendable {
         let query = Dictionary((components.queryItems ?? []).compactMap { item -> (String, String)? in item.value.map { (item.name, $0) } }, uniquingKeysWith: { first, _ in first })
         if method == "GET", components.path == "/" {
             guard query["t"] == server.token else { respond(403, "链接缺少有效访问令牌"); return }
-            let session = server.session(for: headers) ?? server.newSession()
-            let html = WebPage.html.data(using: .utf8)!
+            let session = server.session(for: headers, clientIP: clientIPAddress) ?? server.newSession(clientIP: clientIPAddress)
+            let safeIP = server.ipAddress(for: session)
+                .replacingOccurrences(of: "&", with: "&amp;")
+                .replacingOccurrences(of: "<", with: "&lt;")
+                .replacingOccurrences(of: ">", with: "&gt;")
+            let html = WebPage.html.replacingOccurrences(of: "{{DEVICE_IP}}", with: safeIP).data(using: .utf8)!
             sendHeaders(200, extra: ["Content-Type: text/html; charset=utf-8", "Set-Cookie: lan_session=\(session); HttpOnly; SameSite=Strict; Path=/", "Cache-Control: no-store"], length: Int64(html.count)) { [weak self] in self?.send(html) }
             return
         }
-        let session = server.session(for: headers)
+        let session = server.session(for: headers, clientIP: clientIPAddress)
         let downloadTokenIsValid = (method == "GET" || method == "HEAD")
             && components.path == "/api/file" && query["t"] == server.token
         guard session != nil || downloadTokenIsValid else {
@@ -493,7 +606,23 @@ final class HTTPConnection: @unchecked Sendable {
             return
         }
         switch (method, components.path) {
-        case ("GET", "/api/offer"): downloadOffer()
+        case ("GET", "/api/offer"):
+            guard let session else { respond(401, "会话已过期，请重新扫描二维码"); return }
+            downloadOffer(for: session)
+        case ("POST", "/api/offer-text"):
+            guard headers["transfer-encoding"] == nil, let length = headers["content-length"].flatMap(Int.init),
+                  length > 0, length <= 200_000, body.count <= length else { respond(400, "文本请求无效"); return }
+            if body.count == length {
+                handleTextOffer(body)
+            } else {
+                pendingTextBody = body
+                pendingTextLength = length
+            }
+        case ("POST", "/api/accept-text"):
+            guard let value = query["id"], let id = UUID(uuidString: value),
+                  let task = server.transferRecord(id), task.isText, task.direction == .download, task.isInProgress else { respond(404, "文本任务不存在"); return }
+            server.finishText(id, direction: .download)
+            respond(200, "已接收")
         case ("POST", "/api/offer-upload"):
             guard let name = query["name"], validName(name), let size = query["size"].flatMap(Int64.init),
                   size >= 0, size <= server.maxBytes else { respond(400, "无效文件"); return }
@@ -529,8 +658,16 @@ final class HTTPConnection: @unchecked Sendable {
         !name.isEmpty && name != "." && name != ".." && name == (name as NSString).lastPathComponent && !name.contains("\\") && !name.hasPrefix(".") && name.unicodeScalars.allSatisfy { $0.value >= 32 && $0.value != 127 }
     }
 
-    private func downloadOffer() {
-        guard let task = server.currentDownloadOffer() else {
+    private func handleTextOffer(_ body: Data) {
+        guard let payload = try? JSONSerialization.jsonObject(with: body) as? [String: String],
+              let text = payload["text"], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let task = server.offerUploadText(text) else { respond(400, "文本无效或当前有传输任务"); return }
+        let data = (try? JSONSerialization.data(withJSONObject: ["id": task.id.uuidString])) ?? Data("{}".utf8)
+        sendHeaders(201, extra: ["Content-Type: application/json; charset=utf-8"], length: Int64(data.count)) { [weak self] in self?.send(data) }
+    }
+
+    private func downloadOffer(for sessionID: String) {
+        guard let task = server.currentDownloadOffer(for: server.ipAddress(for: sessionID)) else {
             sendHeaders(204, extra: ["Cache-Control: no-store"], length: 0) { [weak self] in self?.finishOutput() }
             return
         }
@@ -538,7 +675,9 @@ final class HTTPConnection: @unchecked Sendable {
             "id": task.id.uuidString,
             "name": task.name,
             "size": task.total,
-            "displaySize": TransferByteCount.string(from: task.total)
+            "displaySize": TransferByteCount.string(from: task.total),
+            "type": task.isText ? "text" : "file",
+            "text": task.textContent ?? ""
         ])) ?? Data("{}".utf8)
         sendHeaders(200, extra: ["Content-Type: application/json; charset=utf-8", "Cache-Control: no-store"], length: Int64(data.count)) { [weak self] in self?.send(data) }
     }

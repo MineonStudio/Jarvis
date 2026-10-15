@@ -62,6 +62,7 @@ public struct TransferRow: View {
 
     private var resourceMissing: Bool {
         _ = resourceCheck
+        if transfer.isText { return false }
         guard let url = transfer.resourceURL else { return transfer.status == .completed }
         guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]) else { return true }
         return values.isRegularFile != true || values.isSymbolicLink == true
@@ -70,6 +71,8 @@ public struct TransferRow: View {
     private var hasFile: Bool {
         transfer.resourceURL != nil && !resourceMissing
     }
+
+    private var canCopy: Bool { transfer.isText || hasFile }
 
     private var showsStatus: Bool {
         resourceMissing || transfer.status == .failed || transfer.status == .cancelled
@@ -85,7 +88,7 @@ public struct TransferRow: View {
 
     public var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            TransferFilePreview(url: resourceMissing ? nil : transfer.resourceURL, name: transfer.name)
+            TransferFilePreview(url: resourceMissing ? nil : transfer.resourceURL, name: transfer.name, isText: transfer.isText)
                 .frame(width: TransferCardMetrics.thumb, height: TransferCardMetrics.thumb)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -95,10 +98,11 @@ public struct TransferRow: View {
                     .truncationMode(.middle)
                 Spacer(minLength: 0)
                 HStack(spacing: 10) {
-                    Text(sizeText)
+                    Text(transfer.isText ? (transfer.textContent ?? "").replacingOccurrences(of: "\n", with: " ") : sizeText)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                     if showsStatus {
                         Text(statusText)
                             .foregroundStyle(statusColor)
@@ -182,11 +186,11 @@ public struct TransferRow: View {
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
                 pill("打开", enabled: hasFile, action: onOpen)
-                pill(copied ? "已复制" : "复制", enabled: hasFile, action: copyFile)
+                pill(copied ? "已复制" : "复制", enabled: canCopy, action: copyFile)
                 if transfer.isInProgress {
                     pill("取消", action: onCancel)
                 } else {
-                    pill("重新发送", enabled: hasFile && canResend, action: onResend)
+                    pill("重新发送", enabled: canCopy && canResend, action: onResend)
                 }
                 pill("删除", destructive: true, action: onDelete)
             }
@@ -219,6 +223,8 @@ public struct TransferRow: View {
         }
         if hasFile {
             Button("打开", action: onOpen)
+        }
+        if canCopy {
             Button("复制") { copyFile() }
             Button("重新发送", action: onResend)
                 .disabled(!canResend)
@@ -228,7 +234,7 @@ public struct TransferRow: View {
     }
 
     private func copyFile() {
-        guard hasFile, onCopy() else { return }
+        guard canCopy, onCopy() else { return }
         copied = true
     }
 }
@@ -256,13 +262,18 @@ private struct TransferCardActionPillButtonStyle: ButtonStyle {
 private struct TransferFilePreview: View {
     let url: URL?
     let name: String
+    var isText = false
     @State private var image: NSImage?
 
     var body: some View {
         Color.clear
             .frame(width: TransferCardMetrics.thumb, height: TransferCardMetrics.thumb)
             .overlay {
-                if let image {
+                if isText {
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(.tint)
+                } else if let image {
                     Image(nsImage: image)
                         .resizable()
                         .interpolation(.high)

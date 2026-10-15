@@ -9,6 +9,8 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isDropTargeted = false
     @State private var copied = false
+    @State private var textDraft = ""
+    @FocusState private var isTextComposerFocused: Bool
     @State private var now = Date()
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -35,11 +37,8 @@ struct ContentView: View {
             HStack(alignment: .top, spacing: spacing) {
                 connectionPanel
                     .frame(width: availableWidth * 2 / 3, height: innerHeight)
-                VStack(spacing: 12) {
-                    sendPanel
-                    receivePanel
-                }
-                .frame(width: availableWidth / 3, height: innerHeight)
+                sendPanel
+                    .frame(width: availableWidth / 3, height: innerHeight)
             }
             .padding(padding)
         }
@@ -93,6 +92,7 @@ struct ContentView: View {
                     metric("已连接", value: "\(store.pairedDevices)", icon: "laptopcomputer.and.iphone")
                     metric("运行", value: uptime, icon: "clock")
                 }
+                connectedDevicesRow
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -120,6 +120,36 @@ struct ContentView: View {
         return String(format: "%02d:%02d:%02d", seconds / 3600, (seconds / 60) % 60, seconds % 60)
     }
 
+    private var connectedDevicesRow: some View {
+        Group {
+            if store.connectedDevices.isEmpty {
+                Text("暂无已连接设备")
+                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 11, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 12) {
+                        ForEach(Array(store.connectedDevices.enumerated()), id: \.element.id) { index, device in
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(Color(hue: device.colorHue, saturation: 0.68, brightness: 0.82))
+                                    .frame(width: 7, height: 7)
+                                Text("设备\(index + 1)(\(device.ipAddress))")
+                                    .lineLimit(1)
+                                    .fixedSize()
+                            }
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .frame(height: 18)
+            }
+        }
+    }
+
     @ViewBuilder
     private var qrCode: some View {
         if let image = qrImage(store.address) {
@@ -136,7 +166,31 @@ struct ContentView: View {
     }
 
     private var sendPanel: some View {
-        directionPanel("发送到其他设备", icon: "square.and.arrow.up", tint: .accentColor) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 4) {
+                Image(systemName: "square.and.arrow.up")
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 22, height: 22)
+                    .background(Color.accentColor.opacity(0.11), in: RoundedRectangle(cornerRadius: 6))
+                Text("发送到")
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                Picker("传输设备", selection: $store.selectedDeviceIP) {
+                    if store.connectedDevices.isEmpty {
+                        Text("无设备").tag(nil as String?)
+                    } else {
+                        ForEach(Array(store.connectedDevices.enumerated()), id: \.element.id) { index, device in
+                            Text("设备\(index + 1)(\(device.ipAddress))")
+                                .tag(Optional(device.id))
+                        }
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .disabled(store.connectedDevices.isEmpty || !store.canStartTask)
+                .fixedSize()
+                Spacer(minLength: 0)
+            }
             if let task = store.transfers.first(where: { $0.direction == .download && $0.isInProgress }) {
                 transferAnimation(task, tint: .accentColor)
             } else if store.isImporting {
@@ -148,7 +202,13 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                uploadDropZone
+                VStack(spacing: 10) {
+                    textComposer
+                        .frame(height: 32)
+                    uploadDropZone
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             if let message = store.importMessage {
                 Text(message)
@@ -156,38 +216,6 @@ struct ContentView: View {
                     .foregroundStyle(store.importHasErrors ? .red : .secondary)
                     .lineLimit(2)
             }
-        }
-    }
-
-    private var receivePanel: some View {
-        directionPanel("从其他设备接收", icon: "square.and.arrow.down", tint: .accentColor) {
-            if let task = store.transfers.first(where: { $0.direction == .upload && $0.isInProgress }) {
-                transferAnimation(task, tint: .accentColor)
-            } else {
-                Text("等待文件")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
-            }
-        }
-    }
-
-    private func directionPanel(
-        _ title: String, icon: String, tint: Color,
-        @ViewBuilder content: () -> some View
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .foregroundStyle(tint)
-                    .frame(width: 22, height: 22)
-                    .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 6))
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(1)
-            }
-            content()
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -244,6 +272,44 @@ struct ContentView: View {
             }
             return true
         }
+    }
+
+    private var textComposer: some View {
+        HStack(spacing: 8) {
+            TextField("消息", text: $textDraft)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .focused($isTextComposerFocused)
+                .onSubmit(sendDraft)
+                .disabled(!store.canStartTask)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity)
+                .frame(height: 32)
+                .background(.regularMaterial, in: Capsule())
+            Button {
+                sendDraft()
+            } label: {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(textDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary : Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(Color.accentColor.opacity(0.10), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!store.canStartTask || textDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .help("发送文本")
+        }
+    }
+
+    private func sendDraft() {
+        guard textDraft.utf8.count <= 200_000 else {
+            store.sendText(textDraft)
+            return
+        }
+        store.sendText(textDraft)
+        textDraft = ""
+        isTextComposerFocused = false
     }
 
     private func droppedFileURL(from provider: NSItemProvider) async -> URL? {

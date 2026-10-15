@@ -120,7 +120,7 @@ private struct JarvisRootView: View {
                         .environment(appModel)
                 }
             }
-            .alert("接收文件", isPresented: Binding(
+            .alert(shareStore.incomingOffer?.isText == true ? "接收文本" : "接收文件", isPresented: Binding(
                 get: { shareStore.incomingOffer != nil },
                 set: { _ in }
             )) {
@@ -129,14 +129,18 @@ private struct JarvisRootView: View {
                         shareStore.cancel(offer.id)
                     }
                 }
-                Button("下载") {
+                Button(shareStore.incomingOffer?.isText == true ? "复制文本" : "下载") {
                     if let offer = shareStore.incomingOffer {
                         shareStore.acceptIncoming(offer.id)
                     }
                 }
             } message: {
                 if let offer = shareStore.incomingOffer {
-                    Text("\(offer.name) · \(ByteCountFormatter.string(fromByteCount: offer.total, countStyle: .file))")
+                    if let text = offer.textContent {
+                        Text(text.count > 300 ? String(text.prefix(300)) + "…" : text)
+                    } else {
+                        Text("\(offer.name) · \(ByteCountFormatter.string(fromByteCount: offer.total, countStyle: .file))")
+                    }
                 }
             }
             .background {
