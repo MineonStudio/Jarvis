@@ -47,6 +47,9 @@ struct ContentView: View {
                 return
             }
             if case let .active(location) = phase {
+                if homePointerTracker.location != location {
+                    homePointerTracker.lastPointerMovement = Date()
+                }
                 homePointerTracker.location = location
             } else {
                 homePointerTracker.location = nil

@@ -12,10 +12,10 @@ struct JarvisMascotView: View {
     @State private var isDragging = false
     @State private var dragTranslation: CGSize = .zero
     @State private var dragSquash: CGFloat = 0
-    @State private var isCelebrating = false
 
     let diameter: CGFloat
     let pointerDirection: CGSize?
+    let promptBubble: AnyView
 
     private var isPointerTracking: Bool {
         pointerDirection != nil
@@ -78,28 +78,20 @@ struct JarvisMascotView: View {
 
     var body: some View {
         ZStack {
-            JarvisMascotBodyShape()
-                .fill(fillColor, style: FillStyle(eoFill: true))
-
-            JarvisMascotEyesShape()
-                .fill(fillColor)
-                .scaleEffect(
-                    x: isPointerTracking ? 1.06 : 1,
-                    y: isBlinking ? 0.08 : (isPointerTracking ? 1.05 : 1)
+            mascotFace
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            updateDrag(value.translation)
+                        }
+                        .onEnded { _ in
+                            finishDrag()
+                        }
                 )
-                .offset(x: displayedGazeOffset.width, y: displayedGazeOffset.height)
-                .animation(.interactiveSpring(response: 0.12, dampingFraction: 0.82), value: displayedGazeOffset)
-                .animation(.easeInOut(duration: 0.16), value: isBlinking)
 
-            Image(systemName: "sparkles")
-                .font(.system(size: diameter * 0.085, weight: .medium))
-                .foregroundStyle(fillColor)
-                .offset(x: diameter * 0.38, y: -diameter * 0.34)
-                .scaleEffect(isCelebrating ? 1 : 0.25)
-                .rotationEffect(.degrees(isCelebrating ? 0 : -35))
-                .opacity(isCelebrating ? 1 : 0)
-                .animation(.spring(response: 0.24, dampingFraction: 0.56), value: isCelebrating)
-                .accessibilityHidden(true)
+            promptBubble
+                .offset(x: diameter * 0.57, y: -diameter * 0.40)
         }
         .frame(width: diameter, height: diameter)
         .scaleEffect(x: scaleX, y: scaleY * (isBreathing ? 1.012 : 1))
@@ -121,21 +113,30 @@ struct JarvisMascotView: View {
         .task {
             await breathingLoop()
         }
+    }
+
+    private var mascotFace: some View {
+        ZStack {
+            JarvisMascotBodyShape()
+                .fill(fillColor, style: FillStyle(eoFill: true))
+
+            JarvisMascotEyesShape()
+                .fill(fillColor)
+                .scaleEffect(
+                    x: isPointerTracking ? 1.06 : 1,
+                    y: isBlinking ? 0.08 : (isPointerTracking ? 1.05 : 1)
+                )
+                .offset(x: displayedGazeOffset.width, y: displayedGazeOffset.height)
+                .animation(.interactiveSpring(response: 0.12, dampingFraction: 0.82), value: displayedGazeOffset)
+                .animation(.easeInOut(duration: 0.16), value: isBlinking)
+
+        }
+        .frame(width: diameter, height: diameter)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Jarvis 机器人")
         .accessibilityValue(accessibilityStatus)
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("在首页窗口移动指针可注视跟随，点击会弹跳，按住可拖拽")
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    updateDrag(value.translation)
-                }
-                .onEnded { _ in
-                    finishDrag()
-                }
-        )
+        .accessibilityHint("在首页窗口移动指针可注视跟随，按住可拖拽")
     }
 
     private func updateDrag(_ translation: CGSize) {
@@ -146,7 +147,6 @@ struct JarvisMascotView: View {
 
         isDragging = true
         isTapBouncing = false
-        isCelebrating = false
         let normalizedDistance = min(distance / maximumDragDistance, 1)
         let horizontal = min(max(translation.width / maximumDragDistance, -1), 1)
         let vertical = min(max(translation.height / maximumDragDistance, -1), 1)
@@ -178,17 +178,12 @@ struct JarvisMascotView: View {
     private func triggerTapBounce() {
         withAnimation(.spring(response: 0.18, dampingFraction: 0.46, blendDuration: 0.02)) {
             isTapBouncing = true
-            isCelebrating = true
         }
 
         Task {
             guard await pause(for: 0.14) else { return }
             withAnimation(.spring(response: 0.20, dampingFraction: 0.52, blendDuration: 0.02)) {
                 isTapBouncing = false
-            }
-            guard await pause(for: 0.20) else { return }
-            withAnimation(.easeOut(duration: 0.18)) {
-                isCelebrating = false
             }
         }
     }
