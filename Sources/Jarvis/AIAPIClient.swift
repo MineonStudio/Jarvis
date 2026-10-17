@@ -157,8 +157,8 @@ struct AIAPIConfiguration: Equatable, Sendable {
     }
 }
 
-/// Request behavior only. Output length is deliberately not part of this type:
-/// the configured provider/model owns its context and completion limits.
+/// Request behavior for one completion. Output limits are optional so task-specific
+/// callers can cap compact decisions without changing general-purpose requests.
 struct AICompletionOptions: Equatable, Sendable {
     enum ResponseFormat: Equatable, Sendable {
         case jsonObject
@@ -168,15 +168,21 @@ struct AICompletionOptions: Equatable, Sendable {
     let task: String
     let temperature: Double
     let responseFormat: ResponseFormat
+    let timeoutSeconds: TimeInterval
+    let maxOutputTokens: Int?
 
     init(
         task: String,
         temperature: Double = 0.7,
-        responseFormat: ResponseFormat = .jsonObject
+        responseFormat: ResponseFormat = .jsonObject,
+        timeoutSeconds: TimeInterval = 90,
+        maxOutputTokens: Int? = nil
     ) {
         self.task = task
         self.temperature = temperature
         self.responseFormat = responseFormat
+        self.timeoutSeconds = timeoutSeconds
+        self.maxOutputTokens = maxOutputTokens
     }
 
     static let standardJSON = Self(task: "generic-structured-json")
@@ -424,7 +430,7 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 90
+        request.timeoutInterval = max(1, options.timeoutSeconds)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         Self.applyAuthentication(to: &request, configuration: configuration)
         let requestBody = try JSONSerialization.data(
@@ -529,6 +535,9 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
         ]
         if options.responseFormat == .jsonObject {
             body["response_format"] = ["type": "json_object"]
+        }
+        if let maxOutputTokens = options.maxOutputTokens {
+            body["max_tokens"] = maxOutputTokens
         }
         return body
     }

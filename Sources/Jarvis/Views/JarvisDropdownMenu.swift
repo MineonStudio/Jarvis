@@ -219,6 +219,7 @@ struct JarvisDropdownMenu: View {
                 controlWidth: resolvedMenuWidth,
                 onSelect: { optionID in
                     onSelect(optionID)
+                    isPresented = false
                 }
             )
             .allowsHitTesting(false)
@@ -518,13 +519,17 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
                 selectionID: selectionID,
                 showsSelectedOption: showsSelectedOption,
                 controlWidth: controlWidth,
-                onSelect: { [self] optionID in
-                    // #37：以前这里调了三次 dismiss()（同步两次 + 一次 async）。
-                    // dismiss() 本身幂等（panel 置 nil 后直接 return），留一次：
-                    // 先关面板，再回传选择（onSelect 会改 binding 走 update 关面板，
-                    // 是同一条路径的重复调用）。
-                    dismiss()
+                onSelect: { [weak self] optionID in
+                    // 先提交外部选择；它可能触发父视图重绘。最后再写入关闭状态，
+                    // 避免父视图因选择变化重绘时覆盖关闭状态并让面板保持打开。
                     onSelect(optionID)
+                    dismiss()
+                    self?.dismiss()
+                    Task { @MainActor [weak self] in
+                        await Task.yield()
+                        dismiss()
+                        self?.dismiss()
+                    }
                 }
             )
             let hostingView = NSHostingView(rootView: menu.jarvisAccentAware())

@@ -28,8 +28,8 @@ JARVIS_BUNDLE_IDENTIFIER="${JARVIS_BUNDLE_IDENTIFIER:-$DEFAULT_BUNDLE_IDENTIFIER
 JARVIS_DISPLAY_NAME="${JARVIS_DISPLAY_NAME:-$DEFAULT_DISPLAY_NAME}"
 JARVIS_BUNDLE_NAME="${JARVIS_BUNDLE_NAME:-$DEFAULT_BUNDLE_NAME}"
 JARVIS_INSTALL_SOURCE="${JARVIS_INSTALL_SOURCE:-$DEFAULT_INSTALL_SOURCE}"
-JARVIS_VERSION="${JARVIS_VERSION:-1.8.2}"
-JARVIS_BUILD="${JARVIS_BUILD:-365}"
+JARVIS_VERSION="${JARVIS_VERSION:-1.8.4}"
+JARVIS_BUILD="${JARVIS_BUILD:-367}"
 ICON_ASSET_NAME="jarvis-${JARVIS_VERSION//./-}"
 
 cd "$ROOT_DIR"
@@ -64,6 +64,20 @@ if [[ -d "$ROOT_DIR/Resources/EntertainmentIcons" ]]; then
   done
   cp "$ROOT_DIR/Resources/EntertainmentIcons"/*.svg \
      "$APP_DIR/Contents/Resources/EntertainmentIcons/"
+fi
+
+if [[ -d "$ROOT_DIR/Resources/GameArtwork" ]]; then
+  mkdir -p "$APP_DIR/Contents/Resources/GameArtwork"
+  cp "$ROOT_DIR/Resources/GameArtwork"/*.svg \
+     "$APP_DIR/Contents/Resources/GameArtwork/"
+  if [[ -d "$ROOT_DIR/Resources/GameArtwork/Avatars" ]]; then
+    mkdir -p "$APP_DIR/Contents/Resources/GameArtwork/Avatars"
+    for staleAvatar in "$APP_DIR/Contents/Resources/GameArtwork/Avatars"/*.png(N); do
+      rm -f "$staleAvatar"
+    done
+    cp "$ROOT_DIR/Resources/GameArtwork/Avatars"/*.png \
+       "$APP_DIR/Contents/Resources/GameArtwork/Avatars/"
+  fi
 fi
 
 # Keep production builds compatible with the installed app. Development

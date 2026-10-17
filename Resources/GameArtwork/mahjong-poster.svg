@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">中国麻将</title>
+  <desc id="desc">青玉色麻将桌上摆着精致的竹、筒、红中牌，背景以金色回纹和祥云纹样装饰。</desc>
+  <defs>
+    <linearGradient id="felt" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#103E35"/><stop offset=".52" stop-color="#082D29"/><stop offset="1" stop-color="#061F20"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#2F8061" stop-opacity=".55"/><stop offset="1" stop-color="#0A2926" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F4D89B"/><stop offset=".45" stop-color="#C69B55"/><stop offset="1" stop-color="#8D6633"/></linearGradient>
+    <linearGradient id="ivory" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#FFFDF2"/><stop offset="1" stop-color="#E7D9B6"/></linearGradient>
+    <filter id="shadow" x="-.35" y="-.25" width="1.8" height="1.8"><feGaussianBlur in="SourceAlpha" stdDeviation="18"/><feOffset dy="18"/><feComponentTransfer><feFuncA type="linear" slope=".45"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="grain" width="42" height="42" patternUnits="userSpaceOnUse"><path d="M0 21h12v-9h9V0M42 21H30v9h-9v12" fill="none" stroke="#DBB66E" stroke-opacity=".11" stroke-width="1.3"/></pattern>
+  </defs>
+  <rect width="1200" height="700" rx="34" fill="url(#felt)"/>
+  <rect width="1200" height="700" rx="34" fill="url(#glow)"/>
+  <rect width="1200" height="700" rx="34" fill="url(#grain)"/>
+  <rect x="24" y="24" width="1152" height="652" rx="24" fill="none" stroke="url(#gold)" stroke-opacity=".7" stroke-width="2"/>
+  <rect x="34" y="34" width="1132" height="632" rx="19" fill="none" stroke="#F5DDA4" stroke-opacity=".14"/>
+  <path d="M66 94c28-38 65-38 93 0-28 38-65 38-93 0zm975 0c28-38 65-38 93 0-28 38-65 38-93 0zM66 606c28-38 65-38 93 0-28 38-65 38-93 0zm975 0c28-38 65-38 93 0-28 38-65 38-93 0z" fill="none" stroke="url(#gold)" stroke-opacity=".5" stroke-width="2"/>
+  <circle cx="604" cy="324" r="268" fill="none" stroke="#E8C77F" stroke-opacity=".1" stroke-width="1.5"/>
+  <circle cx="604" cy="324" r="235" fill="none" stroke="#E8C77F" stroke-opacity=".13" stroke-width="1" stroke-dasharray="2 11"/>
+  <g fill="#F0D8A0" fill-opacity=".55"><circle cx="604" cy="72" r="3"/><circle cx="856" cy="324" r="3"/><circle cx="604" cy="576" r="3"/><circle cx="352" cy="324" r="3"/></g>
+  <!-- hand-painted gold wind traces -->
+  <g fill="none" stroke="#E4C47E" stroke-opacity=".3" stroke-width="2" stroke-linecap="round">
+    <path d="M150 205c30-28 63-24 75 0 8 17-9 32-25 26-12-4-13-18-4-24"/><path d="M1002 483c30-28 63-24 75 0 8 17-9 32-25 26-12-4-13-18-4-24"/>
+    <path d="M1018 210c-22 10-35 27-34 44 1 12 15 18 23 9 6-7 1-17-7-17"/><path d="M183 488c-22 10-35 27-34 44 1 12 15 18 23 9 6-7 1-17-7-17"/>
+  </g>
+  <!-- custom vector tile fan -->
+  <g filter="url(#shadow)">
+    <g transform="translate(326 183) rotate(-13 118 172)">
+      <rect x="12" y="16" width="208" height="318" rx="23" fill="#071B19" opacity=".7"/>
+      <rect width="208" height="318" rx="23" fill="url(#ivory)" stroke="#C6A365" stroke-width="3"/>
+      <rect x="13" y="13" width="182" height="292" rx="15" fill="none" stroke="#AE8748" stroke-opacity=".65" stroke-width="2"/>
+      <g fill="#17664D" stroke="#F8F1D8" stroke-width="3">
+        <path d="M67 85c-16 22-17 44-3 58 12 12 30 3 26-12-3-9-14-11-20-4 1-16 8-28 19-39-1 22 4 42 16 54 11 12 28 3 23-12-3-8-11-10-18-5 4-15 12-28 25-41 1 24 7 43 20 54 13 11 27 2 21-12-4-8-12-8-18-3 2-17 8-30 18-40V235c-15-19-31-21-43-8-10 10-4 25 7 25 8 0 12-7 9-14 12 4 21 13 27 25H58c7-15 17-23 29-26-4 11 8 20 18 14 13-7 8-24-5-29-19-7-38 4-49 28V85"/>
+      </g>
+      <text x="104" y="281" text-anchor="middle" font-family="Songti SC, STSong, serif" font-size="25" font-weight="700" fill="#17664D">三索</text>
+    </g>
+    <g transform="translate(498 148) rotate(0 118 172)">
+      <rect x="12" y="16" width="208" height="318" rx="23" fill="#071B19" opacity=".7"/>
+      <rect width="208" height="318" rx="23" fill="url(#ivory)" stroke="#C6A365" stroke-width="3"/>
+      <rect x="13" y="13" width="182" height="292" rx="15" fill="none" stroke="#AE8748" stroke-opacity=".65" stroke-width="2"/>
+      <g fill="#B94535" stroke="#F7E9CE" stroke-width="3">
+        <circle cx="67" cy="90" r="21"/><circle cx="141" cy="90" r="21"/><circle cx="104" cy="152" r="21"/><circle cx="67" cy="216" r="21"/><circle cx="141" cy="216" r="21"/>
+      </g>
+      <g fill="#E7B75F"><circle cx="67" cy="90" r="7"/><circle cx="141" cy="90" r="7"/><circle cx="104" cy="152" r="7"/><circle cx="67" cy="216" r="7"/><circle cx="141" cy="216" r="7"/></g>
+      <text x="104" y="281" text-anchor="middle" font-family="Songti SC, STSong, serif" font-size="25" font-weight="700" fill="#17664D">五筒</text>
+    </g>
+    <g transform="translate(670 183) rotate(13 118 172)">
+      <rect x="12" y="16" width="208" height="318" rx="23" fill="#071B19" opacity=".7"/>
+      <rect width="208" height="318" rx="23" fill="url(#ivory)" stroke="#C6A365" stroke-width="3"/>
+      <rect x="13" y="13" width="182" height="292" rx="15" fill="none" stroke="#AE8748" stroke-opacity=".65" stroke-width="2"/>
+      <text x="104" y="198" text-anchor="middle" font-family="Songti SC, STSong, serif" font-size="118" font-weight="700" fill="#B9382F">中</text>
+      <text x="104" y="281" text-anchor="middle" font-family="Songti SC, STSong, serif" font-size="25" font-weight="700" fill="#17664D">红中</text>
+    </g>
+  </g>
+  <g text-anchor="middle">
+    <text x="600" y="584" font-family="Songti SC, STSong, serif" font-size="39" letter-spacing="14" fill="#F4E8C8">中国麻将</text>
+    <text x="600" y="620" font-family="PingFang SC, sans-serif" font-size="15" letter-spacing="7" fill="#D3BD8C" fill-opacity=".78">牌 里 乾 坤 · 一 局 方 圆</text>
+  </g>
+</svg>

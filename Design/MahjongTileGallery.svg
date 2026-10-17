@@ -1,0 +1,575 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1400" viewBox="0 0 1400 1400">
+<defs>
+  <filter id="tableShadow" x="-30%" y="-30%" width="180%" height="190%"><feGaussianBlur stdDeviation="3"/></filter>
+  <linearGradient id="face" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffef9"/><stop offset="1" stop-color="#f2eee3"/></linearGradient>
+  <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#d2ad69"/><stop offset="1" stop-color="#a97a3b"/></linearGradient>
+  <linearGradient id="felt" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#21964b"/><stop offset="1" stop-color="#147c39"/></linearGradient>
+</defs>
+<rect width="1400" height="1400" fill="url(#felt)"/>
+<text x="98" y="72" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="29" font-weight="700">國標麻將・牌面設計稿</text>
+<text x="1300" y="70" text-anchor="end" fill="#e3f4e7" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="14">34 張牌・SVG 向量稿・可繼續迭代</text>
+<text x="98" y="142" text-anchor="start" fill="#eff8f0" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="17" font-weight="700">筒子</text>
+<text x="1300" y="142" text-anchor="end" fill="#d9eedf" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="12" font-weight="500">一至九・同心圓點</text>
+<g class="tile">
+<rect x="106" y="178" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="103" y="169" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="101" y="171" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="98" y="174" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<ellipse cx="170.0" cy="248.0" rx="5.0" ry="7.2" transform="rotate(0.0 170.0 248.0)" fill="#218a45"/>
+<ellipse cx="168.5" cy="255.7" rx="5.0" ry="7.2" transform="rotate(22.5 168.5 255.7)" fill="#218a45"/>
+<ellipse cx="164.1" cy="262.1" rx="5.0" ry="7.2" transform="rotate(45.0 164.1 262.1)" fill="#218a45"/>
+<ellipse cx="157.7" cy="266.5" rx="5.0" ry="7.2" transform="rotate(67.5 157.7 266.5)" fill="#218a45"/>
+<ellipse cx="150.0" cy="268.0" rx="5.0" ry="7.2" transform="rotate(90.0 150.0 268.0)" fill="#218a45"/>
+<ellipse cx="142.3" cy="266.5" rx="5.0" ry="7.2" transform="rotate(112.5 142.3 266.5)" fill="#218a45"/>
+<ellipse cx="135.9" cy="262.1" rx="5.0" ry="7.2" transform="rotate(135.0 135.9 262.1)" fill="#218a45"/>
+<ellipse cx="131.5" cy="255.7" rx="5.0" ry="7.2" transform="rotate(157.5 131.5 255.7)" fill="#218a45"/>
+<ellipse cx="130.0" cy="248.0" rx="5.0" ry="7.2" transform="rotate(180.0 130.0 248.0)" fill="#218a45"/>
+<ellipse cx="131.5" cy="240.3" rx="5.0" ry="7.2" transform="rotate(202.5 131.5 240.3)" fill="#218a45"/>
+<ellipse cx="135.9" cy="233.9" rx="5.0" ry="7.2" transform="rotate(225.0 135.9 233.9)" fill="#218a45"/>
+<ellipse cx="142.3" cy="229.5" rx="5.0" ry="7.2" transform="rotate(247.5 142.3 229.5)" fill="#218a45"/>
+<ellipse cx="150.0" cy="228.0" rx="5.0" ry="7.2" transform="rotate(270.0 150.0 228.0)" fill="#218a45"/>
+<ellipse cx="157.7" cy="229.5" rx="5.0" ry="7.2" transform="rotate(292.5 157.7 229.5)" fill="#218a45"/>
+<ellipse cx="164.1" cy="233.9" rx="5.0" ry="7.2" transform="rotate(315.0 164.1 233.9)" fill="#218a45"/>
+<ellipse cx="168.5" cy="240.3" rx="5.0" ry="7.2" transform="rotate(337.5 168.5 240.3)" fill="#218a45"/>
+<circle cx="150.0" cy="248.0" r="31" fill="none" stroke="#2455a2" stroke-width="3.8"/>
+<circle cx="150.0" cy="248.0" r="16" fill="#c72f3e" stroke="white" stroke-width="2.5"/>
+<path d="M150.0 238.0v20M140.0 248.0h20" stroke="white" stroke-width="2.8" stroke-linecap="round"/>
+<text x="150.0" y="349" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">1筒</text>
+</g>
+<g class="tile">
+<rect x="238" y="178" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="235" y="169" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="233" y="171" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="230" y="174" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<circle cx="282.00" cy="221.36" r="12.00" fill="#2455a2"/>
+<circle cx="282.00" cy="221.36" r="8.40" fill="#fffdf7"/>
+<circle cx="282.00" cy="221.36" r="5.64" fill="#2455a2"/>
+<circle cx="282.00" cy="221.36" r="2.16" fill="#fffdf7"/>
+<circle cx="282.00" cy="274.64" r="12.00" fill="#218a45"/>
+<circle cx="282.00" cy="274.64" r="8.40" fill="#fffdf7"/>
+<circle cx="282.00" cy="274.64" r="5.64" fill="#218a45"/>
+<circle cx="282.00" cy="274.64" r="2.16" fill="#fffdf7"/>
+<text x="282.0" y="349" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">2筒</text>
+</g>
+<g class="tile">
+<rect x="370" y="178" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="367" y="169" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="365" y="171" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="362" y="174" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<circle cx="390.08" cy="211.00" r="12.00" fill="#2455a2"/>
+<circle cx="390.08" cy="211.00" r="8.40" fill="#fffdf7"/>
+<circle cx="390.08" cy="211.00" r="5.64" fill="#2455a2"/>
+<circle cx="390.08" cy="211.00" r="2.16" fill="#fffdf7"/>
+<circle cx="414.00" cy="248.00" r="12.00" fill="#c72f3e"/>
+<circle cx="414.00" cy="248.00" r="8.40" fill="#fffdf7"/>
+<circle cx="414.00" cy="248.00" r="5.64" fill="#c72f3e"/>
+<circle cx="414.00" cy="248.00" r="2.16" fill="#fffdf7"/>
+<circle cx="437.92" cy="285.00" r="12.00" fill="#218a45"/>
+<circle cx="437.92" cy="285.00" r="8.40" fill="#fffdf7"/>
+<circle cx="437.92" cy="285.00" r="5.64" fill="#218a45"/>
+<circle cx="437.92" cy="285.00" r="2.16" fill="#fffdf7"/>
+<text x="414.0" y="349" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">3筒</text>
+</g>
+<g class="tile">
+<rect x="502" y="178" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="499" y="169" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="497" y="171" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="494" y="174" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<circle cx="524.16" cy="216.92" r="12.00" fill="#218a45"/>
+<circle cx="524.16" cy="216.92" r="8.40" fill="#fffdf7"/>
+<circle cx="524.16" cy="216.92" r="5.64" fill="#218a45"/>
+<circle cx="524.16" cy="216.92" r="2.16" fill="#fffdf7"/>
+<circle cx="567.84" cy="216.92" r="12.00" fill="#2455a2"/>
+<circle cx="567.84" cy="216.92" r="8.40" fill="#fffdf7"/>
+<circle cx="567.84" cy="216.92" r="5.64" fill="#2455a2"/>
+<circle cx="567.84" cy="216.92" r="2.16" fill="#fffdf7"/>
+<circle cx="524.16" cy="279.08" r="12.00" fill="#2455a2"/>
+<circle cx="524.16" cy="279.08" r="8.40" fill="#fffdf7"/>
+<circle cx="524.16" cy="279.08" r="5.64" fill="#2455a2"/>
+<circle cx="524.16" cy="279.08" r="2.16" fill="#fffdf7"/>
+<circle cx="567.84" cy="279.08" r="12.00" fill="#218a45"/>
+<circle cx="567.84" cy="279.08" r="8.40" fill="#fffdf7"/>
+<circle cx="567.84" cy="279.08" r="5.64" fill="#218a45"/>
+<circle cx="567.84" cy="279.08" r="2.16" fill="#fffdf7"/>
+<text x="546.0" y="349" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">4筒</text>
+</g>
+<g class="tile">
+<rect x="634" y="178" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="631" y="169" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="629" y="171" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="626" y="174" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<circle cx="656.16" cy="213.96" r="12.00" fill="#218a45"/>
+<circle cx="656.16" cy="213.96" r="8.40" fill="#fffdf7"/>
+<circle cx="656.16" cy="213.96" r="5.64" fill="#218a45"/>
+<circle cx="656.16" cy="213.96" r="2.16" fill="#fffdf7"/>
+<circle cx="699.84" cy="213.96" r="12.00" fill="#2455a2"/>
+<circle cx="699.84" cy="213.96" r="8.40" fill="#fffdf7"/>
+<circle cx="699.84" cy="213.96" r="5.64" fill="#2455a2"/>
+<circle cx="699.84" cy="213.96" r="2.16" fill="#fffdf7"/>
+<circle cx="678.00" cy="248.00" r="12.00" fill="#c72f3e"/>
+<circle cx="678.00" cy="248.00" r="8.40" fill="#fffdf7"/>
+<circle cx="678.00" cy="248.00" r="5.64" fill="#c72f3e"/>
+<circle cx="678.00" cy="248.00" r="2.16" fill="#fffdf7"/>
+<circle cx="656.16" cy="282.04" r="12.00" fill="#2455a2"/>
+<circle cx="656.16" cy="282.04" r="8.40" fill="#fffdf7"/>
+<circle cx="656.16" cy="282.04" r="5.64" fill="#2455a2"/>
+<circle cx="656.16" cy="282.04" r="2.16" fill="#fffdf7"/>
+<circle cx="699.84" cy="282.04" r="12.00" fill="#218a45"/>
+<circle cx="699.84" cy="282.04" r="8.40" fill="#fffdf7"/>
+<circle cx="699.84" cy="282.04" r="5.64" fill="#218a45"/>
+<circle cx="699.84" cy="282.04" r="2.16" fill="#fffdf7"/>
+<text x="678.0" y="349" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">5筒</text>
+</g>
+<g class="tile">
+<rect x="766" y="178" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="763" y="169" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="761" y="171" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="758" y="174" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<circle cx="789.20" cy="209.52" r="12.00" fill="#218a45"/>
+<circle cx="789.20" cy="209.52" r="8.40" fill="#fffdf7"/>
+<circle cx="789.20" cy="209.52" r="5.64" fill="#218a45"/>
+<circle cx="789.20" cy="209.52" r="2.16" fill="#fffdf7"/>
+<circle cx="830.80" cy="209.52" r="12.00" fill="#218a45"/>
+<circle cx="830.80" cy="209.52" r="8.40" fill="#fffdf7"/>
+<circle cx="830.80" cy="209.52" r="5.64" fill="#218a45"/>
+<circle cx="830.80" cy="209.52" r="2.16" fill="#fffdf7"/>
+<circle cx="789.20" cy="248.00" r="12.00" fill="#c72f3e"/>
+<circle cx="789.20" cy="248.00" r="8.40" fill="#fffdf7"/>
+<circle cx="789.20" cy="248.00" r="5.64" fill="#c72f3e"/>
+<circle cx="789.20" cy="248.00" r="2.16" fill="#fffdf7"/>
+<circle cx="830.80" cy="248.00" r="12.00" fill="#c72f3e"/>
+<circle cx="830.80" cy="248.00" r="8.40" fill="#fffdf7"/>
+<circle cx="830.80" cy="248.00" r="5.64" fill="#c72f3e"/>
+<circle cx="830.80" cy="248.00" r="2.16" fill="#fffdf7"/>
+<circle cx="789.20" cy="286.48" r="12.00" fill="#c72f3e"/>
+<circle cx="789.20" cy="286.48" r="8.40" fill="#fffdf7"/>
+<circle cx="789.20" cy="286.48" r="5.64" fill="#c72f3e"/>
+<circle cx="789.20" cy="286.48" r="2.16" fill="#fffdf7"/>
+<circle cx="830.80" cy="286.48" r="12.00" fill="#c72f3e"/>
+<circle cx="830.80" cy="286.48" r="8.40" fill="#fffdf7"/>
+<circle cx="830.80" cy="286.48" r="5.64" fill="#c72f3e"/>
+<circle cx="830.80" cy="286.48" r="2.16" fill="#fffdf7"/>
+<text x="810.0" y="349" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">6筒</text>
+</g>
+<g class="tile">
+<rect x="898" y="178" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="895" y="169" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="893" y="171" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="890" y="174" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<circle cx="916.00" cy="206.56" r="12.00" fill="#218a45"/>
+<circle cx="916.00" cy="206.56" r="8.40" fill="#fffdf7"/>
+<circle cx="916.00" cy="206.56" r="5.64" fill="#218a45"/>
+<circle cx="916.00" cy="206.56" r="2.16" fill="#fffdf7"/>
+<circle cx="942.00" cy="224.32" r="12.00" fill="#218a45"/>
+<circle cx="942.00" cy="224.32" r="8.40" fill="#fffdf7"/>
+<circle cx="942.00" cy="224.32" r="5.64" fill="#218a45"/>
+<circle cx="942.00" cy="224.32" r="2.16" fill="#fffdf7"/>
+<circle cx="968.00" cy="242.08" r="11.67" fill="#218a45"/>
+<circle cx="968.00" cy="242.08" r="8.17" fill="#fffdf7"/>
+<circle cx="968.00" cy="242.08" r="5.49" fill="#218a45"/>
+<circle cx="968.00" cy="242.08" r="2.10" fill="#fffdf7"/>
+<circle cx="921.20" cy="268.72" r="11.46" fill="#c72f3e"/>
+<circle cx="921.20" cy="268.72" r="8.02" fill="#fffdf7"/>
+<circle cx="921.20" cy="268.72" r="5.38" fill="#c72f3e"/>
+<circle cx="921.20" cy="268.72" r="2.06" fill="#fffdf7"/>
+<circle cx="962.80" cy="268.72" r="11.46" fill="#c72f3e"/>
+<circle cx="962.80" cy="268.72" r="8.02" fill="#fffdf7"/>
+<circle cx="962.80" cy="268.72" r="5.38" fill="#c72f3e"/>
+<circle cx="962.80" cy="268.72" r="2.06" fill="#fffdf7"/>
+<circle cx="921.20" cy="295.36" r="11.46" fill="#c72f3e"/>
+<circle cx="921.20" cy="295.36" r="8.02" fill="#fffdf7"/>
+<circle cx="921.20" cy="295.36" r="5.38" fill="#c72f3e"/>
+<circle cx="921.20" cy="295.36" r="2.06" fill="#fffdf7"/>
+<circle cx="962.80" cy="295.36" r="11.46" fill="#c72f3e"/>
+<circle cx="962.80" cy="295.36" r="8.02" fill="#fffdf7"/>
+<circle cx="962.80" cy="295.36" r="5.38" fill="#c72f3e"/>
+<circle cx="962.80" cy="295.36" r="2.06" fill="#fffdf7"/>
+<text x="942.0" y="349" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">7筒</text>
+</g>
+<g class="tile">
+<rect x="1030" y="178" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="1027" y="169" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="1025" y="171" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="1022" y="174" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<circle cx="1053.20" cy="197.68" r="12.00" fill="#2455a2"/>
+<circle cx="1053.20" cy="197.68" r="8.40" fill="#fffdf7"/>
+<circle cx="1053.20" cy="197.68" r="5.64" fill="#2455a2"/>
+<circle cx="1053.20" cy="197.68" r="2.16" fill="#fffdf7"/>
+<circle cx="1094.80" cy="197.68" r="12.00" fill="#2455a2"/>
+<circle cx="1094.80" cy="197.68" r="8.40" fill="#fffdf7"/>
+<circle cx="1094.80" cy="197.68" r="5.64" fill="#2455a2"/>
+<circle cx="1094.80" cy="197.68" r="2.16" fill="#fffdf7"/>
+<circle cx="1053.20" cy="231.72" r="12.00" fill="#2455a2"/>
+<circle cx="1053.20" cy="231.72" r="8.40" fill="#fffdf7"/>
+<circle cx="1053.20" cy="231.72" r="5.64" fill="#2455a2"/>
+<circle cx="1053.20" cy="231.72" r="2.16" fill="#fffdf7"/>
+<circle cx="1094.80" cy="231.72" r="12.00" fill="#2455a2"/>
+<circle cx="1094.80" cy="231.72" r="8.40" fill="#fffdf7"/>
+<circle cx="1094.80" cy="231.72" r="5.64" fill="#2455a2"/>
+<circle cx="1094.80" cy="231.72" r="2.16" fill="#fffdf7"/>
+<circle cx="1053.20" cy="264.28" r="12.00" fill="#2455a2"/>
+<circle cx="1053.20" cy="264.28" r="8.40" fill="#fffdf7"/>
+<circle cx="1053.20" cy="264.28" r="5.64" fill="#2455a2"/>
+<circle cx="1053.20" cy="264.28" r="2.16" fill="#fffdf7"/>
+<circle cx="1094.80" cy="264.28" r="12.00" fill="#2455a2"/>
+<circle cx="1094.80" cy="264.28" r="8.40" fill="#fffdf7"/>
+<circle cx="1094.80" cy="264.28" r="5.64" fill="#2455a2"/>
+<circle cx="1094.80" cy="264.28" r="2.16" fill="#fffdf7"/>
+<circle cx="1053.20" cy="298.32" r="12.00" fill="#2455a2"/>
+<circle cx="1053.20" cy="298.32" r="8.40" fill="#fffdf7"/>
+<circle cx="1053.20" cy="298.32" r="5.64" fill="#2455a2"/>
+<circle cx="1053.20" cy="298.32" r="2.16" fill="#fffdf7"/>
+<circle cx="1094.80" cy="298.32" r="12.00" fill="#2455a2"/>
+<circle cx="1094.80" cy="298.32" r="8.40" fill="#fffdf7"/>
+<circle cx="1094.80" cy="298.32" r="5.64" fill="#2455a2"/>
+<circle cx="1094.80" cy="298.32" r="2.16" fill="#fffdf7"/>
+<text x="1074.0" y="349" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">8筒</text>
+</g>
+<g class="tile">
+<rect x="1162" y="178" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="1159" y="169" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="1157" y="171" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="1154" y="174" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<circle cx="1177.92" cy="208.04" r="12.00" fill="#2455a2"/>
+<circle cx="1177.92" cy="208.04" r="8.40" fill="#fffdf7"/>
+<circle cx="1177.92" cy="208.04" r="5.64" fill="#2455a2"/>
+<circle cx="1177.92" cy="208.04" r="2.16" fill="#fffdf7"/>
+<circle cx="1206.00" cy="208.04" r="12.00" fill="#2455a2"/>
+<circle cx="1206.00" cy="208.04" r="8.40" fill="#fffdf7"/>
+<circle cx="1206.00" cy="208.04" r="5.64" fill="#2455a2"/>
+<circle cx="1206.00" cy="208.04" r="2.16" fill="#fffdf7"/>
+<circle cx="1234.08" cy="208.04" r="12.00" fill="#2455a2"/>
+<circle cx="1234.08" cy="208.04" r="8.40" fill="#fffdf7"/>
+<circle cx="1234.08" cy="208.04" r="5.64" fill="#2455a2"/>
+<circle cx="1234.08" cy="208.04" r="2.16" fill="#fffdf7"/>
+<circle cx="1177.92" cy="248.00" r="12.00" fill="#c72f3e"/>
+<circle cx="1177.92" cy="248.00" r="8.40" fill="#fffdf7"/>
+<circle cx="1177.92" cy="248.00" r="5.64" fill="#c72f3e"/>
+<circle cx="1177.92" cy="248.00" r="2.16" fill="#fffdf7"/>
+<circle cx="1206.00" cy="248.00" r="12.00" fill="#c72f3e"/>
+<circle cx="1206.00" cy="248.00" r="8.40" fill="#fffdf7"/>
+<circle cx="1206.00" cy="248.00" r="5.64" fill="#c72f3e"/>
+<circle cx="1206.00" cy="248.00" r="2.16" fill="#fffdf7"/>
+<circle cx="1234.08" cy="248.00" r="12.00" fill="#c72f3e"/>
+<circle cx="1234.08" cy="248.00" r="8.40" fill="#fffdf7"/>
+<circle cx="1234.08" cy="248.00" r="5.64" fill="#c72f3e"/>
+<circle cx="1234.08" cy="248.00" r="2.16" fill="#fffdf7"/>
+<circle cx="1177.92" cy="287.96" r="12.00" fill="#218a45"/>
+<circle cx="1177.92" cy="287.96" r="8.40" fill="#fffdf7"/>
+<circle cx="1177.92" cy="287.96" r="5.64" fill="#218a45"/>
+<circle cx="1177.92" cy="287.96" r="2.16" fill="#fffdf7"/>
+<circle cx="1206.00" cy="287.96" r="12.00" fill="#218a45"/>
+<circle cx="1206.00" cy="287.96" r="8.40" fill="#fffdf7"/>
+<circle cx="1206.00" cy="287.96" r="5.64" fill="#218a45"/>
+<circle cx="1206.00" cy="287.96" r="2.16" fill="#fffdf7"/>
+<circle cx="1234.08" cy="287.96" r="12.00" fill="#218a45"/>
+<circle cx="1234.08" cy="287.96" r="8.40" fill="#fffdf7"/>
+<circle cx="1234.08" cy="287.96" r="5.64" fill="#218a45"/>
+<circle cx="1234.08" cy="287.96" r="2.16" fill="#fffdf7"/>
+<text x="1206.0" y="349" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">9筒</text>
+</g>
+<text x="98" y="440" text-anchor="start" fill="#eff8f0" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="17" font-weight="700">條子</text>
+<text x="1300" y="440" text-anchor="end" fill="#d9eedf" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="12" font-weight="500">雙節竹形・七條配色・八條曲節重繪</text>
+<g class="tile">
+<rect x="106" y="476" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="103" y="467" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="101" y="469" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="98" y="472" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<path d="M116.0 588.0 Q133.0 558.0 159.0 537.0 M125.0 577.0 Q112.0 564.0 115.0 553.0" fill="none" stroke="#218a45" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M126.0 556.0 C130.0 544.0 142.0 537.0 155.0 541.0 C168.0 545.0 174.0 557.0 168.0 569.0 C161.0 584.0 142.0 585.0 128.0 573.0 Z" fill="#fffdf7" stroke="#2455a2" stroke-width="3.5" stroke-linejoin="round"/>
+<circle cx="163.0" cy="533.0" r="15" fill="#fffdf7" stroke="#2455a2" stroke-width="3.5"/>
+<path d="M152.0 521.0 Q149.0 509.0 157.0 512.0 Q161.0 503.0 167.0 512.0 Q177.0 510.0 173.0 522.0" fill="none" stroke="#c72f3e" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M177.0 531.0 L192.0 537.0 L177.0 541.0 Z" fill="#c72f3e"/>
+<circle cx="168.0" cy="529.0" r="2.4" fill="#2455a2"/>
+<path d="M135.0 556.0 Q151.0 545.0 164.0 558.0 Q155.0 575.0 137.0 570.0 Z" fill="none" stroke="#2455a2" stroke-width="3" stroke-linejoin="round"/>
+<path d="M132.0 574.0 Q146.0 586.0 152.0 603.0" fill="none" stroke="#c72f3e" stroke-width="4.2" stroke-linecap="round"/>
+<text x="150.0" y="647" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">1條</text>
+</g>
+<g class="tile">
+<rect x="238" y="476" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="235" y="467" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="233" y="469" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="230" y="472" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<path d="M282.0 501.36 C290.64 500.64 290.16 506.76 287.28 509.28000000000003 C285.6 511.8 286.16 514.6800000000001 285.84 517.2 C285.68 519.0 285.68 519.72 285.84 521.52 C286.16 524.04 285.6 526.92 287.28 529.44 C290.16 531.96 290.64 538.08 282.0 537.36 C273.36 538.08 273.84 531.96 276.72 529.44 C278.4 526.92 277.84 524.04 278.16 521.52 C278.32 519.72 278.32 519.0 278.16 517.2 C277.84 514.6800000000001 278.4 511.8 276.72 509.28000000000003 C273.84 506.76 273.36 500.64 282.0 501.36Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M278.16 519.36 Q282.0 520.36 285.84 519.36" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M282.0 554.64 C290.64 553.92 290.16 560.04 287.28 562.56 C285.6 565.08 286.16 567.96 285.84 570.48 C285.68 572.28 285.68 573.0 285.84 574.8 C286.16 577.3199999999999 285.6 580.1999999999999 287.28 582.72 C290.16 585.24 290.64 591.36 282.0 590.64 C273.36 591.36 273.84 585.24 276.72 582.72 C278.4 580.1999999999999 277.84 577.3199999999999 278.16 574.8 C278.32 573.0 278.32 572.28 278.16 570.48 C277.84 567.96 278.4 565.08 276.72 562.56 C273.84 560.04 273.36 553.92 282.0 554.64Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M278.16 572.64 Q282.0 573.64 285.84 572.64" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<text x="282.0" y="647" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">2條</text>
+</g>
+<g class="tile">
+<rect x="370" y="476" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="367" y="467" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="365" y="469" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="362" y="472" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<path d="M414.0 492.48 C422.64 491.76 422.16 497.88 419.28 500.40000000000003 C417.6 502.92 418.16 505.8 417.84 508.32 C417.68 510.12 417.68 510.84000000000003 417.84 512.64 C418.16 515.16 417.6 518.04 419.28 520.5600000000001 C422.16 523.08 422.64 529.2 414.0 528.48 C405.36 529.2 405.84 523.08 408.72 520.5600000000001 C410.4 518.04 409.84 515.16 410.16 512.64 C410.32 510.84000000000003 410.32 510.12 410.16 508.32 C409.84 505.8 410.4 502.92 408.72 500.40000000000003 C405.84 497.88 405.36 491.76 414.0 492.48Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M410.16 510.48 Q414.0 511.48 417.84 510.48" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M391.12 560.56 C399.76 559.8399999999999 399.28000000000003 565.9599999999999 396.4 568.4799999999999 C394.72 571.0 395.28000000000003 573.88 394.96 576.4 C394.8 578.1999999999999 394.8 578.92 394.96 580.7199999999999 C395.28000000000003 583.2399999999999 394.72 586.1199999999999 396.4 588.64 C399.28000000000003 591.16 399.76 597.28 391.12 596.56 C382.48 597.28 382.96 591.16 385.84000000000003 588.64 C387.52 586.1199999999999 386.96 583.2399999999999 387.28000000000003 580.7199999999999 C387.44 578.92 387.44 578.1999999999999 387.28000000000003 576.4 C386.96 573.88 387.52 571.0 385.84000000000003 568.4799999999999 C382.96 565.9599999999999 382.48 559.8399999999999 391.12 560.56Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M387.28000000000003 578.56 Q391.12 579.56 394.96 578.56" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M436.88 560.56 C445.52 559.8399999999999 445.04 565.9599999999999 442.15999999999997 568.4799999999999 C440.48 571.0 441.04 573.88 440.71999999999997 576.4 C440.56 578.1999999999999 440.56 578.92 440.71999999999997 580.7199999999999 C441.04 583.2399999999999 440.48 586.1199999999999 442.15999999999997 588.64 C445.04 591.16 445.52 597.28 436.88 596.56 C428.24 597.28 428.71999999999997 591.16 431.6 588.64 C433.28 586.1199999999999 432.71999999999997 583.2399999999999 433.04 580.7199999999999 C433.2 578.92 433.2 578.1999999999999 433.04 576.4 C432.71999999999997 573.88 433.28 571.0 431.6 568.4799999999999 C428.71999999999997 565.9599999999999 428.24 559.8399999999999 436.88 560.56Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M433.04 578.56 Q436.88 579.56 440.71999999999997 578.56" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<text x="414.0" y="647" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">3條</text>
+</g>
+<g class="tile">
+<rect x="502" y="476" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="499" y="467" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="497" y="469" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="494" y="472" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<path d="M525.2 504.32000000000005 C533.84 503.6 533.36 509.72 530.48 512.24 C528.8000000000001 514.7600000000001 529.36 517.6400000000001 529.0400000000001 520.1600000000001 C528.88 521.96 528.88 522.6800000000001 529.0400000000001 524.48 C529.36 527.0 528.8000000000001 529.88 530.48 532.4000000000001 C533.36 534.9200000000001 533.84 541.0400000000001 525.2 540.32 C516.5600000000001 541.0400000000001 517.0400000000001 534.9200000000001 519.9200000000001 532.4000000000001 C521.6 529.88 521.0400000000001 527.0 521.36 524.48 C521.5200000000001 522.6800000000001 521.5200000000001 521.96 521.36 520.1600000000001 C521.0400000000001 517.6400000000001 521.6 514.7600000000001 519.9200000000001 512.24 C517.0400000000001 509.72 516.5600000000001 503.6 525.2 504.32000000000005Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M521.36 522.32 Q525.2 523.32 529.0400000000001 522.32" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M566.8 504.32000000000005 C575.4399999999999 503.6 574.9599999999999 509.72 572.0799999999999 512.24 C570.4 514.7600000000001 570.9599999999999 517.6400000000001 570.64 520.1600000000001 C570.4799999999999 521.96 570.4799999999999 522.6800000000001 570.64 524.48 C570.9599999999999 527.0 570.4 529.88 572.0799999999999 532.4000000000001 C574.9599999999999 534.9200000000001 575.4399999999999 541.0400000000001 566.8 540.32 C558.16 541.0400000000001 558.64 534.9200000000001 561.52 532.4000000000001 C563.1999999999999 529.88 562.64 527.0 562.9599999999999 524.48 C563.12 522.6800000000001 563.12 521.96 562.9599999999999 520.1600000000001 C562.64 517.6400000000001 563.1999999999999 514.7600000000001 561.52 512.24 C558.64 509.72 558.16 503.6 566.8 504.32000000000005Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M562.9599999999999 522.32 Q566.8 523.32 570.64 522.32" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M525.2 551.6800000000001 C533.84 550.96 533.36 557.08 530.48 559.6 C528.8000000000001 562.1200000000001 529.36 565.0000000000001 529.0400000000001 567.5200000000001 C528.88 569.32 528.88 570.0400000000001 529.0400000000001 571.84 C529.36 574.36 528.8000000000001 577.24 530.48 579.7600000000001 C533.36 582.2800000000001 533.84 588.4000000000001 525.2 587.6800000000001 C516.5600000000001 588.4000000000001 517.0400000000001 582.2800000000001 519.9200000000001 579.7600000000001 C521.6 577.24 521.0400000000001 574.36 521.36 571.84 C521.5200000000001 570.0400000000001 521.5200000000001 569.32 521.36 567.5200000000001 C521.0400000000001 565.0000000000001 521.6 562.1200000000001 519.9200000000001 559.6 C517.0400000000001 557.08 516.5600000000001 550.96 525.2 551.6800000000001Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M521.36 569.6800000000001 Q525.2 570.6800000000001 529.0400000000001 569.6800000000001" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M566.8 551.6800000000001 C575.4399999999999 550.96 574.9599999999999 557.08 572.0799999999999 559.6 C570.4 562.1200000000001 570.9599999999999 565.0000000000001 570.64 567.5200000000001 C570.4799999999999 569.32 570.4799999999999 570.0400000000001 570.64 571.84 C570.9599999999999 574.36 570.4 577.24 572.0799999999999 579.7600000000001 C574.9599999999999 582.2800000000001 575.4399999999999 588.4000000000001 566.8 587.6800000000001 C558.16 588.4000000000001 558.64 582.2800000000001 561.52 579.7600000000001 C563.1999999999999 577.24 562.64 574.36 562.9599999999999 571.84 C563.12 570.0400000000001 563.12 569.32 562.9599999999999 567.5200000000001 C562.64 565.0000000000001 563.1999999999999 562.1200000000001 561.52 559.6 C558.64 557.08 558.16 550.96 566.8 551.6800000000001Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M562.9599999999999 569.6800000000001 Q566.8 570.6800000000001 570.64 569.6800000000001" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<text x="546.0" y="647" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">4條</text>
+</g>
+<g class="tile">
+<rect x="634" y="476" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="631" y="467" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="629" y="469" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="626" y="472" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<path d="M655.12 495.44000000000005 C663.76 494.72 663.28 500.84000000000003 660.4 503.36000000000007 C658.72 505.88000000000005 659.28 508.76000000000005 658.96 511.28000000000003 C658.8 513.08 658.8 513.8000000000001 658.96 515.6 C659.28 518.12 658.72 521.0 660.4 523.5200000000001 C663.28 526.0400000000001 663.76 532.1600000000001 655.12 531.44 C646.48 532.1600000000001 646.96 526.0400000000001 649.84 523.5200000000001 C651.52 521.0 650.96 518.12 651.28 515.6 C651.44 513.8000000000001 651.44 513.08 651.28 511.28000000000003 C650.96 508.76000000000005 651.52 505.88000000000005 649.84 503.36000000000007 C646.96 500.84000000000003 646.48 494.72 655.12 495.44000000000005Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M651.28 513.44 Q655.12 514.44 658.96 513.44" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M700.88 495.44000000000005 C709.52 494.72 709.04 500.84000000000003 706.16 503.36000000000007 C704.48 505.88000000000005 705.04 508.76000000000005 704.72 511.28000000000003 C704.56 513.08 704.56 513.8000000000001 704.72 515.6 C705.04 518.12 704.48 521.0 706.16 523.5200000000001 C709.04 526.0400000000001 709.52 532.1600000000001 700.88 531.44 C692.24 532.1600000000001 692.72 526.0400000000001 695.6 523.5200000000001 C697.28 521.0 696.72 518.12 697.04 515.6 C697.2 513.8000000000001 697.2 513.08 697.04 511.28000000000003 C696.72 508.76000000000005 697.28 505.88000000000005 695.6 503.36000000000007 C692.72 500.84000000000003 692.24 494.72 700.88 495.44000000000005Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M697.04 513.44 Q700.88 514.44 704.72 513.44" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M678.0 528.0 C686.64 527.28 686.16 533.4 683.28 535.92 C681.6 538.44 682.16 541.32 681.84 543.84 C681.68 545.64 681.68 546.36 681.84 548.16 C682.16 550.68 681.6 553.56 683.28 556.08 C686.16 558.6 686.64 564.72 678.0 564.0 C669.36 564.72 669.84 558.6 672.72 556.08 C674.4 553.56 673.84 550.68 674.16 548.16 C674.32 546.36 674.32 545.64 674.16 543.84 C673.84 541.32 674.4 538.44 672.72 535.92 C669.84 533.4 669.36 527.28 678.0 528.0Z" fill="none" stroke="#c72f3e" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M674.16 546.0 Q678.0 547.0 681.84 546.0" fill="none" stroke="#c72f3e" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M655.12 560.56 C663.76 559.8399999999999 663.28 565.9599999999999 660.4 568.4799999999999 C658.72 571.0 659.28 573.88 658.96 576.4 C658.8 578.1999999999999 658.8 578.92 658.96 580.7199999999999 C659.28 583.2399999999999 658.72 586.1199999999999 660.4 588.64 C663.28 591.16 663.76 597.28 655.12 596.56 C646.48 597.28 646.96 591.16 649.84 588.64 C651.52 586.1199999999999 650.96 583.2399999999999 651.28 580.7199999999999 C651.44 578.92 651.44 578.1999999999999 651.28 576.4 C650.96 573.88 651.52 571.0 649.84 568.4799999999999 C646.96 565.9599999999999 646.48 559.8399999999999 655.12 560.56Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M651.28 578.56 Q655.12 579.56 658.96 578.56" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M700.88 560.56 C709.52 559.8399999999999 709.04 565.9599999999999 706.16 568.4799999999999 C704.48 571.0 705.04 573.88 704.72 576.4 C704.56 578.1999999999999 704.56 578.92 704.72 580.7199999999999 C705.04 583.2399999999999 704.48 586.1199999999999 706.16 588.64 C709.04 591.16 709.52 597.28 700.88 596.56 C692.24 597.28 692.72 591.16 695.6 588.64 C697.28 586.1199999999999 696.72 583.2399999999999 697.04 580.7199999999999 C697.2 578.92 697.2 578.1999999999999 697.04 576.4 C696.72 573.88 697.28 571.0 695.6 568.4799999999999 C692.72 565.9599999999999 692.24 559.8399999999999 700.88 560.56Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M697.04 578.56 Q700.88 579.56 704.72 578.56" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<text x="678.0" y="647" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">5條</text>
+</g>
+<g class="tile">
+<rect x="766" y="476" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="763" y="467" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="761" y="469" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="758" y="472" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<path d="M784.0 498.4 C792.64 497.67999999999995 792.16 503.79999999999995 789.28 506.32 C787.6 508.84 788.16 511.71999999999997 787.84 514.24 C787.68 516.04 787.68 516.76 787.84 518.56 C788.16 521.0799999999999 787.6 523.9599999999999 789.28 526.48 C792.16 529.0 792.64 535.12 784.0 534.4 C775.36 535.12 775.84 529.0 778.72 526.48 C780.4 523.9599999999999 779.84 521.0799999999999 780.16 518.56 C780.32 516.76 780.32 516.04 780.16 514.24 C779.84 511.71999999999997 780.4 508.84 778.72 506.32 C775.84 503.79999999999995 775.36 497.67999999999995 784.0 498.4Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M780.16 516.4 Q784.0 517.4 787.84 516.4" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M810.0 498.4 C818.64 497.67999999999995 818.16 503.79999999999995 815.28 506.32 C813.6 508.84 814.16 511.71999999999997 813.84 514.24 C813.68 516.04 813.68 516.76 813.84 518.56 C814.16 521.0799999999999 813.6 523.9599999999999 815.28 526.48 C818.16 529.0 818.64 535.12 810.0 534.4 C801.36 535.12 801.84 529.0 804.72 526.48 C806.4 523.9599999999999 805.84 521.0799999999999 806.16 518.56 C806.32 516.76 806.32 516.04 806.16 514.24 C805.84 511.71999999999997 806.4 508.84 804.72 506.32 C801.84 503.79999999999995 801.36 497.67999999999995 810.0 498.4Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M806.16 516.4 Q810.0 517.4 813.84 516.4" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M836.0 498.4 C844.64 497.67999999999995 844.16 503.79999999999995 841.28 506.32 C839.6 508.84 840.16 511.71999999999997 839.84 514.24 C839.68 516.04 839.68 516.76 839.84 518.56 C840.16 521.0799999999999 839.6 523.9599999999999 841.28 526.48 C844.16 529.0 844.64 535.12 836.0 534.4 C827.36 535.12 827.84 529.0 830.72 526.48 C832.4 523.9599999999999 831.84 521.0799999999999 832.16 518.56 C832.32 516.76 832.32 516.04 832.16 514.24 C831.84 511.71999999999997 832.4 508.84 830.72 506.32 C827.84 503.79999999999995 827.36 497.67999999999995 836.0 498.4Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M832.16 516.4 Q836.0 517.4 839.84 516.4" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M784.0 557.6 C792.64 556.88 792.16 563.0 789.28 565.52 C787.6 568.0400000000001 788.16 570.9200000000001 787.84 573.44 C787.68 575.24 787.68 575.96 787.84 577.76 C788.16 580.28 787.6 583.16 789.28 585.6800000000001 C792.16 588.2 792.64 594.32 784.0 593.6 C775.36 594.32 775.84 588.2 778.72 585.6800000000001 C780.4 583.16 779.84 580.28 780.16 577.76 C780.32 575.96 780.32 575.24 780.16 573.44 C779.84 570.9200000000001 780.4 568.0400000000001 778.72 565.52 C775.84 563.0 775.36 556.88 784.0 557.6Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M780.16 575.6 Q784.0 576.6 787.84 575.6" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M810.0 557.6 C818.64 556.88 818.16 563.0 815.28 565.52 C813.6 568.0400000000001 814.16 570.9200000000001 813.84 573.44 C813.68 575.24 813.68 575.96 813.84 577.76 C814.16 580.28 813.6 583.16 815.28 585.6800000000001 C818.16 588.2 818.64 594.32 810.0 593.6 C801.36 594.32 801.84 588.2 804.72 585.6800000000001 C806.4 583.16 805.84 580.28 806.16 577.76 C806.32 575.96 806.32 575.24 806.16 573.44 C805.84 570.9200000000001 806.4 568.0400000000001 804.72 565.52 C801.84 563.0 801.36 556.88 810.0 557.6Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M806.16 575.6 Q810.0 576.6 813.84 575.6" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M836.0 557.6 C844.64 556.88 844.16 563.0 841.28 565.52 C839.6 568.0400000000001 840.16 570.9200000000001 839.84 573.44 C839.68 575.24 839.68 575.96 839.84 577.76 C840.16 580.28 839.6 583.16 841.28 585.6800000000001 C844.16 588.2 844.64 594.32 836.0 593.6 C827.36 594.32 827.84 588.2 830.72 585.6800000000001 C832.4 583.16 831.84 580.28 832.16 577.76 C832.32 575.96 832.32 575.24 832.16 573.44 C831.84 570.9200000000001 832.4 568.0400000000001 830.72 565.52 C827.84 563.0 827.36 556.88 836.0 557.6Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M832.16 575.6 Q836.0 576.6 839.84 575.6" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<text x="810.0" y="647" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">6條</text>
+</g>
+<g class="tile">
+<rect x="898" y="476" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="895" y="467" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="893" y="469" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="890" y="472" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<path d="M942.0 486.56 C950.64 485.84000000000003 950.16 491.96 947.28 494.48 C945.6 497.0 946.16 499.88 945.84 502.4 C945.68 504.2 945.68 504.92 945.84 506.72 C946.16 509.24 945.6 512.12 947.28 514.64 C950.16 517.16 950.64 523.28 942.0 522.56 C933.36 523.28 933.84 517.16 936.72 514.64 C938.4 512.12 937.84 509.24 938.16 506.72 C938.32 504.92 938.32 504.2 938.16 502.4 C937.84 499.88 938.4 497.0 936.72 494.48 C933.84 491.96 933.36 485.84000000000003 942.0 486.56Z" fill="none" stroke="#c72f3e" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M938.16 504.56 Q942.0 505.56 945.84 504.56" fill="none" stroke="#c72f3e" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M916.0 525.04 C924.64 524.3199999999999 924.16 530.4399999999999 921.28 532.9599999999999 C919.6 535.48 920.16 538.36 919.84 540.88 C919.68 542.68 919.68 543.4 919.84 545.1999999999999 C920.16 547.7199999999999 919.6 550.5999999999999 921.28 553.12 C924.16 555.64 924.64 561.76 916.0 561.04 C907.36 561.76 907.84 555.64 910.72 553.12 C912.4 550.5999999999999 911.84 547.7199999999999 912.16 545.1999999999999 C912.32 543.4 912.32 542.68 912.16 540.88 C911.84 538.36 912.4 535.48 910.72 532.9599999999999 C907.84 530.4399999999999 907.36 524.3199999999999 916.0 525.04Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M912.16 543.04 Q916.0 544.04 919.84 543.04" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M942.0 525.04 C950.64 524.3199999999999 950.16 530.4399999999999 947.28 532.9599999999999 C945.6 535.48 946.16 538.36 945.84 540.88 C945.68 542.68 945.68 543.4 945.84 545.1999999999999 C946.16 547.7199999999999 945.6 550.5999999999999 947.28 553.12 C950.16 555.64 950.64 561.76 942.0 561.04 C933.36 561.76 933.84 555.64 936.72 553.12 C938.4 550.5999999999999 937.84 547.7199999999999 938.16 545.1999999999999 C938.32 543.4 938.32 542.68 938.16 540.88 C937.84 538.36 938.4 535.48 936.72 532.9599999999999 C933.84 530.4399999999999 933.36 524.3199999999999 942.0 525.04Z" fill="none" stroke="#2455a2" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M938.16 543.04 Q942.0 544.04 945.84 543.04" fill="none" stroke="#2455a2" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M968.0 525.04 C976.64 524.3199999999999 976.16 530.4399999999999 973.28 532.9599999999999 C971.6 535.48 972.16 538.36 971.84 540.88 C971.68 542.68 971.68 543.4 971.84 545.1999999999999 C972.16 547.7199999999999 971.6 550.5999999999999 973.28 553.12 C976.16 555.64 976.64 561.76 968.0 561.04 C959.36 561.76 959.84 555.64 962.72 553.12 C964.4 550.5999999999999 963.84 547.7199999999999 964.16 545.1999999999999 C964.32 543.4 964.32 542.68 964.16 540.88 C963.84 538.36 964.4 535.48 962.72 532.9599999999999 C959.84 530.4399999999999 959.36 524.3199999999999 968.0 525.04Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M964.16 543.04 Q968.0 544.04 971.84 543.04" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M916.0 566.48 C924.64 565.76 924.16 571.88 921.28 574.4 C919.6 576.9200000000001 920.16 579.8000000000001 919.84 582.32 C919.68 584.12 919.68 584.84 919.84 586.64 C920.16 589.16 919.6 592.04 921.28 594.5600000000001 C924.16 597.08 924.64 603.2 916.0 602.48 C907.36 603.2 907.84 597.08 910.72 594.5600000000001 C912.4 592.04 911.84 589.16 912.16 586.64 C912.32 584.84 912.32 584.12 912.16 582.32 C911.84 579.8000000000001 912.4 576.9200000000001 910.72 574.4 C907.84 571.88 907.36 565.76 916.0 566.48Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M912.16 584.48 Q916.0 585.48 919.84 584.48" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M942.0 566.48 C950.64 565.76 950.16 571.88 947.28 574.4 C945.6 576.9200000000001 946.16 579.8000000000001 945.84 582.32 C945.68 584.12 945.68 584.84 945.84 586.64 C946.16 589.16 945.6 592.04 947.28 594.5600000000001 C950.16 597.08 950.64 603.2 942.0 602.48 C933.36 603.2 933.84 597.08 936.72 594.5600000000001 C938.4 592.04 937.84 589.16 938.16 586.64 C938.32 584.84 938.32 584.12 938.16 582.32 C937.84 579.8000000000001 938.4 576.9200000000001 936.72 574.4 C933.84 571.88 933.36 565.76 942.0 566.48Z" fill="none" stroke="#2455a2" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M938.16 584.48 Q942.0 585.48 945.84 584.48" fill="none" stroke="#2455a2" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M968.0 566.48 C976.64 565.76 976.16 571.88 973.28 574.4 C971.6 576.9200000000001 972.16 579.8000000000001 971.84 582.32 C971.68 584.12 971.68 584.84 971.84 586.64 C972.16 589.16 971.6 592.04 973.28 594.5600000000001 C976.16 597.08 976.64 603.2 968.0 602.48 C959.36 603.2 959.84 597.08 962.72 594.5600000000001 C964.4 592.04 963.84 589.16 964.16 586.64 C964.32 584.84 964.32 584.12 964.16 582.32 C963.84 579.8000000000001 964.4 576.9200000000001 962.72 574.4 C959.84 571.88 959.36 565.76 968.0 566.48Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M964.16 584.48 Q968.0 585.48 971.84 584.48" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<text x="942.0" y="647" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">7條</text>
+</g>
+<g class="tile">
+<rect x="1030" y="476" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="1027" y="467" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="1025" y="469" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="1022" y="472" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<path d="M1044.88 488.54 C1053.736 487.84000000000003 1053.2440000000001 493.79 1050.2920000000001 496.24 C1048.5700000000002 498.69 1049.144 501.49 1048.816 503.94 C1048.652 505.69 1048.652 506.39000000000004 1048.816 508.14000000000004 C1049.144 510.59000000000003 1048.5700000000002 513.39 1050.2920000000001 515.84 C1053.2440000000001 518.29 1053.736 524.24 1044.88 523.54 C1036.0240000000001 524.24 1036.516 518.29 1039.468 515.84 C1041.19 513.39 1040.6160000000002 510.59000000000003 1040.9440000000002 508.14000000000004 C1041.1080000000002 506.39000000000004 1041.1080000000002 505.69 1040.9440000000002 503.94 C1040.6160000000002 501.49 1041.19 498.69 1039.468 496.24 C1036.516 493.79 1036.0240000000001 487.84000000000003 1044.88 488.54Z" fill="none" stroke="#218a45" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1040.9440000000002 506.04 Q1044.88 507.04 1048.816 506.04" fill="none" stroke="#218a45" stroke-width="1.7979999999999998" stroke-linecap="round"/>
+<path d="M1103.12 488.54 C1111.9759999999999 487.84000000000003 1111.484 493.79 1108.532 496.24 C1106.81 498.69 1107.3839999999998 501.49 1107.0559999999998 503.94 C1106.8919999999998 505.69 1106.8919999999998 506.39000000000004 1107.0559999999998 508.14000000000004 C1107.3839999999998 510.59000000000003 1106.81 513.39 1108.532 515.84 C1111.484 518.29 1111.9759999999999 524.24 1103.12 523.54 C1094.264 524.24 1094.7559999999999 518.29 1097.7079999999999 515.84 C1099.4299999999998 513.39 1098.856 510.59000000000003 1099.184 508.14000000000004 C1099.348 506.39000000000004 1099.348 505.69 1099.184 503.94 C1098.856 501.49 1099.4299999999998 498.69 1097.7079999999999 496.24 C1094.7559999999999 493.79 1094.264 487.84000000000003 1103.12 488.54Z" fill="none" stroke="#218a45" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1099.184 506.04 Q1103.12 507.04 1107.0559999999998 506.04" fill="none" stroke="#218a45" stroke-width="1.7979999999999998" stroke-linecap="round"/>
+<path d="M1044.88 528.5 C1053.736 527.8 1053.2440000000001 533.75 1050.2920000000001 536.2 C1048.5700000000002 538.65 1049.144 541.45 1048.816 543.9 C1048.652 545.65 1048.652 546.35 1048.816 548.1 C1049.144 550.55 1048.5700000000002 553.35 1050.2920000000001 555.8 C1053.2440000000001 558.25 1053.736 564.2 1044.88 563.5 C1036.0240000000001 564.2 1036.516 558.25 1039.468 555.8 C1041.19 553.35 1040.6160000000002 550.55 1040.9440000000002 548.1 C1041.1080000000002 546.35 1041.1080000000002 545.65 1040.9440000000002 543.9 C1040.6160000000002 541.45 1041.19 538.65 1039.468 536.2 C1036.516 533.75 1036.0240000000001 527.8 1044.88 528.5Z" fill="none" stroke="#218a45" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1040.9440000000002 546.0 Q1044.88 547.0 1048.816 546.0" fill="none" stroke="#218a45" stroke-width="1.7979999999999998" stroke-linecap="round"/>
+<path d="M1103.12 528.5 C1111.9759999999999 527.8 1111.484 533.75 1108.532 536.2 C1106.81 538.65 1107.3839999999998 541.45 1107.0559999999998 543.9 C1106.8919999999998 545.65 1106.8919999999998 546.35 1107.0559999999998 548.1 C1107.3839999999998 550.55 1106.81 553.35 1108.532 555.8 C1111.484 558.25 1111.9759999999999 564.2 1103.12 563.5 C1094.264 564.2 1094.7559999999999 558.25 1097.7079999999999 555.8 C1099.4299999999998 553.35 1098.856 550.55 1099.184 548.1 C1099.348 546.35 1099.348 545.65 1099.184 543.9 C1098.856 541.45 1099.4299999999998 538.65 1097.7079999999999 536.2 C1094.7559999999999 533.75 1094.264 527.8 1103.12 528.5Z" fill="none" stroke="#218a45" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1099.184 546.0 Q1103.12 547.0 1107.0559999999998 546.0" fill="none" stroke="#218a45" stroke-width="1.7979999999999998" stroke-linecap="round"/>
+<path d="M1044.88 568.46 C1053.736 567.76 1053.2440000000001 573.71 1050.2920000000001 576.1600000000001 C1048.5700000000002 578.61 1049.144 581.4100000000001 1048.816 583.86 C1048.652 585.61 1048.652 586.3100000000001 1048.816 588.0600000000001 C1049.144 590.51 1048.5700000000002 593.3100000000001 1050.2920000000001 595.76 C1053.2440000000001 598.21 1053.736 604.1600000000001 1044.88 603.46 C1036.0240000000001 604.1600000000001 1036.516 598.21 1039.468 595.76 C1041.19 593.3100000000001 1040.6160000000002 590.51 1040.9440000000002 588.0600000000001 C1041.1080000000002 586.3100000000001 1041.1080000000002 585.61 1040.9440000000002 583.86 C1040.6160000000002 581.4100000000001 1041.19 578.61 1039.468 576.1600000000001 C1036.516 573.71 1036.0240000000001 567.76 1044.88 568.46Z" fill="none" stroke="#218a45" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1040.9440000000002 585.96 Q1044.88 586.96 1048.816 585.96" fill="none" stroke="#218a45" stroke-width="1.7979999999999998" stroke-linecap="round"/>
+<path d="M1103.12 568.46 C1111.9759999999999 567.76 1111.484 573.71 1108.532 576.1600000000001 C1106.81 578.61 1107.3839999999998 581.4100000000001 1107.0559999999998 583.86 C1106.8919999999998 585.61 1106.8919999999998 586.3100000000001 1107.0559999999998 588.0600000000001 C1107.3839999999998 590.51 1106.81 593.3100000000001 1108.532 595.76 C1111.484 598.21 1111.9759999999999 604.1600000000001 1103.12 603.46 C1094.264 604.1600000000001 1094.7559999999999 598.21 1097.7079999999999 595.76 C1099.4299999999998 593.3100000000001 1098.856 590.51 1099.184 588.0600000000001 C1099.348 586.3100000000001 1099.348 585.61 1099.184 583.86 C1098.856 581.4100000000001 1099.4299999999998 578.61 1097.7079999999999 576.1600000000001 C1094.7559999999999 573.71 1094.264 567.76 1103.12 568.46Z" fill="none" stroke="#218a45" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1099.184 585.96 Q1103.12 586.96 1107.0559999999998 585.96" fill="none" stroke="#218a45" stroke-width="1.7979999999999998" stroke-linecap="round"/>
+<path d="M1046.0 536.28 C1051.04 536.28 1052.16 514.28 1057.76 514.28 C1063.36 514.28 1062.24 533.1999999999999 1068.4 533.1999999999999 C1074.0 533.1999999999999 1072.6 518.13 1074.0 518.13 C1075.4 518.13 1074.0 533.1999999999999 1079.6 533.1999999999999 C1085.76 533.1999999999999 1084.64 514.28 1090.24 514.28 C1095.84 514.28 1096.96 536.28 1102.0 536.28" fill="none" stroke="#218a45" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1048.8 531.88 C1053.0 531.88 1054.4 519.12 1058.04 519.12 C1062.24 519.12 1064.48 530.01 1068.4 530.01 C1072.04 530.01 1071.76 522.53 1074.0 522.53 C1076.24 522.53 1075.96 530.01 1079.6 530.01 C1083.52 530.01 1085.76 519.12 1089.96 519.12 C1093.6 519.12 1095.0 531.88 1099.2 531.88" fill="none" stroke="#218a45" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1046.0 555.72 C1051.04 555.72 1052.16 577.72 1057.76 577.72 C1063.36 577.72 1062.24 558.8000000000001 1068.4 558.8000000000001 C1074.0 558.8000000000001 1072.6 573.87 1074.0 573.87 C1075.4 573.87 1074.0 558.8000000000001 1079.6 558.8000000000001 C1085.76 558.8000000000001 1084.64 577.72 1090.24 577.72 C1095.84 577.72 1096.96 555.72 1102.0 555.72" fill="none" stroke="#218a45" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1048.8 560.12 C1053.0 560.12 1054.4 572.88 1058.04 572.88 C1062.24 572.88 1064.48 561.99 1068.4 561.99 C1072.04 561.99 1071.76 569.47 1074.0 569.47 C1076.24 569.47 1075.96 561.99 1079.6 561.99 C1083.52 561.99 1085.76 572.88 1089.96 572.88 C1093.6 572.88 1095.0 560.12 1099.2 560.12" fill="none" stroke="#218a45" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1074.0" y="647" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">8條</text>
+</g>
+<g class="tile">
+<rect x="1162" y="476" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="1159" y="467" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="1157" y="469" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="1154" y="472" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<path d="M1180.0 486.56 C1188.64 485.84000000000003 1188.16 491.96 1185.28 494.48 C1183.6 497.0 1184.16 499.88 1183.84 502.4 C1183.68 504.2 1183.68 504.92 1183.84 506.72 C1184.16 509.24 1183.6 512.12 1185.28 514.64 C1188.16 517.16 1188.64 523.28 1180.0 522.56 C1171.36 523.28 1171.84 517.16 1174.72 514.64 C1176.4 512.12 1175.84 509.24 1176.16 506.72 C1176.32 504.92 1176.32 504.2 1176.16 502.4 C1175.84 499.88 1176.4 497.0 1174.72 494.48 C1171.84 491.96 1171.36 485.84000000000003 1180.0 486.56Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1176.16 504.56 Q1180.0 505.56 1183.84 504.56" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M1206.0 486.56 C1214.64 485.84000000000003 1214.16 491.96 1211.28 494.48 C1209.6 497.0 1210.16 499.88 1209.84 502.4 C1209.68 504.2 1209.68 504.92 1209.84 506.72 C1210.16 509.24 1209.6 512.12 1211.28 514.64 C1214.16 517.16 1214.64 523.28 1206.0 522.56 C1197.36 523.28 1197.84 517.16 1200.72 514.64 C1202.4 512.12 1201.84 509.24 1202.16 506.72 C1202.32 504.92 1202.32 504.2 1202.16 502.4 C1201.84 499.88 1202.4 497.0 1200.72 494.48 C1197.84 491.96 1197.36 485.84000000000003 1206.0 486.56Z" fill="none" stroke="#c72f3e" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1202.16 504.56 Q1206.0 505.56 1209.84 504.56" fill="none" stroke="#c72f3e" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M1232.0 486.56 C1240.64 485.84000000000003 1240.16 491.96 1237.28 494.48 C1235.6 497.0 1236.16 499.88 1235.84 502.4 C1235.68 504.2 1235.68 504.92 1235.84 506.72 C1236.16 509.24 1235.6 512.12 1237.28 514.64 C1240.16 517.16 1240.64 523.28 1232.0 522.56 C1223.36 523.28 1223.84 517.16 1226.72 514.64 C1228.4 512.12 1227.84 509.24 1228.16 506.72 C1228.32 504.92 1228.32 504.2 1228.16 502.4 C1227.84 499.88 1228.4 497.0 1226.72 494.48 C1223.84 491.96 1223.36 485.84000000000003 1232.0 486.56Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1228.16 504.56 Q1232.0 505.56 1235.84 504.56" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M1180.0 528.0 C1188.64 527.28 1188.16 533.4 1185.28 535.92 C1183.6 538.44 1184.16 541.32 1183.84 543.84 C1183.68 545.64 1183.68 546.36 1183.84 548.16 C1184.16 550.68 1183.6 553.56 1185.28 556.08 C1188.16 558.6 1188.64 564.72 1180.0 564.0 C1171.36 564.72 1171.84 558.6 1174.72 556.08 C1176.4 553.56 1175.84 550.68 1176.16 548.16 C1176.32 546.36 1176.32 545.64 1176.16 543.84 C1175.84 541.32 1176.4 538.44 1174.72 535.92 C1171.84 533.4 1171.36 527.28 1180.0 528.0Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1176.16 546.0 Q1180.0 547.0 1183.84 546.0" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M1206.0 528.0 C1214.64 527.28 1214.16 533.4 1211.28 535.92 C1209.6 538.44 1210.16 541.32 1209.84 543.84 C1209.68 545.64 1209.68 546.36 1209.84 548.16 C1210.16 550.68 1209.6 553.56 1211.28 556.08 C1214.16 558.6 1214.64 564.72 1206.0 564.0 C1197.36 564.72 1197.84 558.6 1200.72 556.08 C1202.4 553.56 1201.84 550.68 1202.16 548.16 C1202.32 546.36 1202.32 545.64 1202.16 543.84 C1201.84 541.32 1202.4 538.44 1200.72 535.92 C1197.84 533.4 1197.36 527.28 1206.0 528.0Z" fill="none" stroke="#c72f3e" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1202.16 546.0 Q1206.0 547.0 1209.84 546.0" fill="none" stroke="#c72f3e" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M1232.0 528.0 C1240.64 527.28 1240.16 533.4 1237.28 535.92 C1235.6 538.44 1236.16 541.32 1235.84 543.84 C1235.68 545.64 1235.68 546.36 1235.84 548.16 C1236.16 550.68 1235.6 553.56 1237.28 556.08 C1240.16 558.6 1240.64 564.72 1232.0 564.0 C1223.36 564.72 1223.84 558.6 1226.72 556.08 C1228.4 553.56 1227.84 550.68 1228.16 548.16 C1228.32 546.36 1228.32 545.64 1228.16 543.84 C1227.84 541.32 1228.4 538.44 1226.72 535.92 C1223.84 533.4 1223.36 527.28 1232.0 528.0Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1228.16 546.0 Q1232.0 547.0 1235.84 546.0" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M1180.0 569.44 C1188.64 568.72 1188.16 574.84 1185.28 577.36 C1183.6 579.8800000000001 1184.16 582.7600000000001 1183.84 585.2800000000001 C1183.68 587.08 1183.68 587.8000000000001 1183.84 589.6 C1184.16 592.12 1183.6 595.0 1185.28 597.5200000000001 C1188.16 600.0400000000001 1188.64 606.1600000000001 1180.0 605.44 C1171.36 606.1600000000001 1171.84 600.0400000000001 1174.72 597.5200000000001 C1176.4 595.0 1175.84 592.12 1176.16 589.6 C1176.32 587.8000000000001 1176.32 587.08 1176.16 585.2800000000001 C1175.84 582.7600000000001 1176.4 579.8800000000001 1174.72 577.36 C1171.84 574.84 1171.36 568.72 1180.0 569.44Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1176.16 587.44 Q1180.0 588.44 1183.84 587.44" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M1206.0 569.44 C1214.64 568.72 1214.16 574.84 1211.28 577.36 C1209.6 579.8800000000001 1210.16 582.7600000000001 1209.84 585.2800000000001 C1209.68 587.08 1209.68 587.8000000000001 1209.84 589.6 C1210.16 592.12 1209.6 595.0 1211.28 597.5200000000001 C1214.16 600.0400000000001 1214.64 606.1600000000001 1206.0 605.44 C1197.36 606.1600000000001 1197.84 600.0400000000001 1200.72 597.5200000000001 C1202.4 595.0 1201.84 592.12 1202.16 589.6 C1202.32 587.8000000000001 1202.32 587.08 1202.16 585.2800000000001 C1201.84 582.7600000000001 1202.4 579.8800000000001 1200.72 577.36 C1197.84 574.84 1197.36 568.72 1206.0 569.44Z" fill="none" stroke="#c72f3e" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1202.16 587.44 Q1206.0 588.44 1209.84 587.44" fill="none" stroke="#c72f3e" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<path d="M1232.0 569.44 C1240.64 568.72 1240.16 574.84 1237.28 577.36 C1235.6 579.8800000000001 1236.16 582.7600000000001 1235.84 585.2800000000001 C1235.68 587.08 1235.68 587.8000000000001 1235.84 589.6 C1236.16 592.12 1235.6 595.0 1237.28 597.5200000000001 C1240.16 600.0400000000001 1240.64 606.1600000000001 1232.0 605.44 C1223.36 606.1600000000001 1223.84 600.0400000000001 1226.72 597.5200000000001 C1228.4 595.0 1227.84 592.12 1228.16 589.6 C1228.32 587.8000000000001 1228.32 587.08 1228.16 585.2800000000001 C1227.84 582.7600000000001 1228.4 579.8800000000001 1226.72 577.36 C1223.84 574.84 1223.36 568.72 1232.0 569.44Z" fill="none" stroke="#218a45" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1228.16 587.44 Q1232.0 588.44 1235.84 587.44" fill="none" stroke="#218a45" stroke-width="1.7399999999999998" stroke-linecap="round"/>
+<text x="1206.0" y="647" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">9條</text>
+</g>
+<text x="98" y="738" text-anchor="start" fill="#eff8f0" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="17" font-weight="700">萬子</text>
+<text x="1300" y="738" text-anchor="end" fill="#d9eedf" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="12" font-weight="500">一至九・繁體牌面字樣</text>
+<g class="tile">
+<rect x="106" y="774" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="103" y="765" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="101" y="767" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="98" y="770" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="150.0" y="840" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="48" font-weight="700">一</text>
+<text x="150.0" y="898" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="44" font-weight="700">萬</text>
+<text x="150.0" y="945" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">1萬</text>
+</g>
+<g class="tile">
+<rect x="238" y="774" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="235" y="765" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="233" y="767" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="230" y="770" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="282.0" y="840" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="48" font-weight="700">二</text>
+<text x="282.0" y="898" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="44" font-weight="700">萬</text>
+<text x="282.0" y="945" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">2萬</text>
+</g>
+<g class="tile">
+<rect x="370" y="774" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="367" y="765" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="365" y="767" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="362" y="770" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="414.0" y="840" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="48" font-weight="700">三</text>
+<text x="414.0" y="898" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="44" font-weight="700">萬</text>
+<text x="414.0" y="945" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">3萬</text>
+</g>
+<g class="tile">
+<rect x="502" y="774" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="499" y="765" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="497" y="767" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="494" y="770" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="546.0" y="840" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="48" font-weight="700">四</text>
+<text x="546.0" y="898" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="44" font-weight="700">萬</text>
+<text x="546.0" y="945" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">4萬</text>
+</g>
+<g class="tile">
+<rect x="634" y="774" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="631" y="765" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="629" y="767" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="626" y="770" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="678.0" y="840" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="48" font-weight="700">五</text>
+<text x="678.0" y="898" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="44" font-weight="700">萬</text>
+<text x="678.0" y="945" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">5萬</text>
+</g>
+<g class="tile">
+<rect x="766" y="774" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="763" y="765" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="761" y="767" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="758" y="770" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="810.0" y="840" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="48" font-weight="700">六</text>
+<text x="810.0" y="898" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="44" font-weight="700">萬</text>
+<text x="810.0" y="945" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">6萬</text>
+</g>
+<g class="tile">
+<rect x="898" y="774" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="895" y="765" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="893" y="767" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="890" y="770" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="942.0" y="840" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="48" font-weight="700">七</text>
+<text x="942.0" y="898" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="44" font-weight="700">萬</text>
+<text x="942.0" y="945" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">7萬</text>
+</g>
+<g class="tile">
+<rect x="1030" y="774" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="1027" y="765" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="1025" y="767" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="1022" y="770" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="1074.0" y="840" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="48" font-weight="700">八</text>
+<text x="1074.0" y="898" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="44" font-weight="700">萬</text>
+<text x="1074.0" y="945" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">8萬</text>
+</g>
+<g class="tile">
+<rect x="1162" y="774" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="1159" y="765" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="1157" y="767" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="1154" y="770" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="1206.0" y="840" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="48" font-weight="700">九</text>
+<text x="1206.0" y="898" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="44" font-weight="700">萬</text>
+<text x="1206.0" y="945" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">9萬</text>
+</g>
+<text x="98" y="1036" text-anchor="start" fill="#eff8f0" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="17" font-weight="700">字牌</text>
+<text x="1300" y="1036" text-anchor="end" fill="#d9eedf" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="12" font-weight="500">東、南、西、北、中、發、白</text>
+<g class="tile">
+<rect x="238" y="1072" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="235" y="1063" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="233" y="1065" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="230" y="1068" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="282.0" y="1167" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="61" font-weight="700">東</text>
+<text x="282.0" y="1243" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">東</text>
+</g>
+<g class="tile">
+<rect x="370" y="1072" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="367" y="1063" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="365" y="1065" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="362" y="1068" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="414.0" y="1167" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="61" font-weight="700">南</text>
+<text x="414.0" y="1243" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">南</text>
+</g>
+<g class="tile">
+<rect x="502" y="1072" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="499" y="1063" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="497" y="1065" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="494" y="1068" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="546.0" y="1167" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="61" font-weight="700">西</text>
+<text x="546.0" y="1243" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">西</text>
+</g>
+<g class="tile">
+<rect x="634" y="1072" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="631" y="1063" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="629" y="1065" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="626" y="1068" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="678.0" y="1167" text-anchor="middle" fill="#2455a2" font-family="Kaiti SC,STKaiti,serif" font-size="61" font-weight="700">北</text>
+<text x="678.0" y="1243" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">北</text>
+</g>
+<g class="tile">
+<rect x="766" y="1072" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="763" y="1063" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="761" y="1065" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="758" y="1068" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="810.0" y="1167" text-anchor="middle" fill="#c72f3e" font-family="Kaiti SC,STKaiti,serif" font-size="61" font-weight="700">中</text>
+<text x="810.0" y="1243" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">中</text>
+</g>
+<g class="tile">
+<rect x="898" y="1072" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="895" y="1063" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="893" y="1065" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="890" y="1068" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<text x="942.0" y="1167" text-anchor="middle" fill="#218a45" font-family="Kaiti SC,STKaiti,serif" font-size="61" font-weight="700">發</text>
+<text x="942.0" y="1243" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">發</text>
+</g>
+<g class="tile">
+<rect x="1030" y="1072" width="104" height="148" rx="13" fill="#062f18" opacity=".36" filter="url(#tableShadow)"/>
+<rect x="1027" y="1063" width="104" height="148" rx="13" fill="url(#edge)"/>
+<rect x="1025" y="1065" width="104" height="148" rx="13" fill="#e6d1a4" opacity=".8"/>
+<rect x="1022" y="1068" width="104" height="148" rx="13" fill="url(#face)" stroke="#4f453b" stroke-width="1.8"/>
+<rect x="1040.0" y="1081.0" width="68" height="122" rx="8" fill="none" stroke="#2455a2" stroke-width="3.3"/>
+<rect x="1050.0" y="1091.0" width="48" height="102" rx="5" fill="none" stroke="#2455a2" stroke-width="2"/>
+<text x="1074.0" y="1243" text-anchor="middle" fill="#f0f8f1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" font-weight="650">白</text>
+</g>
+<text x="98" y="1360" text-anchor="start" fill="#d7ecdc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="12" font-weight="500">設計檢查點：牌面飽滿度、圖案置中、間距、配色、實體厚邊方向</text>
+</svg>

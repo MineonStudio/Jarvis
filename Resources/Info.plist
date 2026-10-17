@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.4.6</string>
+	<string>1.8.4</string>
 	<key>CFBundleVersion</key>
-	<string>344</string>
+	<string>367</string>
 	<key>JarvisInstallSource</key>
 	<string>direct-download</string>
 	<key>JarvisUpdatePublicKey</key>
@@ -25,10 +25,11 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>贾维斯在局域网传输模块中与同一网络的设备互传文件。</string>
+	<string>贾维斯用于在麻将对局和局域网传输中发现并连接同一网络的设备。</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_http._tcp</string>
+		<string>_mahjong._tcp</string>
 	</array>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>贾维斯在会议记录中采集系统播放音频，以便识别耳机中远程参会者的发言；原始音频保存在本机。</string>

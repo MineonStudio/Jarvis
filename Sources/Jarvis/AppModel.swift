@@ -8,6 +8,7 @@ enum AppSection: Hashable, Identifiable {
     case home
     case aiConversation
     case entertainment
+    case gamePlaza
     case skill(SkillID)
 
     var id: String {
@@ -15,6 +16,7 @@ enum AppSection: Hashable, Identifiable {
         case .home: "home"
         case .aiConversation: "ai-conversation"
         case .entertainment: "entertainment"
+        case .gamePlaza: "game-plaza"
         case let .skill(skill): "skill.\(skill.id)"
         }
     }
@@ -24,6 +26,7 @@ enum AppSection: Hashable, Identifiable {
         case .home: "首页"
         case .aiConversation: "AI聚合"
         case .entertainment: "娱乐广场"
+        case .gamePlaza: "游戏广场"
         case let .skill(skill): skill.title
         }
     }
@@ -33,6 +36,7 @@ enum AppSection: Hashable, Identifiable {
         case .home: "首页"
         case .aiConversation: "AI聚合"
         case .entertainment: "娱乐广场"
+        case .gamePlaza: "游戏广场"
         case .skill(.screenshot): "截图"
         case .skill(.clipboard): "剪贴板"
         case .skill(.windowLayout): "窗口布局"
@@ -48,6 +52,7 @@ enum AppSection: Hashable, Identifiable {
         case .home: "house"
         case .aiConversation: "sparkles"
         case .entertainment: "play.rectangle"
+        case .gamePlaza: "gamecontroller"
         case let .skill(skill): skill.icon
         }
     }

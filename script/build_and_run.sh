@@ -7,7 +7,7 @@ BUNDLE_ID="com.jarvis.mac.dev"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Sign and run outside cloud-backed project directories. File Provider adds
 # FinderInfo to bundle roots in those directories, which codesign rejects.
-APP_BUNDLE="${JARVIS_DEV_APP_DIR:-$HOME/Library/Caches/Jarvis/Development/$APP_NAME.app}"
+APP_BUNDLE="${JARVIS_DEV_APP_DIR:-/Users/Shared/Jarvis/Development/$APP_NAME.app}"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/Jarvis"
 
 cd "$ROOT_DIR"

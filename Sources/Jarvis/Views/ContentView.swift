@@ -73,6 +73,8 @@ struct ContentView: View {
                 navigationSelection = .aiConversation
             case .entertainment:
                 navigationSelection = .entertainment
+            case .gamePlaza:
+                navigationSelection = .gamePlaza
             }
         }
         .task(id: navigationTargetID) {
@@ -119,7 +121,7 @@ struct ContentView: View {
     }
 
     private var bottomNavigationItems: [TopLevelSection] {
-        [.aiConversation, .entertainment]
+        [.aiConversation, .gamePlaza, .entertainment]
     }
 
     private var navigationTargetID: String {
@@ -132,6 +134,8 @@ struct ContentView: View {
             "ai-conversation|\(app.selectedAIProvider.id)"
         case .entertainment:
             "entertainment|\(app.selectedEntertainmentPlatform.id)"
+        case .gamePlaza:
+            "game-plaza"
         }
     }
 
@@ -145,6 +149,8 @@ struct ContentView: View {
             .aiConversation
         case .entertainment:
             .entertainment
+        case .gamePlaza:
+            .gamePlaza
         }
     }
 
@@ -154,6 +160,7 @@ struct ContentView: View {
         case .home: JarvisHomeView(pointerTracker: homePointerTracker)
         case .aiConversation: AIConversationView()
         case .entertainment: EntertainmentView()
+        case .gamePlaza: GamePlazaView()
         case .skill(.screenshot): ScreenshotView()
         case .skill(.clipboard): ClipboardView()
         case .skill(.windowLayout): WindowLayoutView()
@@ -213,6 +220,7 @@ private enum TopLevelSection: Hashable, Identifiable {
     case skill(SkillID)
     case aiConversation
     case entertainment
+    case gamePlaza
 
     var id: String {
         switch self {
@@ -220,6 +228,7 @@ private enum TopLevelSection: Hashable, Identifiable {
         case let .skill(skill): "skill.\(skill.id)"
         case .aiConversation: "ai-conversation"
         case .entertainment: "entertainment"
+        case .gamePlaza: "game-plaza"
         }
     }
 
@@ -229,6 +238,7 @@ private enum TopLevelSection: Hashable, Identifiable {
         case let .skill(skill): skill.navigationTitle
         case .aiConversation: "AI聚合"
         case .entertainment: "娱乐广场"
+        case .gamePlaza: "游戏广场"
         }
     }
 
@@ -238,6 +248,7 @@ private enum TopLevelSection: Hashable, Identifiable {
         case let .skill(skill): skill.icon
         case .aiConversation: "sparkles"
         case .entertainment: "play.rectangle"
+        case .gamePlaza: "gamecontroller"
         }
     }
 
@@ -247,6 +258,7 @@ private enum TopLevelSection: Hashable, Identifiable {
         case let .skill(skill): .skill(skill)
         case .aiConversation: .aiConversation
         case .entertainment: .entertainment
+        case .gamePlaza: .gamePlaza
         }
     }
 }
