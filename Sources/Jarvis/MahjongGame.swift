@@ -189,6 +189,7 @@ final class MahjongGame {
     private(set) var dealer = 0
     private(set) var roundNumber = 1
     private(set) var roundStartedAt: Date?
+    private(set) var roundEndedAt: Date?
     private(set) var dice: [Int] = []
     private(set) var dealtCount = 0
     private(set) var justDrew = false
@@ -235,7 +236,8 @@ final class MahjongGame {
         MahjongGameSnapshot(
             mode: mode, ruleset: ruleset, seatNicknames: seatNicknames,
             hands: hands, melds: melds, discards: discards, wall: wall, turn: turn, dealer: dealer,
-            roundNumber: roundNumber, roundStartedAt: roundStartedAt, dice: dice, dealtCount: dealtCount,
+            roundNumber: roundNumber, roundStartedAt: roundStartedAt, roundEndedAt: roundEndedAt,
+            humanSeats: humanSeats, dice: dice, dealtCount: dealtCount,
             justDrew: justDrew, needsDiscard: needsDiscard, message: message, winner: winner,
             discarder: discarder, winningTile: winningTile, winningHandType: winningHandType,
             aiProfileIDs: aiProfileIDs, winByDiscard: winByDiscard, isStarted: isStarted, phase: phase,
@@ -254,7 +256,8 @@ final class MahjongGame {
         mode = snapshot.mode; ruleset = snapshot.ruleset; seatNicknames = snapshot.seatNicknames
         hands = snapshot.hands; melds = snapshot.melds; discards = snapshot.discards; wall = snapshot.wall
         turn = snapshot.turn; dealer = snapshot.dealer; roundNumber = snapshot.roundNumber
-        roundStartedAt = snapshot.roundStartedAt; dice = snapshot.dice; dealtCount = snapshot.dealtCount
+        roundStartedAt = snapshot.roundStartedAt; roundEndedAt = snapshot.roundEndedAt
+        humanSeats = snapshot.humanSeats; dice = snapshot.dice; dealtCount = snapshot.dealtCount
         justDrew = snapshot.justDrew; needsDiscard = snapshot.needsDiscard; message = snapshot.message
         winner = snapshot.winner; discarder = snapshot.discarder; winningTile = snapshot.winningTile
         winningHandType = snapshot.winningHandType; aiProfileIDs = snapshot.aiProfileIDs
@@ -357,6 +360,7 @@ final class MahjongGame {
         let tiles = Self.makeWall(for: ruleset).shuffled()
         if !isStarted && phase == .idle { dealer = 0; roundNumber = 1 }
         roundStartedAt = nil
+        roundEndedAt = nil
         wall = tiles
         hands = Array(repeating: [], count: 4)
         melds = Array(repeating: [], count: 4)
@@ -379,17 +383,75 @@ final class MahjongGame {
     }
 
     func leaveTable() {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.leave); return }
+        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.leave) }
+        leaveTableLocally()
+    }
+
+    func leaveTableLocally() {
         stopTurnTimer()
         clearPendingResponses()
         isStarted = false
         phase = .idle
         roundStartedAt = nil
+        roundEndedAt = nil
         winner = nil
         winningTile = nil
         winByDiscard = false
         roundResult = ""
         message = "选择玩法并开始一局"
+    }
+
+    func addLANGuest(seat: Int, nickname: String) {
+        guard mode == .lan, isLANAuthority, (1..<4).contains(seat), !humanSeats.contains(seat) else { return }
+        humanSeats.append(seat)
+        humanSeats.sort()
+        setLANNickname(nickname, for: seat)
+        if phase == .waitingForReady { readySeats[seat] = false }
+        if phase == .choosingMissingSuit, missingSuits[seat] == nil, !pendingHumanSeats.contains(seat) {
+            pendingHumanSeats.append(seat)
+        }
+        if phase == .responding, pendingAISeats.contains(seat) {
+            pendingAISeats.remove(seat)
+            pendingHumanSeats.append(seat)
+            stopResponseTimer(for: seat)
+            startResponseTimer(for: seat)
+        } else if phase == .playing, turn == seat {
+            stopTurnTimer()
+            startTurnTimerIfNeeded()
+        }
+    }
+
+    func removeLANGuest(seat: Int, aiNickname: String = "AI") {
+        guard mode == .lan, isLANAuthority, (1..<4).contains(seat), humanSeats.contains(seat) else { return }
+        humanSeats.removeAll { $0 == seat }
+        setLANNickname(aiNickname, for: seat)
+        if phase == .waitingForReady {
+            readySeats[seat] = true
+            if readySeats.allSatisfy({ $0 }) { Task { await rollDiceAndDeal() } }
+        }
+        if phase == .choosingMissingSuit, pendingHumanSeats.contains(seat) {
+            pendingHumanSeats.removeAll { $0 == seat }
+            missingSuits[seat] = Self.leastFrequentSuit(in: hands[seat])
+            if pendingHumanSeats.isEmpty {
+                phase = .playing
+                turn = dealer
+                justDrew = true
+                needsDiscard = true
+                Task { await runAutomatedTurns() }
+            }
+        }
+        if phase == .responding, pendingHumanSeats.contains(seat) {
+            pendingHumanSeats.removeAll { $0 == seat }
+            pendingAISeats.insert(seat)
+            stopResponseTimer(for: seat)
+            startResponseTimer(for: seat)
+            if let tile = pendingTile, let discarder = pendingDiscarder {
+                let responseID = pendingResponseID
+                Task { await resolveAICall(for: seat, discardedTile: tile, discarder: discarder, responseID: responseID) }
+            }
+        } else if phase == .playing, turn == seat {
+            Task { await runAutomatedTurns() }
+        }
     }
 
     func markReady() {
@@ -407,6 +469,7 @@ final class MahjongGame {
         guard phase == .waitingForReady, readySeats.allSatisfy({ $0 }) else { return }
         phase = .dealing
         roundStartedAt = Date()
+        roundEndedAt = nil
         dice = [Int.random(in: 1...6), Int.random(in: 1...6)]
         let breakIndex = (dice.reduce(0, +) * 2) % max(wall.count, 1)
         wall = Array(wall[breakIndex...]) + Array(wall[..<breakIndex])
@@ -1086,6 +1149,7 @@ final class MahjongGame {
 
     private func finishRound(winner: Int, tile: MahjongTile?, byDiscard: Bool, discarder: Int?) {
         stopTurnTimer()
+        roundEndedAt = Date()
         self.winner = winner
         self.discarder = byDiscard ? discarder : nil
         winningTile = tile
@@ -1105,6 +1169,7 @@ final class MahjongGame {
 
     private func finishDraw() {
         stopTurnTimer()
+        roundEndedAt = Date()
         phase = .roundEnded
         isStarted = true
         justDrew = false
@@ -1252,6 +1317,8 @@ struct MahjongGameSnapshot: Codable {
     var dealer: Int
     var roundNumber: Int
     var roundStartedAt: Date?
+    var roundEndedAt: Date?
+    var humanSeats: [Int]
     var dice: [Int]
     var dealtCount: Int
     var justDrew: Bool

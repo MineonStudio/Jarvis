@@ -59,7 +59,7 @@ struct MahjongPlayerArchive: Codable, Identifiable, Equatable {
     }
 }
 
-struct MahjongPlayerRoundSettlement: Identifiable, Equatable {
+struct MahjongPlayerRoundSettlement: Codable, Identifiable, Equatable {
     var id: String { profileID }
     let profileID: String
     let nickname: String
@@ -67,7 +67,7 @@ struct MahjongPlayerRoundSettlement: Identifiable, Equatable {
     let balanceAfter: Int
 }
 
-struct MahjongArchiveSettlement: Equatable {
+struct MahjongArchiveSettlement: Codable, Equatable {
     var transfers: [String]
     var playerResults: [MahjongPlayerRoundSettlement] = []
     var notice: String?
@@ -330,6 +330,83 @@ final class MahjongArchiveStore {
             playerBankrupt: playerBankrupt,
             playerNeedsExit: playerNeedsExit
         )
+    }
+
+    /// The host settles all four LAN seats once, then distributes the resulting profiles.
+    func settleLAN(
+        winnerSeat: Int,
+        discarderSeat: Int?,
+        handType: MahjongWinningHandType,
+        byDiscard: Bool,
+        seatProfiles: [MahjongPlayerArchive]
+    ) -> (settlement: MahjongArchiveSettlement, profiles: [MahjongPlayerArchive]) {
+        guard (0..<4).contains(winnerSeat), seatProfiles.count == 4 else {
+            return (MahjongArchiveSettlement(transfers: [], campaignComplete: false, playerBankrupt: false, playerNeedsExit: false), seatProfiles)
+        }
+
+        var profiles = seatProfiles
+        let amount = byDiscard ? handType.discardPayment : handType.selfDrawPayment
+        let losers = byDiscard ? (discarderSeat.map { [$0] } ?? []) : (0..<4).filter { $0 != winnerSeat }
+        var changes = Array(repeating: 0, count: 4)
+        var transfers: [String] = []
+        for loser in losers where (0..<4).contains(loser) {
+            profiles[loser].balance -= amount
+            profiles[winnerSeat].balance += amount
+            changes[loser] -= amount
+            changes[winnerSeat] += amount
+            transfers.append("\(profiles[loser].nickname) 向 \(profiles[winnerSeat].nickname) 支付 \(amount.formatted()) 毛格子")
+        }
+        for seat in profiles.indices {
+            if seat == winnerSeat { profiles[seat].wins += 1 }
+            else { profiles[seat].losses += 1 }
+        }
+
+        // LAN AI profiles belong to the host's archive; the visiting player's own device
+        // persists their account when this authoritative result arrives.
+        player.balance = profiles[0].balance
+        player.wins = profiles[0].wins
+        player.losses = profiles[0].losses
+        for profile in profiles.dropFirst() {
+            if let index = aiProfiles.firstIndex(where: { $0.id == profile.id }) {
+                aiProfiles[index].balance = profile.balance
+                aiProfiles[index].wins = profile.wins
+                aiProfiles[index].losses = profile.losses
+                aiProfiles[index].eliminatedDay = profile.balance <= 0 ? dayKey : nil
+            }
+        }
+
+        let results = profiles.indices.map { seat in
+            MahjongPlayerRoundSettlement(
+                profileID: profiles[seat].id,
+                nickname: profiles[seat].nickname,
+                balanceChange: changes[seat],
+                balanceAfter: profiles[seat].balance
+            )
+        }
+        let notice = "本局结算完成：\(profiles[winnerSeat].nickname) 获胜"
+        lastNotice = notice
+        save()
+        return (
+            MahjongArchiveSettlement(
+                transfers: transfers,
+                playerResults: results,
+                notice: notice,
+                campaignComplete: false,
+                playerBankrupt: profiles[0].balance <= 0,
+                playerNeedsExit: false
+            ),
+            profiles
+        )
+    }
+
+    /// Applies the authoritative LAN account data while preserving this device's
+    /// local nickname/avatar and account identifier.
+    func applyLANPlayerProfile(_ remote: MahjongPlayerArchive) {
+        guard player.balance != remote.balance || player.wins != remote.wins || player.losses != remote.losses else { return }
+        player.balance = remote.balance
+        player.wins = remote.wins
+        player.losses = remote.losses
+        save()
     }
 
     func recordVoluntaryEscape(profileID: String = "player") {
