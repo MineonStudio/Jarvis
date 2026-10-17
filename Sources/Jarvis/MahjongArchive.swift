@@ -397,7 +397,7 @@ final class MahjongArchiveStore {
     ]
 }
 
-enum MahjongWinningHandType: String {
+enum MahjongWinningHandType: String, Codable {
     case standard = "普通胡牌"
     case sevenPairs = "七对"
     case thirteenOrphans = "十三幺"

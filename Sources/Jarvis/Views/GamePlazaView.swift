@@ -85,6 +85,7 @@ struct GamePlazaView: View {
                 .frame(minWidth: 720, minHeight: 620)
         }
         .onChange(of: game.phase) { _, phase in
+            guard game.mode != .lan else { return }
             guard phase == .roundEnded, lastSettledRoundNumber != game.roundNumber else { return }
             settleRound()
         }
@@ -340,15 +341,24 @@ struct GamePlazaView: View {
     private func startLANMatch(_ service: MahjongLANRoomService) {
         lanRoomService = service
         game.mode = .lan
-        game.assignAIProfiles(archive.prepareAIOpponents())
-        game.start()
         lastSettledRoundNumber = 0
         latestSettlement = nil
         librarySelection = .mahjong
+        if service.isHosting {
+            game.assignAIProfiles(archive.prepareAIOpponents())
+            service.startHostGame(game, nickname: archive.player.nickname)
+            game.start()
+        } else {
+            service.startJoinedGame(game, nickname: archive.player.nickname)
+        }
         showsLANRoom = false
     }
 
     private func startNextRound() {
+        if game.mode == .lan {
+            game.nextRound()
+            return
+        }
         if latestSettlement?.campaignComplete == true || latestSettlement?.playerNeedsExit == true {
             game.leaveTable()
             latestSettlement = nil
@@ -712,13 +722,15 @@ struct MahjongTableView: View {
             EmptyView()
 
         case .choosingMissingSuit:
-            HStack(spacing: 10) {
-                ForEach(MahjongSuit.allCases, id: \.self) { suit in
-                    Button(suit.shortName) { game.chooseMissingSuit(suit) }
-                        .buttonStyle(JarvisSecondaryButtonStyle())
+            if game.currentResponderSeat == game.localSeat {
+                HStack(spacing: 10) {
+                    ForEach(MahjongSuit.allCases, id: \.self) { suit in
+                        Button(suit.shortName) { game.chooseMissingSuit(suit) }
+                            .buttonStyle(JarvisSecondaryButtonStyle())
+                    }
                 }
+                .padding(12)
             }
-            .padding(12)
 
         case .responding:
             HStack(spacing: 8) {
@@ -1110,6 +1122,13 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
     }
 
     private func playerProfile(for seat: Int) -> MahjongPlayerArchive {
+        if game.mode == .lan, game.humanSeats.contains(seat) {
+            if seat == game.localSeat { return archive.player }
+            return MahjongPlayerArchive(
+                id: "lan-seat-\(seat)", nickname: game.seatNicknames[seat], avatarStyle: .player,
+                balance: 0
+            )
+        }
         if seat == 0 { return archive.player }
         if game.aiProfileIDs.indices.contains(seat - 1),
            let storedProfile = archive.profile(id: game.aiProfileIDs[seat - 1]) {
