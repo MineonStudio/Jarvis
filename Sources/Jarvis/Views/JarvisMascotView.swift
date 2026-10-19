@@ -129,7 +129,6 @@ struct JarvisMascotView: View {
                 .offset(x: displayedGazeOffset.width, y: displayedGazeOffset.height)
                 .animation(.interactiveSpring(response: 0.12, dampingFraction: 0.82), value: displayedGazeOffset)
                 .animation(.easeInOut(duration: 0.16), value: isBlinking)
-
         }
         .frame(width: diameter, height: diameter)
         .accessibilityElement(children: .ignore)

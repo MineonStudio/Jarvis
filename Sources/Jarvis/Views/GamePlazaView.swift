@@ -5,7 +5,9 @@ import UniformTypeIdentifiers
 private enum GameLibrarySelection: String, CaseIterable, Identifiable, Hashable {
     case all = "全部游戏"
     case mahjong = "麻将"
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 }
 
 struct GamePlazaView: View {
@@ -23,6 +25,11 @@ struct GamePlazaView: View {
     @State private var checkInFailed = false
     @State private var showsAvatarImporter = false
     @State private var avatarImportError: String?
+    @State private var gameWindowModel: MahjongGameWindowModel?
+
+    private var gameWindow: MahjongGameWindowController {
+        .shared
+    }
 
     var body: some View {
         JarvisContentArea(
@@ -39,41 +46,20 @@ struct GamePlazaView: View {
                 ToolbarItem(placement: .automatic) { EmptyView() }
             },
             content: {
-                if librarySelection == .mahjong && (game.isStarted || game.winner != nil) {
-                    MahjongTableView(
-                        game: game,
-                        archive: archive,
-                        lanRoomService: lanRoomService ?? idleLANRoomService,
-                        roundNotice: latestSettlement?.notice,
-                        roundSettlement: latestSettlement,
-                        onNextRound: startNextRound
-                    ) {
-                        if game.isStarted && game.phase != .roundEnded {
-                            archive.recordVoluntaryEscape()
+                ScrollView {
+                    Group {
+                        if librarySelection == .mahjong {
+                            mahjongDetail
+                        } else {
+                            gameGallery
                         }
-                        game.leaveTable()
-                        lanRoomService?.stop()
-                        lanRoomService = nil
-                        latestSettlement = nil
-                        librarySelection = .mahjong
                     }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        Group {
-                            if librarySelection == .mahjong {
-                                mahjongDetail
-                            } else {
-                                gameGallery
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(24)
-                    }
-                    .scrollIndicators(.hidden)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .jarvisModulePanel()
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(24)
                 }
+                .scrollIndicators(.hidden)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .jarvisModulePanel()
             }
         )
         .sheet(isPresented: $showsLANRoom) {
@@ -95,6 +81,10 @@ struct GamePlazaView: View {
                 settleRound()
             }
         }
+        .onReceive((lanRoomService ?? idleLANRoomService).$lastVoiceCue) { cue in
+            guard let cue, let service = lanRoomService, !service.isHosting else { return }
+            MahjongVoicePlayer.shared.play(cue.key, gender: voiceGender(for: cue.seat))
+        }
         .onReceive((lanRoomService ?? idleLANRoomService).$settlement) { settlement in
             guard game.mode == .lan, let service = lanRoomService, !service.isHosting,
                   let settlement, game.phase == .roundEnded else { return }
@@ -115,6 +105,15 @@ struct GamePlazaView: View {
             lanRoomService = nil
             latestSettlement = nil
             librarySelection = .mahjong
+        }
+        .onChange(of: game.isStarted) { _, started in
+            if !started {
+                gameWindow.hide()
+            }
+        }
+        .onChange(of: latestSettlement) { _, settlement in
+            gameWindowModel?.roundNotice = settlement?.notice
+            gameWindowModel?.roundSettlement = settlement
         }
     }
 
@@ -176,9 +175,15 @@ struct GamePlazaView: View {
                             game.mode = mode
                         }
                         Button {
-                            if game.mode == .lan { showsLANRoom = true } else { startSoloMatch() }
+                            if game.isStarted {
+                                presentGameWindow()
+                            } else if game.mode == .lan {
+                                showsLANRoom = true
+                            } else {
+                                startSoloMatch()
+                            }
                         } label: {
-                            Text("进入游戏")
+                            Text(game.isStarted ? "回到牌桌" : "进入游戏")
                         }
                         .buttonStyle(JarvisSecondaryButtonStyle())
                         .fixedSize()
@@ -249,6 +254,18 @@ struct GamePlazaView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.accentColor)
                     }
+                    Picker("麻将配音", selection: Binding(
+                        get: { archive.player.voiceGender },
+                        set: { archive.updatePlayerProfile(voiceGender: $0) }
+                    )) {
+                        ForEach(MahjongVoiceGender.allCases) { gender in
+                            Text(gender.displayName).tag(gender)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 112)
+                    .help("选择你的麻将语音")
                     Text("余额  \(archive.player.balance.formatted()) 毛格子")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
@@ -260,8 +277,8 @@ struct GamePlazaView: View {
                 archiveMetric("逃跑", "\(archive.player.escapes)")
                 Spacer(minLength: 8)
                 Button(checkInButtonTitle, action: startDailyCheckIn)
-                .buttonStyle(JarvisSecondaryButtonStyle())
-                .disabled(!archive.canClaimDailyReward || isCheckingIn)
+                    .buttonStyle(JarvisSecondaryButtonStyle())
+                    .disabled(!archive.canClaimDailyReward || isCheckingIn)
                 Button("查看档案") { showsArchive = true }
                     .buttonStyle(JarvisSecondaryButtonStyle())
             }
@@ -283,7 +300,9 @@ struct GamePlazaView: View {
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
         }
         .onAppear {
-            if playerNicknameDraft.isEmpty { playerNicknameDraft = archive.player.nickname }
+            if playerNicknameDraft.isEmpty {
+                playerNicknameDraft = archive.player.nickname
+            }
         }
         .onChange(of: archive.player.nickname) { _, nickname in
             playerNicknameDraft = nickname
@@ -305,15 +324,41 @@ struct GamePlazaView: View {
     }
 
     private var checkInButtonTitle: String {
-        if isCheckingIn { return "开始签到" }
-        if checkInFailed { return "签到失败" }
-        if !archive.canClaimDailyReward { return "签到成功" }
+        if isCheckingIn {
+            return "开始签到"
+        }
+        if checkInFailed {
+            return "签到失败"
+        }
+        if !archive.canClaimDailyReward {
+            return "签到成功"
+        }
         return "开始签到"
     }
 
     private func savePlayerNickname() {
         archive.updatePlayerProfile(nickname: playerNicknameDraft)
         playerNicknameDraft = archive.player.nickname
+    }
+
+    private func voiceGender(for seat: Int) -> MahjongVoiceGender {
+        if game.mode == .lan {
+            if let profile = lanRoomService?.syncedProfiles[seat] {
+                return profile.voiceGender
+            }
+            if seat == game.localSeat {
+                return archive.player.voiceGender
+            }
+        }
+        if seat == 0 {
+            return archive.player.voiceGender
+        }
+        if game.aiProfileIDs.indices.contains(seat - 1),
+           let profile = archive.profile(id: game.aiProfileIDs[seat - 1])
+        {
+            return profile.voiceGender
+        }
+        return .female
     }
 
     private func startDailyCheckIn() {
@@ -359,15 +404,73 @@ struct GamePlazaView: View {
         }
         game.mode = .solo
         game.assignAIProfiles(profiles)
+        let archive = archive
+        let aiProfileIDs = game.aiProfileIDs
+        game.onMahjongVoiceCue = { cue in
+            let gender: MahjongVoiceGender = if cue.seat == 0 {
+                archive.player.voiceGender
+            } else if aiProfileIDs.indices.contains(cue.seat - 1),
+                      let profile = archive.profile(id: aiProfileIDs[cue.seat - 1])
+            {
+                profile.voiceGender
+            } else {
+                .female
+            }
+            MahjongVoicePlayer.shared.play(cue.key, gender: gender)
+        }
         game.start()
         lastSettledRoundNumber = 0
         latestSettlement = nil
         librarySelection = .mahjong
+        presentGameWindow()
+    }
+
+    private func exitMatch() {
+        if game.isStarted, game.phase != .roundEnded {
+            archive.recordVoluntaryEscape()
+        }
+        game.leaveTable()
+        lanRoomService?.stop()
+        lanRoomService = nil
+        latestSettlement = nil
+        librarySelection = .mahjong
+    }
+
+    private func presentGameWindow() {
+        let model: MahjongGameWindowModel
+        if let gameWindowModel {
+            model = gameWindowModel
+        } else {
+            let created = MahjongGameWindowModel(
+                game: game,
+                archive: archive,
+                lanRoomService: lanRoomService ?? idleLANRoomService
+            )
+            gameWindowModel = created
+            model = created
+        }
+        model.lanRoomService = lanRoomService ?? idleLANRoomService
+        model.roundNotice = latestSettlement?.notice
+        model.roundSettlement = latestSettlement
+        model.onNextRound = { startNextRound() }
+        model.onExit = { exitMatch() }
+        gameWindow.onUserClose = { exitMatch() }
+        gameWindow.show(model: model)
     }
 
     private func startLANMatch(_ service: MahjongLANRoomService) {
         lanRoomService = service
         game.mode = .lan
+        if service.isHosting {
+            let archive = archive
+            game.onMahjongVoiceCue = { [weak service] cue in
+                let gender = service?.syncedProfiles[cue.seat]?.voiceGender ?? archive.player.voiceGender
+                MahjongVoicePlayer.shared.play(cue.key, gender: gender)
+                service?.broadcastVoiceCue(cue)
+            }
+        } else {
+            game.onMahjongVoiceCue = nil
+        }
         lastSettledRoundNumber = 0
         latestSettlement = nil
         librarySelection = .mahjong
@@ -381,6 +484,7 @@ struct GamePlazaView: View {
             service.startJoinedGame(game, profile: archive.player)
         }
         showsLANRoom = false
+        presentGameWindow()
     }
 
     private func startNextRound() {
@@ -416,7 +520,9 @@ struct GamePlazaView: View {
             game.leaveTable()
             return
         }
-        if settlement.campaignComplete { game.declareCampaignComplete() }
+        if settlement.campaignComplete {
+            game.declareCampaignComplete()
+        }
     }
 
     private func settleLANRound(using service: MahjongLANRoomService) {
@@ -425,14 +531,18 @@ struct GamePlazaView: View {
             latestSettlement = nil
             return
         }
-        var seats = (0..<4).map { seat in
+        var seats = (0 ..< 4).map { seat in
             service.syncedProfiles[seat] ?? MahjongPlayerArchive(
                 id: "empty-seat-\(seat)", nickname: game.seatName(seat), avatarStyle: .player, balance: 0
             )
         }
         seats[0] = archive.player
-        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(1) ? game.aiProfileIDs[1] : "") { seats[2] = profile }
-        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(2) ? game.aiProfileIDs[2] : "") { seats[3] = profile }
+        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(1) ? game.aiProfileIDs[1] : "") {
+            seats[2] = profile
+        }
+        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(2) ? game.aiProfileIDs[2] : "") {
+            seats[3] = profile
+        }
         let result = archive.settleLAN(
             winnerSeat: winner,
             discarderSeat: game.discarder,
@@ -492,7 +602,16 @@ private struct MahjongArchiveDashboardView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(archive.aiProfiles) { profile in
-                        MahjongArchiveProfileCard(profile: profile, isEliminated: archive.isEliminatedToday(profile))
+                        MahjongArchiveProfileCard(
+                            profile: profile,
+                            isEliminated: archive.isEliminatedToday(profile),
+                            onToggleVoiceGender: {
+                                archive.updateAIVoiceGender(
+                                    profileID: profile.id,
+                                    voiceGender: profile.voiceGender == .male ? .female : .male
+                                )
+                            }
+                        )
                     }
                 }
                 .padding(.bottom, 8)
@@ -513,6 +632,7 @@ private struct MahjongArchiveDashboardView: View {
 private struct MahjongArchiveProfileCard: View {
     let profile: MahjongPlayerArchive
     let isEliminated: Bool
+    let onToggleVoiceGender: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -526,8 +646,14 @@ private struct MahjongArchiveProfileCard: View {
                 }
                 Text("\(profile.balance.formatted()) 毛格子")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                Text("胜率 \(profile.winRate)%  ·  胜 \(profile.wins) / 负 \(profile.losses) / 逃跑 \(profile.escapes)")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                HStack(spacing: 7) {
+                    Text("胜率 \(profile.winRate)%  ·  胜 \(profile.wins) / 负 \(profile.losses) / 逃跑 \(profile.escapes)")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                    Button(profile.voiceGender.displayName, action: onToggleVoiceGender)
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .help("切换 AI 麻将语音")
+                }
             }
             Spacer(minLength: 0)
         }
@@ -536,7 +662,7 @@ private struct MahjongArchiveProfileCard: View {
     }
 }
 
-private struct MahjongArchiveAvatar: View {
+struct MahjongArchiveAvatar: View {
     let profile: MahjongPlayerArchive
     let size: CGFloat
 
@@ -563,7 +689,9 @@ private struct MahjongArchiveAvatar: View {
     private var generatedImage: NSImage? {
         if let filename = profile.customAvatarFilename {
             let url = MahjongArchiveStore.avatarDirectoryURL.appendingPathComponent(filename)
-            if let image = NSImage(contentsOf: url) { return image }
+            if let image = NSImage(contentsOf: url) {
+                return image
+            }
         }
         guard let assetName = profile.avatarStyle.generatedAssetName,
               let url = Bundle.main.url(forResource: assetName, withExtension: "png", subdirectory: "GameArtwork/Avatars") else { return nil }
@@ -600,9 +728,10 @@ private struct MahjongArchiveAvatar: View {
                     .foregroundStyle(.white.opacity(0.95))
                     .shadow(color: .black.opacity(0.3), radius: 5, y: 2)
                 VStack { Spacer(); Text(String(profile.nickname.prefix(1)))
-                        .font(.system(size: size * 0.15, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.68))
-                        .padding(.bottom, size * 0.055) }
+                    .font(.system(size: size * 0.15, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.68))
+                    .padding(.bottom, size * 0.055)
+                }
             }
         }
         .frame(width: size, height: size)
@@ -679,97 +808,168 @@ private struct GamePosterArtwork: View {
     }
 }
 
+/// Match-table felt and tile shell. Tags and buttons use the same semantic
+/// colors as the rest of the app, so they are not listed here.
+private struct MahjongTablePalette {
+    var scheme: ColorScheme
+
+    var isDark: Bool {
+        scheme == .dark
+    }
+
+    var felt: Color {
+        isDark
+            ? Color(red: 0.035, green: 0.12, blue: 0.09)
+            : Color(red: 0.56, green: 0.76, blue: 0.66)
+    }
+
+    var feltAccentTop: Double {
+        isDark ? 0.68 : 0.22
+    }
+
+    var feltAccentBottom: Double {
+        isDark ? 0.38 : 0.08
+    }
+
+    var discardFill: Color {
+        Color.black.opacity(isDark ? 0.14 : 0.08)
+    }
+
+    var discardStroke: Color {
+        isDark ? Color.white.opacity(0.07) : Color(red: 0.10, green: 0.26, blue: 0.18).opacity(0.28)
+    }
+
+    var tileBackGreen: [Color] {
+        isDark
+            ? [Color(red: 0.20, green: 0.59, blue: 0.33), Color(red: 0.09, green: 0.39, blue: 0.23)]
+            : [Color(red: 0.30, green: 0.68, blue: 0.42), Color(red: 0.16, green: 0.48, blue: 0.30)]
+    }
+
+    var tileSide: Color {
+        isDark
+            ? Color(red: 0.035, green: 0.22, blue: 0.12)
+            : Color(red: 0.10, green: 0.34, blue: 0.20)
+    }
+
+    func tileShadowOpacity(compact: Bool) -> Double {
+        if isDark {
+            return compact ? 0.08 : 0.18
+        }
+        return compact ? 0.14 : 0.26
+    }
+}
+
+private extension View {
+    /// Title and ready tags share one frosted capsule. Text follows the
+    /// appearance; the glass itself is the system liquid glass, untinted.
+    func mahjongAdaptiveTag() -> some View {
+        font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .jarvisGlass(in: Capsule(), interactive: false)
+    }
+}
+
 struct MahjongTableView: View {
-    let game: MahjongGame
-    let archive: MahjongArchiveStore
-    @ObservedObject var lanRoomService: MahjongLANRoomService
-    let roundNotice: String?
-    let roundSettlement: MahjongArchiveSettlement?
-    let onNextRound: () -> Void
-    let onExit: () -> Void
+    var model: MahjongGameWindowModel
+
+    private var game: MahjongGame {
+        model.game
+    }
+
+    private var archive: MahjongArchiveStore {
+        model.archive
+    }
+
+    private var lanRoomService: MahjongLANRoomService {
+        model.lanRoomService
+    }
+
+    private var roundNotice: String? {
+        model.roundNotice
+    }
+
+    private var roundSettlement: MahjongArchiveSettlement? {
+        model.roundSettlement
+    }
+
+    private var onNextRound: () -> Void {
+        model.onNextRound
+    }
+
+    private var onExit: () -> Void {
+        model.onExit
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                HStack(spacing: 8) {
-                    titleTag(game.ruleset.rawValue)
-                    titleTag(game.mode.rawValue)
-                    if game.mode == .lan, let code = lanRoomService.roomCode {
-                        titleTag("房间码 \(code)")
-                    }
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        MahjongOverheadTable(
+            game: game,
+            archive: archive,
+            lanRoomService: lanRoomService,
+            roundNotice: roundNotice,
+            roundSettlement: roundSettlement,
+            onNextRound: onNextRound,
+            onExit: onExit
+        )
+    }
 
-                HStack(spacing: 8) {
-                    if let endedAt = game.roundEndedAt {
-                        titleTag("对局时长  \(formattedRoundDuration(at: endedAt))")
-                    } else if game.roundStartedAt != nil {
-                        TimelineView(.periodic(from: .now, by: 1)) { context in
-                            titleTag("对局时长  \(formattedRoundDuration(at: context.date))")
-                        }
-                    } else {
-                        titleTag("对局时长 00:00")
-                    }
-                    titleTag("牌组剩余  \(game.wall.count) 张")
+    /// Rules, duration, wall count, and exit. Its own rounded panel, above the felt.
+    private var matchInfoBar: some View {
+        ZStack {
+            HStack(spacing: 8) {
+                titleTag(game.ruleset.rawValue)
+                titleTag(game.mode.rawValue)
+                if game.mode == .lan, let code = lanRoomService.roomCode {
+                    titleTag("房间码 \(code)")
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
-
-                HStack {
-                    Spacer(minLength: 0)
-                    Button("退出游戏", action: onExit)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .buttonStyle(.plain)
-                        .jarvisGlass(tint: .white.opacity(0.7), in: Capsule(), interactive: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                Spacer(minLength: 0)
             }
-            .frame(height: 36)
-            .padding(.horizontal, 22)
-            .padding(.top, 18)
-            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            MahjongDiscardBoard(
-                game: game,
-                archive: archive,
-                lanRoomService: lanRoomService,
-                onExit: onExit,
-                roundNotice: roundNotice,
-                roundSettlement: roundSettlement,
-                onNextRound: onNextRound
-            ) {
-                workflowControls
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .background {
-            Color(red: 0.035, green: 0.12, blue: 0.09)
-                .overlay {
-                    LinearGradient(
-                        colors: [Color.jarvisAccent.opacity(0.68), Color.jarvisAccent.opacity(0.38)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+            HStack(spacing: 8) {
+                if let endedAt = game.roundEndedAt {
+                    titleTag("对局时长  \(formattedRoundDuration(at: endedAt))")
+                } else if game.roundStartedAt != nil {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        titleTag("对局时长  \(formattedRoundDuration(at: context.date))")
+                    }
+                } else {
+                    titleTag("对局时长 00:00")
                 }
+                titleTag("牌组剩余  \(game.wall.count) 张")
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+
+            HStack {
+                Spacer(minLength: 0)
+                Button("退出游戏", action: onExit)
+                    .buttonStyle(JarvisSecondaryButtonStyle())
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .clipShape(RoundedRectangle(cornerRadius: JarvisMetrics.panelRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: JarvisMetrics.panelRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
+        .frame(minHeight: 36)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 12)
+    }
+
+    private func feltBackground(_ palette: MahjongTablePalette) -> some View {
+        palette.felt
+            .overlay {
+                LinearGradient(
+                    colors: [
+                        Color.jarvisAccent.opacity(palette.feltAccentTop),
+                        Color.jarvisAccent.opacity(palette.feltAccentBottom)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
     }
 
     private func titleTag(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.black)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.white.opacity(0.82), in: Capsule())
+            .mahjongAdaptiveTag()
     }
 
     private func formattedRoundDuration(at date: Date) -> String {
@@ -808,8 +1008,8 @@ struct MahjongTableView: View {
             .padding(12)
 
         case .playing where game.isHumanTurn:
-            HStack(spacing: 8) {
-                if game.canSelfDraw || !game.availableKongTiles.isEmpty {
+            if game.canSelfDraw || !game.availableKongTiles.isEmpty {
+                HStack(spacing: 8) {
                     if game.canSelfDraw {
                         Button("自摸") { game.claimSelfDraw() }
                             .buttonStyle(JarvisSecondaryButtonStyle(tint: .orange))
@@ -819,9 +1019,8 @@ struct MahjongTableView: View {
                             .buttonStyle(JarvisSecondaryButtonStyle())
                     }
                 }
-                Spacer()
+                .padding(10)
             }
-            .padding(10)
 
         case .roundEnded:
             EmptyView()
@@ -836,7 +1035,6 @@ struct MahjongTableView: View {
         let tiles = option.heldTiles.map(\.accessibilityName).joined(separator: "、")
         return "\(option.kind.rawValue)【\(tiles)】"
     }
-
 }
 
 private enum MahjongDiscardMetrics {
@@ -888,6 +1086,7 @@ private enum MahjongSeatAreaMetrics {
     static let tileSpacing: CGFloat = 2
     static let safeInset: CGFloat = 12
     static let drawGap: CGFloat = tileWidth
+    static let meldGroupGap: CGFloat = 8
     // Fifteen slots: thirteen base tiles, one tile-width draw gap, and the drawn tile.
     // Keep the safety inset on both ends; side seats use these same dimensions rotated.
     static let handLength: CGFloat = 15 * tileWidth + 12 * tileSpacing + 2 * safeInset
@@ -895,6 +1094,8 @@ private enum MahjongSeatAreaMetrics {
     static let spacingBetweenAreas: CGFloat = 12
     static let operationHeight: CGFloat = 64
     static let operationMaxWidth: CGFloat = 620
+    /// Main-view hand tiles draw larger than the other three seats.
+    static let localHandScale: CGFloat = 1.5
 
     static func operationCenterY(in boardHeight: CGFloat) -> CGFloat {
         boardHeight - 55 - areaThickness / 2 - spacingBetweenAreas
@@ -904,6 +1105,12 @@ private enum MahjongSeatAreaMetrics {
 
 private enum MahjongPlayerInfoCardMetrics {
     static let gap: CGFloat = 12
+    /// Compact slot: avatar, nickname, and balance. The detail popover holds the rest.
+    static let compactWidth: CGFloat = 252
+    static let compactHeight: CGFloat = 100
+    /// Left and right seats stack avatar, nickname, and balance on separate rows.
+    static let sideWidth: CGFloat = 136
+    static let sideHeight: CGFloat = 180
 
     static func height(areaThickness: CGFloat) -> CGFloat {
         areaThickness + gap + areaThickness
@@ -916,73 +1123,171 @@ private enum MahjongPlayerInfoCardMetrics {
 
 private struct MahjongPlayerInfoCard: View {
     let profile: MahjongPlayerArchive
+    let seatName: String
     let missingSuit: MahjongSuit?
     let countdownActive: Bool
     let countdownDeadline: Date?
+    var stacksVertically = false
+    var detailArrowEdge: Edge = .bottom
+
+    @State private var showsDetail = false
+    @State private var isAvatarHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    let avatarSize: CGFloat = countdownActive ? 72 : 64
-                    let avatarFrameSize = avatarSize + 8
-                    MahjongArchiveAvatar(profile: profile, size: avatarSize)
-                        .frame(width: avatarSize, height: avatarSize)
-                    if countdownActive {
-                        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
-                            let remaining = countdownDeadline?.timeIntervalSince(context.date) ?? 20
-                            MahjongCountdownRing(
-                                progress: CGFloat(min(max(remaining / 20, 0), 1)),
-                                size: avatarFrameSize
-                            )
-                        }
-                    }
-                }
-                // Keep the information card's layout fixed; only the avatar and
-                // its countdown frame grow over the reserved avatar slot.
-                .frame(width: 72, height: 72)
-                .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(profile.nickname)
-                        .font(.system(size: 19, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    if let missingSuit {
-                        Text("缺门：\(missingSuit.shortName)")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Color.white.opacity(0.82))
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                Spacer(minLength: 0)
+        content
+            .padding(14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if stacksVertically {
+            VStack(spacing: 8) {
+                avatarButton
+                nicknameText
+                balanceRow
             }
-            Text("毛格子：\(profile.balance)")
-                .font(.system(size: 19, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color.white.opacity(0.88))
+        } else {
+            HStack(alignment: .center, spacing: 12) {
+                avatarButton
+                VStack(alignment: .leading, spacing: 4) {
+                    nicknameText
+                    balanceRow
+                }
+                .frame(maxWidth: 140, alignment: .leading)
+            }
+        }
+    }
+
+    private var nicknameText: some View {
+        Text(profile.nickname)
+            .font(.system(size: 19, weight: .bold, design: .rounded))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+
+    private var balanceRow: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "centsign.circle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(red: 0.96, green: 0.76, blue: 0.22))
+                .accessibilityHidden(true)
+            Text(profile.balance.formatted())
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.88))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.7)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("余额\(profile.balance.formatted())毛格子")
+    }
+
+    private var avatarButton: some View {
+        Button {
+            showsDetail = true
+        } label: {
+            avatar
+        }
+        .buttonStyle(.plain)
+        .onHover { isAvatarHovered = $0 }
+        .scaleEffect(isAvatarHovered ? 1.06 : 1)
+        .animation(.easeInOut(duration: 0.15), value: isAvatarHovered)
+        .help("查看\(profile.nickname)的资料")
+        .accessibilityLabel("查看\(profile.nickname)的资料")
+        .popover(isPresented: $showsDetail, arrowEdge: detailArrowEdge) {
+            MahjongPlayerDetailPanel(
+                profile: profile,
+                missingSuit: missingSuit
+            )
+        }
+    }
+
+    private var avatar: some View {
+        ZStack {
+            let avatarSize: CGFloat = countdownActive ? 72 : 64
+            let avatarFrameSize = avatarSize + 8
+            MahjongArchiveAvatar(profile: profile, size: avatarSize)
+                .frame(width: avatarSize, height: avatarSize)
+            if countdownActive {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
+                    let remaining = countdownDeadline?.timeIntervalSince(context.date) ?? 20
+                    MahjongCountdownRing(
+                        progress: CGFloat(min(max(remaining / 20, 0), 1)),
+                        size: avatarFrameSize
+                    )
+                }
+            }
+        }
+        .frame(width: 72, height: 72)
+        .accessibilityHidden(true)
+    }
+}
+
+struct MahjongPlayerDetailPanel: View {
+    let profile: MahjongPlayerArchive
+    let missingSuit: MahjongSuit?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                MahjongArchiveAvatar(profile: profile, size: 64)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profile.nickname)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text("毛格子：\(profile.balance.formatted())")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let missingSuit {
+                Text("缺门：\(missingSuit.shortName)")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+            }
             HStack(spacing: 0) {
                 metric("胜率", "\(profile.winRate)%")
                 metric("胜场", "\(profile.wins)")
                 metric("败场", "\(profile.losses)")
                 metric("逃跑", "\(profile.escapes)")
             }
+            Text("语音：\(profile.voiceGender.displayName)")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(16)
+        .frame(width: 300, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        var parts = [
+            profile.nickname,
+            "余额\(profile.balance)毛格子",
+            "胜率\(profile.winRate)%",
+            "胜场\(profile.wins)",
+            "败场\(profile.losses)",
+            "逃跑\(profile.escapes)",
+            "语音\(profile.voiceGender.displayName)"
+        ]
+        if let missingSuit {
+            parts.insert("缺门\(missingSuit.shortName)", at: 2)
+        }
+        return parts.joined(separator: "，")
     }
 
     private func metric(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.72))
+                .foregroundStyle(.secondary)
             Text(value)
                 .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -992,17 +1297,20 @@ private struct MahjongCountdownRing: View {
     let progress: CGFloat
     let size: CGFloat
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
+        let trackColor = colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.3)
         Canvas { context, size in
             let bounds = CGRect(x: 2, y: 2, width: size.width - 4, height: size.height - 4)
             let track = Path(roundedRect: bounds, cornerSize: CGSize(width: 14, height: 14))
-            context.stroke(track, with: .color(.white.opacity(0.3)), lineWidth: 3)
+            context.stroke(track, with: .color(trackColor), lineWidth: 3)
 
             let boundedProgress = min(max(progress, 0), 1)
             let segmentCount = Int((boundedProgress * 120).rounded(.up))
             guard segmentCount > 0 else { return }
             let activeColor = countdownColor(at: 1 - Double(boundedProgress))
-            for index in 0..<segmentCount {
+            for index in 0 ..< segmentCount {
                 let start = Double(index) / 120
                 let end = min(Double(index + 1) / 120, Double(boundedProgress))
                 let segment = track.trimmedPath(from: start, to: end)
@@ -1062,92 +1370,157 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
     let onNextRound: () -> Void
     @ViewBuilder let workflowControls: () -> WorkflowControls
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let height = proxy.size.height
-            let playerInfoGap = MahjongPlayerInfoCardMetrics.gap
-            let playerInfoHeight = MahjongPlayerInfoCardMetrics.height(areaThickness: MahjongSeatAreaMetrics.areaThickness)
-            let playerInfoWidth = MahjongPlayerInfoCardMetrics.width(areaThickness: MahjongSeatAreaMetrics.areaThickness)
-            let requiredBoardSpan = MahjongSeatAreaMetrics.handLength + 2 * (playerInfoGap + playerInfoHeight) + 16
-            let boardScale = max(0.4, min(min(width / 1_400, height / 920), min(1.22, min(width, height) / requiredBoardSpan)))
-            let maxSeatLength = max(0, 2 * (min(width / 2, height / 2) / boardScale - playerInfoGap - playerInfoHeight - 8))
-            let seatRegionLength = min(MahjongSeatAreaMetrics.handLength, maxSeatLength)
-            let horizontalZoneWidth = seatRegionLength
-            let sideMeldWidth = MahjongSeatAreaMetrics.areaThickness
-            let operationWidth = max(0, min(width - 48, MahjongSeatAreaMetrics.operationMaxWidth))
-            let operationCenterY = height - (
-                55 + MahjongSeatAreaMetrics.areaThickness / 2
-                    + MahjongSeatAreaMetrics.spacingBetweenAreas
-                    + MahjongSeatAreaMetrics.areaThickness
-                    + MahjongSeatAreaMetrics.spacingBetweenAreas
-                    + MahjongSeatAreaMetrics.operationHeight / 2
-            ) * boardScale
-            // Side-seat melds occupy the strip between that player's hand and discard area.
-            // Hand and meld zones share the same rotated dimensions and a 12 pt outside gap.
-            let sideMeldX = 52 + sideMeldWidth / 2 + MahjongSeatAreaMetrics.spacingBetweenAreas + sideMeldWidth / 2
+            let edgeInset: CGFloat = 8
+            let infoGap = MahjongPlayerInfoCardMetrics.gap
+            let handLength = MahjongSeatAreaMetrics.handLength
+            let thickness = MahjongSeatAreaMetrics.areaThickness
+            let zoneGap = MahjongSeatAreaMetrics.spacingBetweenAreas
+            // Hands alone set the scale. Player cards are placed after the hands are centered.
+            let verticalDesign = thickness + zoneGap + handLength + zoneGap + thickness * MahjongSeatAreaMetrics.localHandScale
+            let horizontalDesign = thickness * 2 + zoneGap * 2 + handLength
+            let boardScale = max(
+                0.4,
+                min(
+                    min(width / 1400, height / 920),
+                    min(1.22, min(width, height) / max(verticalDesign, horizontalDesign))
+                )
+            )
+            let horizontalZoneWidth = handLength
+            // Every hand area stays within the centered discard block's width.
+            let discardSpan = MahjongDiscardMetrics.sideWidth * 2
+                + MahjongDiscardMetrics.horizontalWidth
+                + MahjongDiscardMetrics.zoneGap * 2
+            let maxHandScale = discardSpan / handLength
+            let seatHandScale = min(1, maxHandScale)
+            let sideClearance = edgeInset + thickness * boardScale + zoneGap * boardScale
+            let localMeldSize = localMeldCornerSize()
+            let localMeldVisualWidth = localMeldSize.width * boardScale
+            let cornerLeading = localMeldVisualWidth > 0 ? edgeInset + localMeldVisualWidth + 16 : sideClearance
+            let widthFitScale = (width - cornerLeading - sideClearance - 24) / max(horizontalZoneWidth * boardScale, 1)
+            let minimumLocalScale: CGFloat = localMeldVisualWidth > 0 ? 0.85 : 1
+            let localHandScale = min(
+                MahjongSeatAreaMetrics.localHandScale,
+                maxHandScale,
+                max(widthFitScale, minimumLocalScale)
+            )
+            let localHandVisualHalf = thickness * boardScale * localHandScale / 2
+            let localHandVisualWidth = horizontalZoneWidth * boardScale * localHandScale
+            let localHandMinCenterX = cornerLeading + localHandVisualWidth / 2
+            let localHandMaxCenterX = width - sideClearance - localHandVisualWidth / 2
+            let localHandCenterX = min(max(width / 2, localHandMinCenterX), max(localHandMaxCenterX, localHandMinCenterX))
+            let infoWidth = MahjongPlayerInfoCardMetrics.compactWidth
+            let infoHeight = MahjongPlayerInfoCardMetrics.compactHeight
+            let sideInfoWidth = MahjongPlayerInfoCardMetrics.sideWidth
+            let sideInfoHeight = MahjongPlayerInfoCardMetrics.sideHeight
+            let infoVisualHalf = infoHeight * boardScale / 2
+            // Main-view info stays on the bottom edge. The hand sits just above it.
+            let localInfoCenterX = width / 2
+            let localInfoCenterY = height - edgeInset - infoVisualHalf
+            let localHandCenterY = localInfoCenterY - infoVisualHalf - infoGap * boardScale - localHandVisualHalf
+            let topHandCenterX = width / 2
+            let topHandCenterY = edgeInset + thickness * boardScale * seatHandScale / 2
+            let opponentHandBottom = topHandCenterY + thickness * boardScale * seatHandScale / 2
+            let opponentHandVisualHalf = horizontalZoneWidth * boardScale * seatHandScale / 2
+            let opponentInfoHalf = infoWidth * boardScale / 2
+            let topInfoCenterX = min(
+                width - edgeInset - opponentInfoHalf,
+                topHandCenterX + opponentHandVisualHalf + infoGap * boardScale + opponentInfoHalf
+            )
+            let localHandTop = localHandCenterY - localHandVisualHalf
+            let localHoverLift = MahjongSeatAreaMetrics.tileHeight / 3 * boardScale * localHandScale
+            let seatGap = max(24, localHoverLift)
+            // Left and right hands share the table's vertical center. Fitting them
+            // between the other hands does not move that center.
+            let sideHandCenterY = height / 2
+            let sideTopRoom = sideHandCenterY - (opponentHandBottom + zoneGap * boardScale)
+            let sideBottomRoom = (localHandTop - seatGap) - sideHandCenterY
+            let sideSpan = max(0, min(sideTopRoom, sideBottomRoom) * 2)
+            let sideFitScale = min(seatHandScale, sideSpan / max(handLength * boardScale, 1))
+            let sideHandVisualHalfWidth = thickness * boardScale * sideFitScale / 2
+            let sideHandVisualHalfHeight = handLength * boardScale * sideFitScale / 2
+            let leftHandCenterX = edgeInset + sideHandVisualHalfWidth
+            let rightHandCenterX = width - edgeInset - sideHandVisualHalfWidth
+            let sideInfoHalfWidth = sideInfoWidth * boardScale / 2
+            let sideInfoHalfHeight = sideInfoHeight * boardScale / 2
+            let alongTile = MahjongSeatAreaMetrics.tileWidth
+            let sideTileSpan = 14 * alongTile + 13 * MahjongSeatAreaMetrics.tileSpacing
+            let sideTileHalf = min(sideHandVisualHalfHeight, sideTileSpan * boardScale * sideFitScale / 2)
+            let infoGapScaled = infoGap * boardScale
+            // Own left sits just outside the tiles. If that spot is off the table,
+            // the card slides inward instead of covering the hand.
+            let preferredLeftInfoY = sideHandCenterY - sideTileHalf - infoGapScaled - sideInfoHalfHeight
+            let leftInfoCenterY = max(edgeInset + sideInfoHalfHeight, preferredLeftInfoY)
+            let leftInfoOverlapsHand = leftInfoCenterY + sideInfoHalfHeight > sideHandCenterY - sideTileHalf
+            let leftClearX = leftHandCenterX + sideHandVisualHalfWidth + infoGapScaled + sideInfoHalfWidth
+            let leftInfoCenterX = min(
+                width - edgeInset - sideInfoHalfWidth,
+                leftInfoOverlapsHand ? leftClearX : max(edgeInset + sideInfoHalfWidth, leftHandCenterX)
+            )
+            // The right seat's own left is under the column. Keep the card there
+            // and line its right edge up with the hand, even when the local hand
+            // occupies the same vertical band farther toward the center.
+            let rightHandRight = rightHandCenterX + sideHandVisualHalfWidth
+            let rightInfoCenterX = min(
+                width - edgeInset - sideInfoHalfWidth,
+                max(edgeInset + sideInfoHalfWidth, rightHandRight - sideInfoHalfWidth)
+            )
+            let preferredRightInfoY = sideHandCenterY + sideTileHalf + infoGapScaled + sideInfoHalfHeight
+            let rightInfoCenterY = min(
+                height - edgeInset - sideInfoHalfHeight,
+                max(edgeInset + sideInfoHalfHeight, preferredRightInfoY)
+            )
+            let frontGap = zoneGap * boardScale
+            let sideMeldShift = sideHandVisualHalfWidth + frontGap + sideHandVisualHalfWidth
             ZStack {
                 seatHand(actualSeat(at: 2), viewPosition: 2, width: horizontalZoneWidth, length: MahjongSeatAreaMetrics.areaThickness)
                     .frame(width: horizontalZoneWidth, height: MahjongSeatAreaMetrics.areaThickness, alignment: .center)
-                    .scaleEffect(boardScale)
-                    .position(x: width / 2, y: 55 * boardScale)
+                    .scaleEffect(boardScale * seatHandScale)
+                    .position(x: topHandCenterX, y: topHandCenterY)
                 seatHand(actualSeat(at: 0), viewPosition: 0, width: horizontalZoneWidth, length: MahjongSeatAreaMetrics.areaThickness)
                     .frame(width: horizontalZoneWidth, height: MahjongSeatAreaMetrics.areaThickness, alignment: .center)
-                    .scaleEffect(boardScale)
-                    .position(x: width / 2, y: height - 55 * boardScale)
+                    .scaleEffect(boardScale * localHandScale)
+                    .position(x: localHandCenterX, y: localHandCenterY)
 
-                seatHand(actualSeat(at: 1), viewPosition: 1, width: sideMeldWidth, length: seatRegionLength)
-                    .frame(width: sideMeldWidth, height: seatRegionLength, alignment: .center)
-                    .scaleEffect(boardScale)
-                    .position(x: 52 * boardScale, y: height / 2)
-                seatHand(actualSeat(at: 3), viewPosition: 3, width: sideMeldWidth, length: seatRegionLength)
-                    .frame(width: sideMeldWidth, height: seatRegionLength, alignment: .center)
-                    .scaleEffect(boardScale)
-                    .position(x: width - 52 * boardScale, y: height / 2)
+                seatHand(actualSeat(at: 1), viewPosition: 1, width: thickness, length: handLength)
+                    .frame(width: thickness, height: handLength, alignment: .center)
+                    .scaleEffect(boardScale * sideFitScale)
+                    .position(x: leftHandCenterX, y: sideHandCenterY)
+                seatHand(actualSeat(at: 3), viewPosition: 3, width: thickness, length: handLength)
+                    .frame(width: thickness, height: handLength, alignment: .center)
+                    .scaleEffect(boardScale * sideFitScale)
+                    .position(x: rightHandCenterX, y: sideHandCenterY)
 
-                // Keep the player info height aligned with its meld/hand stack,
-                // while giving the text more horizontal room.
-                playerInfoCard(for: actualSeat(at: 0), width: playerInfoWidth, height: playerInfoHeight)
-                    .scaleEffect(boardScale)
+                frontMelds(viewPosition: 2)
+                    .scaleEffect(boardScale * seatHandScale)
                     .position(
-                        x: width / 2 - (horizontalZoneWidth / 2 + playerInfoGap + playerInfoWidth / 2) * boardScale,
-                        y: height - (55 + (MahjongSeatAreaMetrics.areaThickness + playerInfoGap) / 2) * boardScale
+                        x: topHandCenterX,
+                        y: opponentHandBottom + frontGap + MahjongSeatAreaMetrics.areaThickness * boardScale / 2
                     )
-                playerInfoCard(for: actualSeat(at: 2), width: playerInfoWidth, height: playerInfoHeight)
-                    .scaleEffect(boardScale)
-                    .position(
-                        x: width / 2 + (horizontalZoneWidth / 2 + playerInfoGap + playerInfoWidth / 2) * boardScale,
-                        y: (55 + (MahjongSeatAreaMetrics.areaThickness + playerInfoGap) / 2) * boardScale
-                    )
-                playerInfoCard(for: actualSeat(at: 1), width: playerInfoWidth, height: playerInfoHeight)
-                    .scaleEffect(boardScale)
-                    .position(
-                        x: ((52 + sideMeldX) / 2 + (playerInfoWidth - playerInfoHeight) / 2) * boardScale,
-                        y: height / 2 - (seatRegionLength / 2 + playerInfoGap + playerInfoHeight / 2) * boardScale
-                    )
-                playerInfoCard(for: actualSeat(at: 3), width: playerInfoWidth, height: playerInfoHeight)
-                    .scaleEffect(boardScale)
-                    .position(
-                        x: width - ((52 + sideMeldX) / 2 + (playerInfoWidth - playerInfoHeight) / 2) * boardScale,
-                        y: height / 2 + (seatRegionLength / 2 + playerInfoGap + playerInfoHeight / 2) * boardScale
-                    )
+                frontMelds(viewPosition: 1)
+                    .scaleEffect(boardScale * sideFitScale)
+                    .position(x: leftHandCenterX + sideMeldShift, y: sideHandCenterY)
+                frontMelds(viewPosition: 3)
+                    .scaleEffect(boardScale * sideFitScale)
+                    .position(x: rightHandCenterX - sideMeldShift, y: sideHandCenterY)
 
-                meldTiles(actualSeat(at: 2), viewPosition: 2, width: horizontalZoneWidth, length: MahjongSeatAreaMetrics.areaThickness)
-                    .frame(width: horizontalZoneWidth, height: MahjongSeatAreaMetrics.areaThickness)
+                playerInfoCard(for: actualSeat(at: 0), viewPosition: 0, width: infoWidth, height: infoHeight)
                     .scaleEffect(boardScale)
-                    .position(x: width / 2, y: (55 + MahjongSeatAreaMetrics.areaThickness + MahjongSeatAreaMetrics.spacingBetweenAreas) * boardScale)
-                meldTiles(actualSeat(at: 0), viewPosition: 0, width: horizontalZoneWidth, length: MahjongSeatAreaMetrics.areaThickness)
-                    .frame(width: horizontalZoneWidth, height: MahjongSeatAreaMetrics.areaThickness)
+                    .position(x: localInfoCenterX, y: localInfoCenterY)
+                playerInfoCard(for: actualSeat(at: 2), viewPosition: 2, width: infoWidth, height: infoHeight)
                     .scaleEffect(boardScale)
-                    .position(x: width / 2, y: height - (55 + MahjongSeatAreaMetrics.areaThickness + MahjongSeatAreaMetrics.spacingBetweenAreas) * boardScale)
-                meldTiles(actualSeat(at: 1), viewPosition: 1, width: sideMeldWidth, length: seatRegionLength)
-                    .frame(width: sideMeldWidth, height: seatRegionLength)
+                    .position(x: topInfoCenterX, y: topHandCenterY)
+                playerInfoCard(for: actualSeat(at: 1), viewPosition: 1, width: sideInfoWidth, height: sideInfoHeight)
                     .scaleEffect(boardScale)
-                    .position(x: sideMeldX * boardScale, y: height / 2)
-                meldTiles(actualSeat(at: 3), viewPosition: 3, width: sideMeldWidth, length: seatRegionLength)
-                    .frame(width: sideMeldWidth, height: seatRegionLength)
+                    .position(x: leftInfoCenterX, y: leftInfoCenterY)
+                playerInfoCard(for: actualSeat(at: 3), viewPosition: 3, width: sideInfoWidth, height: sideInfoHeight)
                     .scaleEffect(boardScale)
-                    .position(x: width - sideMeldX * boardScale, y: height / 2)
+                    .position(x: rightInfoCenterX, y: rightInfoCenterY)
 
                 discardArea(width: width, height: height)
                     .scaleEffect(boardScale)
@@ -1163,29 +1536,45 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
                         .fixedSize()
                         .position(x: width / 2, y: height / 2)
                 }
+            }
+            .overlay(alignment: .bottomLeading) {
+                localMeldCorner()
+                    .scaleEffect(boardScale, anchor: .bottomLeading)
+                    .padding(edgeInset)
+            }
+            .overlay(alignment: .bottomTrailing) {
                 workflowControls()
-                    .frame(width: operationWidth, height: MahjongSeatAreaMetrics.operationHeight)
-                    .scaleEffect(boardScale)
-                    .position(x: width / 2, y: operationCenterY)
-
+                    .fixedSize()
+                    .padding(16)
             }
         }
     }
 
-    private func playerInfoCard(for seat: Int, width: CGFloat, height: CGFloat) -> some View {
+    private func playerInfoCard(for seat: Int, viewPosition: Int, width: CGFloat, height: CGFloat) -> some View {
         let profile = playerProfile(for: seat)
 
         return MahjongPlayerInfoCard(
             profile: profile,
+            seatName: game.seatName(seat),
             missingSuit: game.ruleset == .sichuan && game.missingSuits.indices.contains(seat)
                 ? game.missingSuits[seat]
                 : nil,
             countdownActive: game.isCountdownActive(for: seat),
-            countdownDeadline: game.countdownDeadline(for: seat)
+            countdownDeadline: game.countdownDeadline(for: seat),
+            stacksVertically: viewPosition == 1 || viewPosition == 3,
+            detailArrowEdge: detailArrowEdge(for: viewPosition)
         )
-            .frame(width: width, height: height)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(game.seatName(seat))，\(profile.nickname)，余额\(profile.balance)毛格子，胜率\(profile.winRate)%，胜场\(profile.wins)，败场\(profile.losses)，逃跑\(profile.escapes)")
+        .frame(width: width, height: height)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func detailArrowEdge(for viewPosition: Int) -> Edge {
+        switch viewPosition {
+        case 1: .top
+        case 2: .trailing
+        case 3: .bottom
+        default: .bottom
+        }
     }
 
     private func actualSeat(at viewPosition: Int) -> Int {
@@ -1205,12 +1594,17 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
             return profile
         }
         if game.mode == .lan, game.humanSeats.contains(seat) {
-            if seat == game.localSeat { return archive.player }
+            if seat == game.localSeat {
+                return archive.player
+            }
             return MahjongPlayerArchive(id: "lan-seat-\(seat)", nickname: game.seatNicknames[seat], avatarStyle: .player, balance: 0)
         }
-        if seat == 0 { return archive.player }
+        if seat == 0 {
+            return archive.player
+        }
         if game.aiProfileIDs.indices.contains(seat - 1),
-           let storedProfile = archive.profile(id: game.aiProfileIDs[seat - 1]) {
+           let storedProfile = archive.profile(id: game.aiProfileIDs[seat - 1])
+        {
             return storedProfile
         }
         return MahjongPlayerArchive(
@@ -1222,99 +1616,26 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
         )
     }
 
-    private func layoutDebugOverlay(
-        width: CGFloat,
-        height: CGFloat,
-        boardScale: CGFloat,
-        horizontalZoneWidth: CGFloat,
-        sideMeldWidth: CGFloat,
-        sideMeldX: CGFloat,
-        seatRegionLength: CGFloat,
-        operationWidth: CGFloat,
-        operationCenterY: CGFloat
-    ) -> some View {
-        let horizontalMeldWidth = horizontalZoneWidth
-        let sideMeldHeight = seatRegionLength
-        let areaThickness = MahjongSeatAreaMetrics.areaThickness
-        let playerInfoGap = MahjongPlayerInfoCardMetrics.gap
-        let playerInfoHeight = MahjongPlayerInfoCardMetrics.height(areaThickness: areaThickness)
-        let playerInfoWidth = MahjongPlayerInfoCardMetrics.width(areaThickness: areaThickness)
-
-        return ZStack {
-            debugRegion("\(game.seatName(actualSeat(at: 2)))手牌区", width: horizontalZoneWidth, height: areaThickness, scale: boardScale)
-                .position(x: width / 2, y: 55 * boardScale)
-            debugRegion("\(game.seatName(actualSeat(at: 0)))手牌区", width: horizontalZoneWidth, height: areaThickness, scale: boardScale)
-                .position(x: width / 2, y: height - 55 * boardScale)
-            debugRegion("\(game.seatName(actualSeat(at: 1)))手牌区", width: areaThickness, height: sideMeldHeight, scale: boardScale)
-                .position(x: 52 * boardScale, y: height / 2)
-            debugRegion("\(game.seatName(actualSeat(at: 3)))手牌区", width: areaThickness, height: sideMeldHeight, scale: boardScale)
-                .position(x: width - 52 * boardScale, y: height / 2)
-
-            debugRegion("\(game.seatName(actualSeat(at: 0)))玩家信息区", width: playerInfoWidth, height: playerInfoHeight, scale: boardScale)
-                .position(
-                    x: width / 2 - (horizontalZoneWidth / 2 + playerInfoGap + playerInfoWidth / 2) * boardScale,
-                    y: height - (55 + (areaThickness + playerInfoGap) / 2) * boardScale
-                )
-            debugRegion("\(game.seatName(actualSeat(at: 2)))玩家信息区", width: playerInfoWidth, height: playerInfoHeight, scale: boardScale)
-                .position(
-                    x: width / 2 + (horizontalZoneWidth / 2 + playerInfoGap + playerInfoWidth / 2) * boardScale,
-                    y: (55 + (areaThickness + playerInfoGap) / 2) * boardScale
-                )
-            debugRegion("\(game.seatName(actualSeat(at: 1)))玩家信息区", width: playerInfoWidth, height: playerInfoHeight, scale: boardScale)
-                .position(
-                    x: ((52 + sideMeldX) / 2 + (playerInfoWidth - playerInfoHeight) / 2) * boardScale,
-                    y: height / 2 - (seatRegionLength / 2 + playerInfoGap + playerInfoHeight / 2) * boardScale
-                )
-            debugRegion("\(game.seatName(actualSeat(at: 3)))玩家信息区", width: playerInfoWidth, height: playerInfoHeight, scale: boardScale)
-                .position(
-                    x: width - ((52 + sideMeldX) / 2 + (playerInfoWidth - playerInfoHeight) / 2) * boardScale,
-                    y: height / 2 + (seatRegionLength / 2 + playerInfoGap + playerInfoHeight / 2) * boardScale
-                )
-
-            debugRegion("\(game.seatName(actualSeat(at: 2)))吃碰杠区", width: horizontalMeldWidth, height: areaThickness, scale: boardScale)
-                .position(x: width / 2, y: (55 + areaThickness + MahjongSeatAreaMetrics.spacingBetweenAreas) * boardScale)
-            debugRegion("\(game.seatName(actualSeat(at: 0)))吃碰杠区", width: horizontalMeldWidth, height: areaThickness, scale: boardScale)
-                .position(x: width / 2, y: height - (55 + areaThickness + MahjongSeatAreaMetrics.spacingBetweenAreas) * boardScale)
-            debugRegion("\(game.seatName(actualSeat(at: 1)))吃碰杠区", width: sideMeldWidth, height: sideMeldHeight, scale: boardScale)
-                .position(x: sideMeldX * boardScale, y: height / 2)
-            debugRegion("\(game.seatName(actualSeat(at: 3)))吃碰杠区", width: sideMeldWidth, height: sideMeldHeight, scale: boardScale)
-                .position(x: width - sideMeldX * boardScale, y: height / 2)
-            debugRegion("\(game.seatName(game.localSeat))玩家操作区", width: operationWidth, height: MahjongSeatAreaMetrics.operationHeight, scale: boardScale)
-                .position(x: width / 2, y: operationCenterY)
-
-            debugRegion("\(game.seatName(actualSeat(at: 1)))弃牌区", width: MahjongDiscardMetrics.sideWidth, height: MahjongDiscardMetrics.sideAreaHeight, scale: boardScale)
-                .position(MahjongDiscardMetrics.scaledCenter(for: 1, width: width, height: height, scale: boardScale))
-            debugRegion("\(game.seatName(actualSeat(at: 3)))弃牌区", width: MahjongDiscardMetrics.sideWidth, height: MahjongDiscardMetrics.sideAreaHeight, scale: boardScale)
-                .position(MahjongDiscardMetrics.scaledCenter(for: 3, width: width, height: height, scale: boardScale))
-            debugRegion("\(game.seatName(actualSeat(at: 2)))弃牌区", width: MahjongDiscardMetrics.horizontalWidth, height: MahjongDiscardMetrics.horizontalHeight, scale: boardScale)
-                .position(MahjongDiscardMetrics.scaledCenter(for: 2, width: width, height: height, scale: boardScale))
-            debugRegion("\(game.seatName(actualSeat(at: 0)))弃牌区", width: MahjongDiscardMetrics.horizontalWidth, height: MahjongDiscardMetrics.horizontalHeight, scale: boardScale)
-                .position(MahjongDiscardMetrics.scaledCenter(for: 0, width: width, height: height, scale: boardScale))
-            debugRegion("玩家准备区", width: 620, height: 100)
-                .position(x: width / 2, y: height / 2)
-        }
-    }
-
     private var preparationControls: some View {
         VStack(spacing: 10) {
             readyPlayerBadges
             Button("准备") { game.markReady() }
-                .buttonStyle(JarvisSecondaryButtonStyle(tint: .black))
+                .buttonStyle(JarvisSecondaryButtonStyle())
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 20)
-        .jarvisGlass(tint: .white.opacity(0.62), cornerRadius: 22, interactive: false)
+        .jarvisGlass(cornerRadius: 22, interactive: false)
     }
 
     private var settlementControls: some View {
         VStack(spacing: 14) {
             Text(game.winner.map { "恭喜【\(playerProfile(for: $0).nickname)】获得本局胜利" } ?? "本局流局")
                 .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundStyle(.black)
+                .foregroundStyle(.primary)
 
             Text(game.roundResult)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.black.opacity(0.78))
+                .foregroundStyle(.secondary)
 
             if let playerResults = roundSettlement?.playerResults, !playerResults.isEmpty {
                 VStack(spacing: 5) {
@@ -1338,68 +1659,51 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
 
             if roundNotice?.contains("挑战获胜") == true || roundNotice?.contains("挑战已完成") == true {
                 Button("返回档案") { onNextRound() }
-                    .buttonStyle(JarvisSecondaryButtonStyle(tint: .black))
+                    .buttonStyle(JarvisSecondaryButtonStyle())
             } else {
                 Button("再来一局") { onNextRound() }
-                    .buttonStyle(JarvisSecondaryButtonStyle(tint: .black))
+                    .buttonStyle(JarvisSecondaryButtonStyle())
             }
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 20)
-        .jarvisGlass(tint: .white.opacity(0.62), cornerRadius: 22, interactive: false)
+        .jarvisGlass(cornerRadius: 22, interactive: false)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("牌局结算")
     }
 
     private var readyPlayerBadges: some View {
         HStack(spacing: 6) {
-            ForEach(0..<4, id: \.self) { seat in
+            ForEach(0 ..< 4, id: \.self) { seat in
                 if game.readySeats.indices.contains(seat), game.readySeats[seat] {
                     HStack(spacing: 5) {
                         Image(systemName: "checkmark.circle.fill")
                         Text("\(playerProfile(for: seat).nickname)已就绪")
                     }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.62), in: Capsule())
+                    .mahjongAdaptiveTag()
                 }
             }
         }
     }
 
     private func signedBalanceChange(_ value: Int) -> String {
-        if value > 0 { return "+\(value.formatted()) 毛格子" }
-        if value < 0 { return "−\(abs(value).formatted()) 毛格子" }
+        if value > 0 {
+            return "+\(value.formatted()) 毛格子"
+        }
+        if value < 0 {
+            return "−\(abs(value).formatted()) 毛格子"
+        }
         return "0 毛格子"
     }
 
-    private func debugRegion(_ title: String, width: CGFloat, height: CGFloat, scale: CGFloat = 1) -> some View {
-        Rectangle()
-            .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-            .foregroundStyle(Color.red.opacity(0.9))
-            .frame(width: width, height: height)
-            .overlay(alignment: .topLeading) {
-                Text(title)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.red.opacity(0.9))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 3))
-                    .fixedSize()
-                    .offset(x: 3, y: -11)
-            }
-            .scaleEffect(scale)
-    }
-
     private func discardArea(width: CGFloat, height: CGFloat) -> some View {
-        ZStack {
+        let palette = MahjongTablePalette(scheme: colorScheme)
+        return ZStack {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.black.opacity(0.14))
+                .fill(palette.discardFill)
                 .overlay {
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
+                        .strokeBorder(palette.discardStroke, lineWidth: 1)
                 }
                 .frame(
                     width: MahjongDiscardMetrics.sideWidth * 2
@@ -1450,7 +1754,7 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
         let localTiles = Array((game.discards.indices.contains(seat) ? game.discards[seat] : []).prefix(28))
         let columns = viewPosition == 1 || viewPosition == 3 ? 4 : 7
         let rows = viewPosition == 1 || viewPosition == 3 ? 7 : 4
-        var cells = Array<MahjongTile?>(repeating: nil, count: columns * rows)
+        var cells = [MahjongTile?](repeating: nil, count: columns * rows)
 
         for (index, tile) in localTiles.enumerated() {
             let localRow = index / 7
@@ -1478,19 +1782,25 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
         let drawsSeparateTile = game.justDrew && seat == game.turn && displayedTiles.count > 1
         let baseTiles = drawsSeparateTile ? Array(displayedTiles.dropLast()) : displayedTiles
         let drawnTile = drawsSeparateTile ? displayedTiles.last : nil
-        // Full thirteen-tile hands start at local left. Once a meld reduces the hand,
-        // center the base row; ordinary draw/discard turns do not change that alignment.
         let drawDirection: CGFloat = viewPosition == 0 || viewPosition == 1 ? 1 : -1
         let baseWidth = baseHandWidth(baseTiles.count)
         let axisLength = isSideSeat ? length : width
         let hasReducedHand = baseTiles.count < 13
-        let localBaseCenter = hasReducedHand ? axisLength / 2 : MahjongSeatAreaMetrics.safeInset + baseWidth / 2
-        let baseAxisPosition = drawDirection > 0 ? localBaseCenter : axisLength - localBaseCenter
-        let localDrawAnchor: CGFloat = hasReducedHand
-            ? axisLength / 2 + baseWidth / 2 + MahjongSeatAreaMetrics.drawGap + MahjongSeatAreaMetrics.tileWidth / 2
-            : MahjongSeatAreaMetrics.safeInset + baseHandWidth(13)
-                + MahjongSeatAreaMetrics.drawGap + MahjongSeatAreaMetrics.tileWidth / 2
-        let drawnAxisPosition = drawDirection > 0 ? localDrawAnchor : axisLength - localDrawAnchor
+        // The local hand starts at local left when full, and centers when short.
+        // The other three hands stay centered on their own side.
+        let centersOnSide = viewPosition != 0
+        let trailingSpan: CGFloat = drawnTile == nil
+            ? 0
+            : MahjongSeatAreaMetrics.drawGap + MahjongSeatAreaMetrics.tileWidth
+        let handLeft: CGFloat = centersOnSide || hasReducedHand
+            ? max(0, (axisLength - baseWidth - trailingSpan) / 2)
+            : MahjongSeatAreaMetrics.safeInset
+        let baseAxisPosition = screenAxis(handLeft + baseWidth / 2, axisLength: axisLength, growsPositive: drawDirection > 0)
+        let drawnAxisPosition = screenAxis(
+            handLeft + baseWidth + MahjongSeatAreaMetrics.drawGap + MahjongSeatAreaMetrics.tileWidth / 2,
+            axisLength: axisLength,
+            growsPositive: drawDirection > 0
+        )
 
         return GeometryReader { geometry in
             ZStack {
@@ -1594,6 +1904,72 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
         return CGFloat(count * 48 + (count - 1) * 2)
     }
 
+    private func screenAxis(_ localCenter: CGFloat, axisLength: CGFloat, growsPositive: Bool) -> CGFloat {
+        growsPositive ? localCenter : axisLength - localCenter
+    }
+
+    private func seatHasMelds(_ seat: Int) -> Bool {
+        game.melds.indices.contains(seat) && !game.melds[seat].isEmpty
+    }
+
+    /// Other players' exposed melds sit in a strip just in front of that hand.
+    @ViewBuilder
+    private func frontMelds(viewPosition: Int) -> some View {
+        let seat = actualSeat(at: viewPosition)
+        if seatHasMelds(seat) {
+            handMeldRow(seat: seat, viewPosition: viewPosition)
+                .fixedSize()
+        }
+    }
+
+    /// Main-view melds occupy the bottom-left corner, up to two rows of two groups.
+    @ViewBuilder
+    private func localMeldCorner() -> some View {
+        let seat = actualSeat(at: 0)
+        let melds = Array(meldsInSeatOrder(seat, viewPosition: 0).prefix(4))
+        if !melds.isEmpty {
+            let top = Array(melds.prefix(2))
+            let bottom = Array(melds.dropFirst(2))
+            VStack(alignment: .leading, spacing: MahjongSeatAreaMetrics.meldGroupGap) {
+                meldCornerRow(top, seat: seat)
+                if !bottom.isEmpty {
+                    meldCornerRow(bottom, seat: seat)
+                }
+            }
+            .accessibilityElement(children: .contain)
+        }
+    }
+
+    private func meldCornerRow(_ melds: [MahjongMeld], seat: Int) -> some View {
+        HStack(alignment: .top, spacing: MahjongSeatAreaMetrics.meldGroupGap) {
+            ForEach(melds) { meld in
+                meldGroup(meld, seat: seat, viewPosition: 0, isSide: false)
+            }
+        }
+    }
+
+    private func localMeldCornerSize() -> CGSize {
+        let seat = actualSeat(at: 0)
+        let melds = Array(meldsInSeatOrder(seat, viewPosition: 0).prefix(4))
+        guard !melds.isEmpty else { return .zero }
+        func rowWidth(_ row: ArraySlice<MahjongMeld>) -> CGFloat {
+            let widths = row.map { uprightMeldWidth($0) }
+            let gaps = MahjongSeatAreaMetrics.meldGroupGap * CGFloat(max(0, widths.count - 1))
+            return widths.reduce(0, +) + gaps
+        }
+        let width = max(rowWidth(melds.prefix(2)), rowWidth(melds.dropFirst(2)))
+        let rows: CGFloat = melds.count > 2 ? 2 : 1
+        let height = rows * MahjongSeatAreaMetrics.tileHeight
+            + (rows - 1) * MahjongSeatAreaMetrics.meldGroupGap
+        return CGSize(width: width, height: height)
+    }
+
+    private func uprightMeldWidth(_ meld: MahjongMeld) -> CGFloat {
+        let count = max(meld.tiles.count, 1)
+        return CGFloat(count) * MahjongSeatAreaMetrics.tileWidth
+            + CGFloat(count - 1) * MahjongSeatAreaMetrics.tileSpacing
+    }
+
     @ViewBuilder
     private func handTile(
         _ entry: MahjongHandDisplayTile,
@@ -1670,51 +2046,29 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
             .frame(width: isSideways ? 68 : 48, height: isSideways ? 48 : 68)
     }
 
-    private func meldTiles(_ seat: Int, viewPosition: Int, width: CGFloat, length: CGFloat) -> some View {
+    @ViewBuilder
+    private func handMeldRow(seat: Int, viewPosition: Int) -> some View {
         let isSide = viewPosition == 1 || viewPosition == 3
-        let safeInset = MahjongSeatAreaMetrics.safeInset
-        let contentWidth = max(0, width - 2 * safeInset)
-        let contentLength = max(0, length - 2 * safeInset)
-        return VStack(alignment: .leading, spacing: 0) {
-            if game.melds.indices.contains(seat), !game.melds[seat].isEmpty {
-                if isSide {
-                    ScrollView(.vertical) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(meldsInSeatOrder(seat, viewPosition: viewPosition)) { meld in
-                                meldGroup(meld, seat: seat, viewPosition: viewPosition, isSide: true)
-                            }
-                        }
-                        .frame(minWidth: contentWidth, maxWidth: contentWidth,
-                               minHeight: contentLength, alignment: viewPosition == 3 ? .bottom : .top)
+        let groups = meldsInSeatOrder(seat, viewPosition: viewPosition)
+        Group {
+            if isSide {
+                VStack(alignment: .center, spacing: MahjongSeatAreaMetrics.meldGroupGap) {
+                    ForEach(groups) { meld in
+                        meldGroup(meld, seat: seat, viewPosition: viewPosition, isSide: true)
                     }
-                    .frame(width: contentWidth, height: contentLength, alignment: .topLeading)
-                    .padding(safeInset)
-                    .defaultScrollAnchor(viewPosition == 3 ? .bottom : .top)
-                    .scrollIndicators(.hidden)
-                    .accessibilityLabel("\(game.seatName(seat)) 的吃碰杠明牌")
-                } else {
-                    ScrollView(.horizontal) {
-                        HStack(alignment: .center, spacing: 8) {
-                            ForEach(meldsInSeatOrder(seat, viewPosition: viewPosition)) { meld in
-                                meldGroup(meld, seat: seat, viewPosition: viewPosition, isSide: false)
-                            }
-                        }
-                        .frame(minWidth: contentWidth, alignment: viewPosition == 2 ? .trailing : .leading)
-                    }
-                    .frame(width: contentWidth, height: MahjongSeatAreaMetrics.tileHeight,
-                           alignment: viewPosition == 2 ? .trailing : .leading)
-                    .padding(safeInset)
-                    .scrollIndicators(.hidden)
-                    .accessibilityLabel("\(game.seatName(seat)) 的吃碰杠明牌")
                 }
             } else {
-                Color.clear
+                HStack(alignment: .center, spacing: MahjongSeatAreaMetrics.meldGroupGap) {
+                    ForEach(groups) { meld in
+                        meldGroup(meld, seat: seat, viewPosition: viewPosition, isSide: false)
+                    }
+                }
             }
         }
-        .frame(width: width, height: length, alignment: .topLeading)
+        .accessibilityLabel("\(game.seatName(seat)) 的吃碰杠明牌")
     }
 
-    private func meldGroup(_ meld: MahjongMeld, seat: Int, viewPosition: Int, isSide: Bool) -> some View {
+    private func meldGroup(_ meld: MahjongMeld, seat _: Int, viewPosition: Int, isSide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             if isSide {
                 VStack(spacing: 2) {
@@ -1749,29 +2103,36 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
 private struct MahjongTileBackView: View {
     var scale: CGFloat = 1
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
+        let palette = MahjongTablePalette(scheme: colorScheme)
+        // Same shell as MahjongTileView. Only the face panel is the back.
+        let cornerRadius: CGFloat = 9
         ZStack {
-            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                .fill(Color(red: 0.025, green: 0.17, blue: 0.10))
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(palette.tileSide)
                 .offset(x: 3 * scale, y: -4 * scale)
-            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(LinearGradient(
-                    colors: [Color(red: 0.91, green: 0.81, blue: 0.58), Color(red: 0.69, green: 0.54, blue: 0.31)],
+                    colors: [Color(red: 0.88, green: 0.74, blue: 0.48), Color(red: 0.67, green: 0.50, blue: 0.28)],
                     startPoint: .top,
                     endPoint: .bottom
                 ))
                 .offset(x: 1.5 * scale, y: -2 * scale)
-            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(LinearGradient(
-                    colors: [Color(red: 0.20, green: 0.59, blue: 0.33), Color(red: 0.09, green: 0.39, blue: 0.23)],
+                    colors: palette.tileBackGreen,
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ))
-                .padding(4 * scale)
-            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                .strokeBorder(Color(red: 0.89, green: 0.78, blue: 0.50).opacity(0.85), lineWidth: 0.45)
-                .padding(8 * scale)
-            // Keep the back artwork upright for every seat, matching the player's tiles.
+                .shadow(color: .black.opacity(palette.tileShadowOpacity(compact: false)), radius: 2.5, x: 1.5, y: -1.5)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color(red: 0.24, green: 0.21, blue: 0.19), lineWidth: 1.35 * scale)
+            // Back artwork stays upright so the tile edge matches the local hand.
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(Color(red: 0.89, green: 0.78, blue: 0.50).opacity(0.85), lineWidth: 0.7 * scale)
+                .padding(6 * scale)
             VStack(spacing: 2 * scale) {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 6 * scale, weight: .bold))
@@ -1795,10 +2156,13 @@ struct MahjongTileView: View {
     var scale: CGFloat = 1
     var faceRotation: CGFloat = 0
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
+        let palette = MahjongTablePalette(scheme: colorScheme)
         ZStack {
             RoundedRectangle(cornerRadius: compact ? 3 : 9, style: .continuous)
-                .fill(Color(red: 0.035, green: 0.22, blue: 0.12))
+                .fill(palette.tileSide)
                 .offset(x: compact ? 1 : 3 * scale, y: compact ? -1.2 : -4 * scale)
             RoundedRectangle(cornerRadius: compact ? 3 : 9, style: .continuous)
                 .fill(LinearGradient(colors: [Color(red: 0.88, green: 0.74, blue: 0.48), Color(red: 0.67, green: 0.50, blue: 0.28)], startPoint: .top, endPoint: .bottom))
@@ -1813,7 +2177,7 @@ struct MahjongTileView: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .shadow(color: .black.opacity(compact ? 0.08 : 0.18), radius: compact ? 0.8 : 2.5, x: compact ? 0.5 : 1.5, y: compact ? -0.8 : -1.5)
+                .shadow(color: .black.opacity(palette.tileShadowOpacity(compact: compact)), radius: compact ? 0.8 : 2.5, x: compact ? 0.5 : 1.5, y: compact ? -0.8 : -1.5)
             RoundedRectangle(cornerRadius: compact ? 3 : 9, style: .continuous)
                 .strokeBorder(Color(red: 0.24, green: 0.21, blue: 0.19), lineWidth: compact ? 0.65 : 1.35 * scale)
             MahjongTileFace(tile: tile, compact: compact, rotation: faceRotation, scale: scale)
@@ -1827,11 +2191,12 @@ struct MahjongTileView: View {
     }
 }
 
-private struct MahjongTileFace: View {
+struct MahjongTileFace: View {
     let tile: MahjongTile
     let compact: Bool
     var rotation: CGFloat = 0
     var scale: CGFloat = 1
+    var fullness: CGFloat = 1
 
     var body: some View {
         Group {
@@ -1860,7 +2225,7 @@ private struct MahjongTileFace: View {
                         let nearest = pips.filter { $0.x != pip.x || $0.y != pip.y }.map {
                             hypot(($0.x - pip.x) * size.width, ($0.y - pip.y) * size.height)
                         }.min() ?? min(size.width, size.height)
-                        let baseRadius = compact ? 1.7 : min(size.width * 0.14, size.height * 0.095)
+                        let baseRadius = (compact ? 1.7 : min(size.width * 0.14, size.height * 0.095)) * fullness
                         let radius = min(baseRadius, nearest * 0.43)
                         drawConcentricDot(at: CGPoint(x: pip.x * size.width, y: pip.y * size.height), radius: radius, in: &context, color: color(for: pip.ink))
                     }
@@ -1877,14 +2242,14 @@ private struct MahjongTileFace: View {
                 }
             case let .suited(.characters, rank):
                 let numbers = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
-                drawCalligraphy(numbers[rank], in: &context, at: CGPoint(x: size.width / 2, y: size.height * 0.34), font: compact ? 8 : 19, color: .blue)
-                drawCalligraphy("萬", in: &context, at: CGPoint(x: size.width / 2, y: size.height * 0.70), font: compact ? 8 : 17, color: .red)
+                drawCalligraphy(numbers[rank], in: &context, at: CGPoint(x: size.width / 2, y: size.height * 0.33), font: (compact ? 8 : 19) * fullness, color: .blue)
+                drawCalligraphy("萬", in: &context, at: CGPoint(x: size.width / 2, y: size.height * 0.71), font: (compact ? 8 : 17) * fullness, color: .red)
             case let .honor(rank):
                 let glyphs = ["東", "南", "西", "北", "中", "發", "白"]
                 if rank == 6 {
                     drawWhiteDragon(in: &context, size: size)
                 } else {
-                    drawCalligraphy(glyphs[rank], in: &context, at: CGPoint(x: size.width / 2, y: size.height * 0.53), font: compact ? 12 : 27, color: rank == 4 ? .red : (rank == 5 ? .green : .blue))
+                    drawCalligraphy(glyphs[rank], in: &context, at: CGPoint(x: size.width / 2, y: size.height * 0.52), font: (compact ? 12 : 27) * fullness, color: rank == 4 ? .red : (rank == 5 ? .green : .blue))
                 }
             }
         }
@@ -1921,7 +2286,7 @@ private struct MahjongTileFace: View {
         let radiusY = size.height * 0.21
         let petalRadiusX = size.width * 0.048
         let petalRadiusY = size.height * 0.049
-        for index in 0..<16 {
+        for index in 0 ..< 16 {
             let angle = CGFloat(index) * .pi * 2 / 16
             let point = CGPoint(x: center.x + cos(angle) * radiusX * 0.645, y: center.y + sin(angle) * radiusY * 0.645)
             let petal = CGRect(x: point.x - petalRadiusX, y: point.y - petalRadiusY, width: petalRadiusX * 2, height: petalRadiusY * 2)
@@ -1943,8 +2308,8 @@ private struct MahjongTileFace: View {
     }
 
     private func drawBambooStick(at point: CGPoint, in context: inout GraphicsContext, size: CGSize, color: Color) {
-        let halfWidth = compact ? 1.15 : min(size.width * 0.09, 3.1)
-        let halfHeight = compact ? 2.6 : min(size.height * 0.115, 6.8)
+        let halfWidth = (compact ? 1.15 : min(size.width * 0.09, 3.1)) * fullness
+        let halfHeight = (compact ? 2.6 : min(size.height * 0.115, 6.8)) * fullness
         var shape = Path()
         shape.move(to: CGPoint(x: point.x, y: point.y - halfHeight))
         shape.addCurve(to: CGPoint(x: point.x + halfWidth * 0.72, y: point.y - halfHeight * 0.62), control1: CGPoint(x: point.x + halfWidth * 1.05, y: point.y - halfHeight * 0.96), control2: CGPoint(x: point.x + halfWidth * 0.82, y: point.y - halfHeight * 0.86))
@@ -2005,7 +2370,9 @@ private struct MahjongTileFace: View {
         let green = color(for: .green), blue = color(for: .blue), red = color(for: .red)
         let sx = size.width / 104, sy = size.height / 148
         let line = min(sx, sy)
-        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * sx, y: y * sy) }
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: x * sx, y: y * sy)
+        }
         var branch = Path()
         branch.move(to: point(18, 116))
         branch.addQuadCurve(to: point(61, 65), control: point(35, 86))
@@ -2070,7 +2437,9 @@ private struct MahjongTileFace: View {
     }
 
     private func dotPattern(_ rank: Int) -> [Pip] {
-        func p(_ x: CGFloat, _ y: CGFloat, _ ink: MahjongTileInk) -> Pip { Pip(x: x, y: y, ink: ink) }
+        func p(_ x: CGFloat, _ y: CGFloat, _ ink: MahjongTileInk) -> Pip {
+            Pip(x: x, y: y, ink: ink)
+        }
         switch rank {
         case 2: return [p(0.5, 0.32, .blue), p(0.5, 0.68, .green)]
         case 3: return [p(0.27, 0.25, .blue), p(0.5, 0.5, .red), p(0.73, 0.75, .green)]
@@ -2084,7 +2453,9 @@ private struct MahjongTileFace: View {
     }
 
     private func bambooPattern(_ rank: Int) -> [Pip] {
-        func p(_ x: CGFloat, _ y: CGFloat, _ ink: MahjongTileInk = .green) -> Pip { Pip(x: x, y: y, ink: ink) }
+        func p(_ x: CGFloat, _ y: CGFloat, _ ink: MahjongTileInk = .green) -> Pip {
+            Pip(x: x, y: y, ink: ink)
+        }
         switch rank {
         case 2: return [p(0.5, 0.32), p(0.5, 0.68)]
         case 3: return [p(0.5, 0.26), p(0.28, 0.72), p(0.72, 0.72)]
@@ -2121,7 +2492,7 @@ private struct MahjongLANRoomView: View {
                     service.stop()
                     dismiss()
                 }
-                    .buttonStyle(.plain)
+                .buttonStyle(.plain)
             }
 
             HStack(spacing: 12) {
@@ -2205,7 +2576,6 @@ private struct MahjongLANRoomView: View {
             }
             .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity)
-
         }
         .padding(26)
         .onAppear {

@@ -55,6 +55,12 @@ enum MahjongTile: Hashable, Codable, Identifiable {
     }
 }
 
+struct MahjongVoiceCue: Codable, Identifiable, Equatable {
+    var id = UUID()
+    let seat: Int
+    let key: String
+}
+
 enum MahjongTileInk {
     case red, blue, green, emerald
 }
@@ -64,7 +70,9 @@ enum MahjongRuleset: String, CaseIterable, Identifiable, Codable {
     case sichuan = "四川麻将 · 定缺"
     case cantonese = "广东麻将 · 推倒胡"
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var detail: String {
         switch self {
@@ -77,14 +85,18 @@ enum MahjongRuleset: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var includesHonors: Bool { self != .sichuan }
+    var includesHonors: Bool {
+        self != .sichuan
+    }
 }
 
 enum MahjongPlayMode: String, CaseIterable, Identifiable, Codable {
     case solo = "单人对战"
     case lan = "局域网"
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 }
 
 enum MahjongRoundPhase: Equatable, Codable {
@@ -136,7 +148,9 @@ struct MahjongCallOption: Identifiable, Equatable, Codable {
     let kind: MahjongCallKind
     let heldTiles: [MahjongTile]
 
-    var id: String { "\(kind.rawValue)-\(heldTiles.map(\.id).sorted().joined(separator: "-"))" }
+    var id: String {
+        "\(kind.rawValue)-\(heldTiles.map(\.id).sorted().joined(separator: "-"))"
+    }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id
@@ -218,11 +232,12 @@ final class MahjongGame {
     private(set) var isLANAuthority = true
     private(set) var seatNicknames = ["玩家", "局域网玩家", "AI", "AI"]
     var onLANAction: ((MahjongLANAction) -> Void)?
+    var onMahjongVoiceCue: ((MahjongVoiceCue) -> Void)?
     private var applyingRemoteAction = false
     private var remoteActionSeat: Int?
 
     func configureLAN(humanSeats: [Int], localSeat: Int, authority: Bool) {
-        self.humanSeats = Array(Set(humanSeats.filter { (0..<4).contains($0) })).sorted()
+        self.humanSeats = Array(Set(humanSeats.filter { (0 ..< 4).contains($0) })).sorted()
         self.localSeat = localSeat
         isLANAuthority = authority
     }
@@ -230,6 +245,11 @@ final class MahjongGame {
     func setLANNickname(_ nickname: String, for seat: Int) {
         guard seatNicknames.indices.contains(seat) else { return }
         seatNicknames[seat] = String(nickname.prefix(16))
+    }
+
+    private func announceVoice(_ key: String, for seat: Int) {
+        let cue = MahjongVoiceCue(seat: seat, key: key)
+        onMahjongVoiceCue?(cue)
     }
 
     func makeLANSnapshot() -> MahjongGameSnapshot {
@@ -314,36 +334,71 @@ final class MahjongGame {
     private var preservedTurnDeadline: Date?
     private var responseTimerTasks: [Int: Task<Void, Never>] = [:]
 
-    var humanCount: Int { humanSeats.count }
-    var isHumanTurn: Bool { isStarted && phase == .playing && turn == localSeat }
-    private var isHumanSeatTurn: Bool { isStarted && phase == .playing && humanSeats.contains(turn) }
-    private var canActForCurrentSeat: Bool { isHumanTurn || remoteActionSeat == turn }
+    var humanCount: Int {
+        humanSeats.count
+    }
+
+    var isHumanTurn: Bool {
+        isStarted && phase == .playing && turn == localSeat
+    }
+
+    private var isHumanSeatTurn: Bool {
+        isStarted && phase == .playing && humanSeats.contains(turn)
+    }
+
+    private var canActForCurrentSeat: Bool {
+        isHumanTurn || remoteActionSeat == turn
+    }
+
     func countdown(for seat: Int) -> Int {
         responseCountdowns[seat] ?? (turnTimerSeat == seat ? (turnSecondsRemaining ?? 20) : 20)
     }
+
     func isCountdownActive(for seat: Int) -> Bool {
         responseCountdowns[seat] != nil || (turnTimerSeat == seat && turnSecondsRemaining != nil)
     }
+
     func countdownDeadline(for seat: Int) -> Date? {
         responseCountdownDeadlines[seat] ?? (turnTimerSeat == seat ? turnCountdownDeadline : nil)
     }
-    var currentHand: [MahjongTile] { hands.indices.contains(turn) ? hands[turn] : [] }
-    var visibleHandSeat: Int { currentResponderSeat ?? localSeat }
-    var visibleHand: [MahjongTile] { hands.indices.contains(visibleHandSeat) ? hands[visibleHandSeat] : [] }
-    var activeSeat: Int { currentResponderSeat ?? turn }
-    var isHumanResponse: Bool { phase == .responding && currentResponderSeat != nil }
+
+    var currentHand: [MahjongTile] {
+        hands.indices.contains(turn) ? hands[turn] : []
+    }
+
+    var visibleHandSeat: Int {
+        currentResponderSeat ?? localSeat
+    }
+
+    var visibleHand: [MahjongTile] {
+        hands.indices.contains(visibleHandSeat) ? hands[visibleHandSeat] : []
+    }
+
+    var activeSeat: Int {
+        currentResponderSeat ?? turn
+    }
+
+    var isHumanResponse: Bool {
+        phase == .responding && currentResponderSeat != nil
+    }
+
     var currentResponderSeat: Int? {
-        if let remoteActionSeat, pendingHumanSeats.contains(remoteActionSeat) { return remoteActionSeat }
+        if let remoteActionSeat, pendingHumanSeats.contains(remoteActionSeat) {
+            return remoteActionSeat
+        }
         return pendingHumanSeats.first(where: { $0 == localSeat })
     }
+
     var humanResponseOptions: [MahjongCallOption] {
         guard let seat = currentResponderSeat else { return [] }
         return pendingOptions[seat, default: []] + [MahjongCallOption(kind: .pass, heldTiles: [])]
     }
+
     var canSelfDraw: Bool {
         guard canActForCurrentSeat, justDrew else { return false }
         return Self.isWinningHand(currentHand, meldCount: melds[turn].count, missingSuit: missingSuits[turn])
     }
+
     var availableKongTiles: [MahjongTile] {
         guard canActForCurrentSeat, justDrew, wall.count > 0 else { return [] }
         let unique = Set(currentHand).sorted { $0.sortKey < $1.sortKey }
@@ -354,11 +409,15 @@ final class MahjongGame {
     }
 
     func start() {
-        if mode == .lan && !isLANAuthority { onLANAction?(.start); return }
+        if mode == .lan, !isLANAuthority {
+            onLANAction?(.start); return
+        }
         stopTurnTimer()
         clearPendingResponses()
         let tiles = Self.makeWall(for: ruleset).shuffled()
-        if !isStarted && phase == .idle { dealer = 0; roundNumber = 1 }
+        if !isStarted, phase == .idle {
+            dealer = 0; roundNumber = 1
+        }
         roundStartedAt = nil
         roundEndedAt = nil
         wall = tiles
@@ -376,14 +435,16 @@ final class MahjongGame {
         roundResult = ""
         justDrew = false
         needsDiscard = false
-        readySeats = (0..<4).map { !humanSeats.contains($0) }
+        readySeats = (0 ..< 4).map { !humanSeats.contains($0) }
         phase = .waitingForReady
         isStarted = true
         message = "AI 已准备 · 等待玩家准备"
     }
 
     func leaveTable() {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.leave) }
+        if mode == .lan, !isLANAuthority, !applyingRemoteAction {
+            onLANAction?(.leave)
+        }
         leaveTableLocally()
     }
 
@@ -402,11 +463,13 @@ final class MahjongGame {
     }
 
     func addLANGuest(seat: Int, nickname: String) {
-        guard mode == .lan, isLANAuthority, (1..<4).contains(seat), !humanSeats.contains(seat) else { return }
+        guard mode == .lan, isLANAuthority, (1 ..< 4).contains(seat), !humanSeats.contains(seat) else { return }
         humanSeats.append(seat)
         humanSeats.sort()
         setLANNickname(nickname, for: seat)
-        if phase == .waitingForReady { readySeats[seat] = false }
+        if phase == .waitingForReady {
+            readySeats[seat] = false
+        }
         if phase == .choosingMissingSuit, missingSuits[seat] == nil, !pendingHumanSeats.contains(seat) {
             pendingHumanSeats.append(seat)
         }
@@ -422,12 +485,14 @@ final class MahjongGame {
     }
 
     func removeLANGuest(seat: Int, aiNickname: String = "AI") {
-        guard mode == .lan, isLANAuthority, (1..<4).contains(seat), humanSeats.contains(seat) else { return }
+        guard mode == .lan, isLANAuthority, (1 ..< 4).contains(seat), humanSeats.contains(seat) else { return }
         humanSeats.removeAll { $0 == seat }
         setLANNickname(aiNickname, for: seat)
         if phase == .waitingForReady {
             readySeats[seat] = true
-            if readySeats.allSatisfy({ $0 }) { Task { await rollDiceAndDeal() } }
+            if readySeats.allSatisfy({ $0 }) {
+                Task { await rollDiceAndDeal() }
+            }
         }
         if phase == .choosingMissingSuit, pendingHumanSeats.contains(seat) {
             pendingHumanSeats.removeAll { $0 == seat }
@@ -455,9 +520,14 @@ final class MahjongGame {
     }
 
     func markReady() {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.ready); return }
+        if mode == .lan, !isLANAuthority, !applyingRemoteAction {
+            onLANAction?(.ready); return
+        }
+        let seat = remoteActionSeat ?? localSeat
         guard phase == .waitingForReady,
-              let seat = (remoteActionSeat.map { [$0] } ?? humanSeats).first(where: { !readySeats[$0] }) else { return }
+              humanSeats.contains(seat),
+              readySeats.indices.contains(seat),
+              !readySeats[seat] else { return }
         readySeats[seat] = true
         message = "\(seatName(seat)) 已准备"
         if readySeats.allSatisfy({ $0 }) {
@@ -470,15 +540,15 @@ final class MahjongGame {
         phase = .dealing
         roundStartedAt = Date()
         roundEndedAt = nil
-        dice = [Int.random(in: 1...6), Int.random(in: 1...6)]
+        dice = [Int.random(in: 1 ... 6), Int.random(in: 1 ... 6)]
         let breakIndex = (dice.reduce(0, +) * 2) % max(wall.count, 1)
         wall = Array(wall[breakIndex...]) + Array(wall[..<breakIndex])
         message = "掷出 \(dice[0]) 点和 \(dice[1]) 点 · 从庄家右侧开门"
 
         // Deal three four-tile packets, then one tile per seat, then the dealer's extra tile.
         for packetSize in [4, 4, 4, 1] {
-            for _ in 0..<packetSize {
-                for offset in 0..<4 {
+            for _ in 0 ..< packetSize {
+                for offset in 0 ..< 4 {
                     let seat = (dealer + offset) % 4
                     dealOneTile(to: seat)
                     try? await Task.sleep(nanoseconds: 50_000_000)
@@ -487,7 +557,9 @@ final class MahjongGame {
         }
         dealOneTile(to: dealer)
         let dealerDraw = hands[dealer].last
-        for seat in 0..<4 { hands[seat].sort { $0.sortKey < $1.sortKey } }
+        for seat in 0 ..< 4 {
+            hands[seat].sort { $0.sortKey < $1.sortKey }
+        }
         if let dealerDraw, let index = hands[dealer].firstIndex(of: dealerDraw) {
             let tile = hands[dealer].remove(at: index)
             hands[dealer].append(tile)
@@ -505,8 +577,11 @@ final class MahjongGame {
     }
 
     func chooseMissingSuit(_ suit: MahjongSuit) {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.missingSuit(suit)); return }
+        if mode == .lan, !isLANAuthority, !applyingRemoteAction {
+            onLANAction?(.missingSuit(suit)); return
+        }
         guard phase == .choosingMissingSuit, let seat = currentResponderSeat else { return }
+        announceVoice("action-missing-suit", for: seat)
         missingSuits[seat] = suit
         pendingHumanSeats.removeAll { $0 == seat }
         if pendingHumanSeats.contains(localSeat) {
@@ -527,12 +602,16 @@ final class MahjongGame {
     }
 
     func discard(_ tile: MahjongTile) {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.discard(tile, drawnTile: false)); return }
+        if mode == .lan, !isLANAuthority, !applyingRemoteAction {
+            onLANAction?(.discard(tile, drawnTile: false)); return
+        }
         discard(tile, drawnTile: false)
     }
 
     func discardDrawnTile() {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.discardDrawn); return }
+        if mode == .lan, !isLANAuthority, !applyingRemoteAction {
+            onLANAction?(.discardDrawn); return
+        }
         guard justDrew, let tile = currentHand.last else { return }
         discard(tile, drawnTile: true)
     }
@@ -550,13 +629,20 @@ final class MahjongGame {
     }
 
     func respond(to option: MahjongCallOption) {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.respond(option)); return }
+        if mode == .lan, !isLANAuthority, !applyingRemoteAction {
+            onLANAction?(.respond(option)); return
+        }
         guard phase == .responding, let seat = currentResponderSeat else { return }
+        if option.kind == .pass {
+            announceVoice("action-pass", for: seat)
+        }
         if option.kind != .pass {
             preservedTurnDeadline = responseCountdownDeadlines[seat]
         }
         stopResponseTimer(for: seat)
-        if option.kind != .pass { chosenResponses[seat] = option }
+        if option.kind != .pass {
+            chosenResponses[seat] = option
+        }
         pendingHumanSeats.removeAll { $0 == seat }
         if let nextSeat = currentResponderSeat {
             message = "\(seatName(nextSeat))，请回应这张弃牌"
@@ -568,14 +654,18 @@ final class MahjongGame {
     }
 
     func claimSelfDraw() {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.selfDraw); return }
+        if mode == .lan && !isLANAuthority && !applyingRemoteAction {
+            onLANAction?(.selfDraw); return
+        }
         guard canSelfDraw || (remoteActionSeat == turn && Self.isWinningHand(currentHand, meldCount: melds[turn].count, missingSuit: missingSuits[turn])) else { return }
         stopTurnTimer()
         finishRound(winner: turn, tile: hands[turn].last, byDiscard: false)
     }
 
     func declareKong(_ tile: MahjongTile) {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.kong(tile)); return }
+        if mode == .lan && !isLANAuthority && !applyingRemoteAction {
+            onLANAction?(.kong(tile)); return
+        }
         guard availableKongTiles.contains(tile) || (remoteActionSeat == turn && aiKongTiles(for: turn).contains(tile)) else { return }
         stopTurnTimer()
         performKong(tile, for: turn)
@@ -583,9 +673,13 @@ final class MahjongGame {
     }
 
     func nextRound() {
-        if mode == .lan && !isLANAuthority && !applyingRemoteAction { onLANAction?(.nextRound); return }
+        if mode == .lan, !isLANAuthority, !applyingRemoteAction {
+            onLANAction?(.nextRound); return
+        }
         guard phase == .roundEnded else { return }
-        if winner != dealer { dealer = (dealer + 1) % 4 }
+        if winner != dealer {
+            dealer = (dealer + 1) % 4
+        }
         roundNumber += 1
         start()
         markReady()
@@ -614,7 +708,7 @@ final class MahjongGame {
     private func prepareMissingSuitChoices() {
         phase = .choosingMissingSuit
         pendingHumanSeats = humanSeats
-        for seat in 0..<4 where !humanSeats.contains(seat) {
+        for seat in 0 ..< 4 where !humanSeats.contains(seat) {
             missingSuits[seat] = Self.leastFrequentSuit(in: hands[seat])
         }
         if let first = currentResponderSeat {
@@ -630,6 +724,7 @@ final class MahjongGame {
             hands[player].sort { $0.sortKey < $1.sortKey }
         }
         discards[player].append(tile)
+        announceVoice("tile-\(tile.id)", for: player)
         justDrew = false
         needsDiscard = false
         message = "\(seatName(player)) 打出 \(tile.accessibilityName)"
@@ -639,7 +734,7 @@ final class MahjongGame {
         clearPendingResponses()
         pendingTile = tile
         pendingDiscarder = discarder
-        for distance in 1...3 {
+        for distance in 1 ... 3 {
             let seat = (discarder + distance) % 4
             let options = availableCalls(for: seat, using: tile, from: discarder)
             guard !options.isEmpty else { continue }
@@ -652,8 +747,12 @@ final class MahjongGame {
         }
         if !pendingHumanSeats.isEmpty || !pendingAISeats.isEmpty {
             phase = .responding
-            for seat in pendingHumanSeats { startResponseTimer(for: seat) }
-            for seat in pendingAISeats { startResponseTimer(for: seat) }
+            for seat in pendingHumanSeats {
+                startResponseTimer(for: seat)
+            }
+            for seat in pendingAISeats {
+                startResponseTimer(for: seat)
+            }
             if let responder = currentResponderSeat {
                 message = "\(seatName(responder))，请回应这张弃牌"
             } else {
@@ -678,10 +777,14 @@ final class MahjongGame {
             options.append(MahjongCallOption(kind: .win, heldTiles: []))
         }
         let same = hands[seat].filter { $0 == tile }
-        if same.count >= 3, !wall.isEmpty { options.append(MahjongCallOption(kind: .exposedKong, heldTiles: Array(same.prefix(3)))) }
-        if same.count >= 2 { options.append(MahjongCallOption(kind: .pong, heldTiles: Array(same.prefix(2)))) }
-        if (seat == (discarder + 1) % 4), case let .suited(suit, value) = tile {
-            for start in max(1, value - 2)...min(7, value) {
+        if same.count >= 3, !wall.isEmpty {
+            options.append(MahjongCallOption(kind: .exposedKong, heldTiles: Array(same.prefix(3))))
+        }
+        if same.count >= 2 {
+            options.append(MahjongCallOption(kind: .pong, heldTiles: Array(same.prefix(2))))
+        }
+        if seat == (discarder + 1) % 4, case let .suited(suit, value) = tile {
+            for start in max(1, value - 2) ... min(7, value) {
                 let run = [MahjongTile.suited(suit, start), .suited(suit, start + 1), .suited(suit, start + 2)]
                 guard run.contains(tile) else { continue }
                 var available = hands[seat]
@@ -712,7 +815,14 @@ final class MahjongGame {
               pendingResponseID == responseID,
               pendingAISeats.contains(seat) else { return }
         stopResponseTimer(for: seat)
-        if let choice { chosenResponses[seat] = choice }
+        if let choice {
+            chosenResponses[seat] = choice
+            if choice.kind == .pass {
+                announceVoice("action-pass", for: seat)
+            }
+        } else {
+            announceVoice("action-pass", for: seat)
+        }
         pendingAISeats.remove(seat)
         if pendingAISeats.isEmpty, pendingHumanSeats.isEmpty {
             resolveResponses()
@@ -728,7 +838,9 @@ final class MahjongGame {
     ) async -> MahjongCallOption? {
         let fallback = fallbackAICall(from: options, for: seat)
         // 胡牌是确定性规则判断，命中后直接胡牌，不等待模型接口。
-        if let winningOption = options.first(where: { $0.kind == .win }) { return winningOption }
+        if let winningOption = options.first(where: { $0.kind == .win }) {
+            return winningOption
+        }
         let choices = options + [MahjongCallOption(kind: .pass, heldTiles: [])]
         let choiceText = choices.enumerated()
             .map { "\($0.offset + 1). \(aiCallLabel($0.element))" }
@@ -752,12 +864,18 @@ final class MahjongGame {
     }
 
     private func fallbackAICall(from options: [MahjongCallOption], for seat: Int) -> MahjongCallOption? {
-        if let win = options.first(where: { $0.kind == .win }) { return win }
-        if let kong = options.first(where: { $0.kind == .exposedKong }) { return kong }
-        if let pong = options.first(where: { $0.kind == .pong }) { return pong }
+        if let win = options.first(where: { $0.kind == .win }) {
+            return win
+        }
+        if let kong = options.first(where: { $0.kind == .exposedKong }) {
+            return kong
+        }
+        if let pong = options.first(where: { $0.kind == .pong }) {
+            return pong
+        }
         if let chi = options.first(where: { $0.kind == .chi }) {
             let hand = hands[seat] + chi.heldTiles
-            return Self.isWinningHand(hand, meldCount: melds[seat].count, missingSuit: missingSuits[seat]) || Int.random(in: 0...2) == 0 ? chi : nil
+            return Self.isWinningHand(hand, meldCount: melds[seat].count, missingSuit: missingSuits[seat]) || Int.random(in: 0 ... 2) == 0 ? chi : nil
         }
         return nil
     }
@@ -781,7 +899,9 @@ final class MahjongGame {
         let selected = chosenResponses
             .filter { $0.value.kind != .pass }
             .sorted { lhs, rhs in
-                if lhs.value.kind.priority != rhs.value.kind.priority { return lhs.value.kind.priority > rhs.value.kind.priority }
+                if lhs.value.kind.priority != rhs.value.kind.priority {
+                    return lhs.value.kind.priority > rhs.value.kind.priority
+                }
                 let leftDistance = (lhs.key - discarder + 4) % 4
                 let rightDistance = (rhs.key - discarder + 4) % 4
                 return leftDistance < rightDistance
@@ -792,6 +912,7 @@ final class MahjongGame {
             case .win:
                 finishRound(winner: seat, tile: tile, byDiscard: true, discarder: discarder)
             case .exposedKong:
+                announceVoice("action-exposed-kong", for: seat)
                 consumeClaimedDiscard(from: discarder)
                 remove(option.heldTiles, from: seat)
                 melds[seat].append(MahjongMeld(kind: .exposedKong, tiles: option.heldTiles + [tile]))
@@ -799,6 +920,7 @@ final class MahjongGame {
                 message = "\(seatName(seat)) 明杠 · 补一张牌"
                 drawSupplement(for: seat)
             case .pong:
+                announceVoice("action-pong", for: seat)
                 consumeClaimedDiscard(from: discarder)
                 remove(option.heldTiles, from: seat)
                 melds[seat].append(MahjongMeld(kind: .triplet, tiles: option.heldTiles + [tile]))
@@ -808,6 +930,7 @@ final class MahjongGame {
                 phase = .playing
                 message = "\(seatName(seat)) 碰牌 · 请打出一张"
             case .chi:
+                announceVoice("action-chi", for: seat)
                 consumeClaimedDiscard(from: discarder)
                 remove(option.heldTiles, from: seat)
                 melds[seat].append(MahjongMeld(kind: .sequence, tiles: option.heldTiles + [tile]))
@@ -826,12 +949,16 @@ final class MahjongGame {
     }
 
     private func consumeClaimedDiscard(from seat: Int) {
-        if discards.indices.contains(seat), !discards[seat].isEmpty { discards[seat].removeLast() }
+        if discards.indices.contains(seat), !discards[seat].isEmpty {
+            discards[seat].removeLast()
+        }
     }
 
     private func remove(_ tiles: [MahjongTile], from seat: Int) {
         for tile in tiles {
-            if let index = hands[seat].firstIndex(of: tile) { hands[seat].remove(at: index) }
+            if let index = hands[seat].firstIndex(of: tile) {
+                hands[seat].remove(at: index)
+            }
         }
     }
 
@@ -876,10 +1003,13 @@ final class MahjongGame {
 
     private func performKong(_ tile: MahjongTile, for seat: Int) {
         if let tripletIndex = melds[seat].firstIndex(where: { $0.kind == .triplet && $0.tiles.first == tile }),
-           let handIndex = hands[seat].firstIndex(of: tile) {
+           let handIndex = hands[seat].firstIndex(of: tile)
+        {
+            announceVoice("action-added-kong", for: seat)
             hands[seat].remove(at: handIndex)
             melds[seat][tripletIndex] = MahjongMeld(kind: .addedKong, tiles: melds[seat][tripletIndex].tiles + [tile])
         } else {
+            announceVoice("action-concealed-kong", for: seat)
             let four = Array(hands[seat].filter { $0 == tile }.prefix(4))
             remove(four, from: seat)
             melds[seat].append(MahjongMeld(kind: .concealedKong, tiles: four))
@@ -920,7 +1050,9 @@ final class MahjongGame {
             beginResponses(to: tile, from: discarder)
             guard phase == .playing else { return }
         }
-        if phase == .playing, needsDiscard, humanSeats.contains(turn) { startTurnTimerIfNeeded() }
+        if phase == .playing, needsDiscard, humanSeats.contains(turn) {
+            startTurnTimerIfNeeded()
+        }
     }
 
     private func aiTurnDecision(for seat: Int) async -> MahjongAIDecision {
@@ -963,7 +1095,8 @@ final class MahjongGame {
         \(choiceText)
         """
         if let answer = await requestMahjongAI(userPrompt: userPrompt, outputFormat: .optionIndex),
-           let index = parseAIOptionIndex(answer, count: decisions.count) {
+           let index = parseAIOptionIndex(answer, count: decisions.count)
+        {
             return decisions[index]
         }
         return .discard(Self.aiDiscard(from: hand, missingSuit: missingSuits[seat]) ?? firstTile)
@@ -972,12 +1105,11 @@ final class MahjongGame {
     private func requestMahjongAI(userPrompt: String, outputFormat: MahjongAIOutputFormat) async -> String? {
         let configuration = AIAPIConfiguration.load()
         guard configuration.isConfigured else { return nil }
-        let systemPrompt: String
-        switch outputFormat {
+        let systemPrompt = switch outputFormat {
         case .tileName:
-            systemPrompt = "你是麻将选牌判定器。只能从用户消息给出的合法牌名中选择一张，并且只输出牌名本身。禁止输出操作、序号、解释、标点、引号、JSON、Markdown或其他内容。"
+            "你是麻将选牌判定器。只能从用户消息给出的合法牌名中选择一张，并且只输出牌名本身。禁止输出操作、序号、解释、标点、引号、JSON、Markdown或其他内容。"
         case .optionIndex:
-            systemPrompt = "你是麻将操作判定器。只能选择用户消息中的一项，只输出该项从1开始的十进制序号。禁止输出操作名称、解释、标点、引号、JSON、Markdown或其他内容。"
+            "你是麻将操作判定器。只能选择用户消息中的一项，只输出该项从1开始的十进制序号。禁止输出操作名称、解释、标点、引号、JSON、Markdown或其他内容。"
         }
         return await withCheckedContinuation { continuation in
             let gate = MahjongAIRequestGate(continuation)
@@ -1030,7 +1162,7 @@ final class MahjongGame {
         guard !answer.isEmpty,
               answer.allSatisfy(\.isNumber),
               let number = Int(answer),
-              (1...count).contains(number) else { return nil }
+              (1 ... count).contains(number) else { return nil }
         return number - 1
     }
 
@@ -1060,7 +1192,9 @@ final class MahjongGame {
             guard let self, !Task.isCancelled,
                   self.phase == .playing, self.turn == seat, self.needsDiscard else { return }
             let tile = self.timeoutDiscardTile(for: seat)
-            if let tile { self.autoDiscardAfterTimeout(tile, for: seat) }
+            if let tile {
+                self.autoDiscardAfterTimeout(tile, for: seat)
+            }
         }
     }
 
@@ -1070,7 +1204,8 @@ final class MahjongGame {
 
         if ruleset == .sichuan,
            let missingSuit = missingSuits[seat],
-           hand.contains(where: { $0.matches(missingSuit) }) {
+           hand.contains(where: { $0.matches(missingSuit) })
+        {
             // Hand order follows each seat's own view: east/south read from the
             // first tile, west/north from the last tile.
             if seat <= 1 {
@@ -1079,7 +1214,9 @@ final class MahjongGame {
             return hand.reversed().first(where: { $0.matches(missingSuit) })
         }
 
-        if justDrew { return hand.last }
+        if justDrew {
+            return hand.last
+        }
         return Self.aiDiscard(from: hand, missingSuit: missingSuits[seat])
     }
 
@@ -1148,6 +1285,7 @@ final class MahjongGame {
     }
 
     private func finishRound(winner: Int, tile: MahjongTile?, byDiscard: Bool, discarder: Int?) {
+        announceVoice(byDiscard ? "action-win" : "action-self-draw", for: winner)
         stopTurnTimer()
         roundEndedAt = Date()
         self.winner = winner
@@ -1155,7 +1293,9 @@ final class MahjongGame {
         winningTile = tile
         winByDiscard = byDiscard
         var completedHand = hands.indices.contains(winner) ? hands[winner] : []
-        if byDiscard, let tile { completedHand.append(tile) }
+        if byDiscard, let tile {
+            completedHand.append(tile)
+        }
         winningHandType = Self.winningHandType(completedHand, meldCount: melds.indices.contains(winner) ? melds[winner].count : 0)
         phase = .roundEnded
         isStarted = true
@@ -1163,11 +1303,12 @@ final class MahjongGame {
         needsDiscard = false
         roundResult = "\(byDiscard ? "荣和" : "自摸")\(tile.map { " · \($0.accessibilityName)" } ?? "")"
         message = "\(roundResult) · 本局结束"
-        readySeats = (0..<4).map { !humanSeats.contains($0) }
+        readySeats = (0 ..< 4).map { !humanSeats.contains($0) }
         clearPendingResponses()
     }
 
     private func finishDraw() {
+        announceVoice("action-draw", for: turn)
         stopTurnTimer()
         roundEndedAt = Date()
         phase = .roundEnded
@@ -1177,12 +1318,14 @@ final class MahjongGame {
         winner = nil
         roundResult = "牌墙摸完 · 流局"
         message = roundResult
-        readySeats = (0..<4).map { !humanSeats.contains($0) }
+        readySeats = (0 ..< 4).map { !humanSeats.contains($0) }
         clearPendingResponses()
     }
 
     private func clearPendingResponses() {
-        for seat in Array(responseTimerTasks.keys) { stopResponseTimer(for: seat) }
+        for seat in Array(responseTimerTasks.keys) {
+            stopResponseTimer(for: seat)
+        }
         pendingResponseID = UUID()
         pendingTile = nil
         pendingDiscarder = nil
@@ -1199,13 +1342,17 @@ final class MahjongGame {
     private static func makeWall(for ruleset: MahjongRuleset) -> [MahjongTile] {
         var tiles: [MahjongTile] = []
         for suit in MahjongSuit.allCases {
-            for value in 1...9 {
-                for _ in 0..<4 { tiles.append(.suited(suit, value)) }
+            for value in 1 ... 9 {
+                for _ in 0 ..< 4 {
+                    tiles.append(.suited(suit, value))
+                }
             }
         }
         if ruleset.includesHonors {
-            for value in 0..<7 {
-                for _ in 0..<4 { tiles.append(.honor(value)) }
+            for value in 0 ..< 7 {
+                for _ in 0 ..< 4 {
+                    tiles.append(.honor(value))
+                }
             }
         }
         return tiles
@@ -1240,24 +1387,31 @@ final class MahjongGame {
 
     private static func isWinningHand(_ hand: [MahjongTile], meldCount: Int = 0, missingSuit: MahjongSuit? = nil) -> Bool {
         guard hand.count == 14 - meldCount * 3 else { return false }
-        if let missingSuit, hand.contains(where: { $0.matches(missingSuit) }) { return false }
+        if let missingSuit, hand.contains(where: { $0.matches(missingSuit) }) {
+            return false
+        }
         var counts = Dictionary(grouping: hand, by: { $0 }).mapValues(\.count)
         if meldCount == 0 {
             let pairCount = counts.values.reduce(0) { $0 + $1 / 2 }
-            if counts.values.allSatisfy({ $0.isMultiple(of: 2) }), pairCount == 7 { return true }
+            if counts.values.allSatisfy({ $0.isMultiple(of: 2) }), pairCount == 7 {
+                return true
+            }
 
             let orphans: Set<MahjongTile> = Set(MahjongSuit.allCases.flatMap { suit in
                 [MahjongTile.suited(suit, 1), .suited(suit, 9)]
-            } + (0..<7).map(MahjongTile.honor))
+            } + (0 ..< 7).map(MahjongTile.honor))
             if hand.allSatisfy(orphans.contains),
                orphans.allSatisfy({ counts[$0, default: 0] > 0 }),
-               counts.values.contains(2) {
+               counts.values.contains(2)
+            {
                 return true
             }
         }
         for tile in counts.keys where counts[tile, default: 0] >= 2 {
             counts[tile, default: 0] -= 2
-            if canFormMelds(&counts) { return true }
+            if canFormMelds(&counts) {
+                return true
+            }
             counts[tile, default: 0] += 2
         }
         return false
@@ -1266,14 +1420,17 @@ final class MahjongGame {
     private static func winningHandType(_ hand: [MahjongTile], meldCount: Int) -> MahjongWinningHandType {
         guard meldCount == 0 else { return .standard }
         let counts = Dictionary(grouping: hand, by: { $0 }).mapValues(\.count)
-        if counts.values.allSatisfy({ $0 == 2 }), counts.count == 7 { return .sevenPairs }
+        if counts.values.allSatisfy({ $0 == 2 }), counts.count == 7 {
+            return .sevenPairs
+        }
         let orphans: Set<MahjongTile> = Set(MahjongSuit.allCases.flatMap { suit in
             [MahjongTile.suited(suit, 1), .suited(suit, 9)]
-        } + (0..<7).map(MahjongTile.honor))
+        } + (0 ..< 7).map(MahjongTile.honor))
         if hand.count == 14,
            hand.allSatisfy(orphans.contains),
            orphans.allSatisfy({ counts[$0, default: 0] > 0 }),
-           counts.values.contains(2) {
+           counts.values.contains(2)
+        {
             return .thirteenOrphans
         }
         return .standard
@@ -1285,7 +1442,9 @@ final class MahjongGame {
         }
         if counts[tile, default: 0] >= 3 {
             counts[tile, default: 0] -= 3
-            if canFormMelds(&counts) { return true }
+            if canFormMelds(&counts) {
+                return true
+            }
             counts[tile, default: 0] += 3
         }
         if case let .suited(suit, value) = tile, value <= 7 {
@@ -1295,7 +1454,9 @@ final class MahjongGame {
                 counts[tile, default: 0] -= 1
                 counts[next, default: 0] -= 1
                 counts[last, default: 0] -= 1
-                if canFormMelds(&counts) { return true }
+                if canFormMelds(&counts) {
+                    return true
+                }
                 counts[tile, default: 0] += 1
                 counts[next, default: 0] += 1
                 counts[last, default: 0] += 1
@@ -1351,7 +1512,9 @@ struct MahjongGameSnapshot: Codable {
 
 private extension MahjongTile {
     func matches(_ suit: MahjongSuit) -> Bool {
-        if case let .suited(tileSuit, _) = self { return tileSuit == suit }
+        if case let .suited(tileSuit, _) = self {
+            return tileSuit == suit
+        }
         return false
     }
 }

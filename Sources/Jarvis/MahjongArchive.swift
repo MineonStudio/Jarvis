@@ -1,6 +1,26 @@
+import AppKit
 import Foundation
 import Observation
-import AppKit
+
+enum MahjongVoiceGender: String, Codable, CaseIterable, Identifiable {
+    case male
+    case female
+
+    var id: String {
+        rawValue
+    }
+
+    var displayName: String {
+        self == .male ? "男声" : "女声"
+    }
+
+    static func defaultProfile(for id: String) -> MahjongVoiceGender {
+        switch id {
+        case "iron-man", "thor", "hulk", "hawkeye": .male
+        default: .female
+        }
+    }
+}
 
 enum MahjongArchiveAvatarStyle: String, Codable, CaseIterable {
     case player, iron, spider, captain, thor, hulk, widow, hawkeye
@@ -45,6 +65,7 @@ struct MahjongPlayerArchive: Codable, Identifiable, Equatable {
     var id: String
     var nickname: String
     var avatarStyle: MahjongArchiveAvatarStyle
+    var voiceGender: MahjongVoiceGender = .female
     var customAvatarFilename: String? = nil
     var balance: Int
     var wins: Int = 0
@@ -59,8 +80,33 @@ struct MahjongPlayerArchive: Codable, Identifiable, Equatable {
     }
 }
 
+extension MahjongPlayerArchive {
+    private enum CodingKeys: String, CodingKey {
+        case id, nickname, avatarStyle, voiceGender, customAvatarFilename
+        case balance, wins, losses, escapes, eliminatedDay
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        nickname = try values.decode(String.self, forKey: .nickname)
+        avatarStyle = try values.decode(MahjongArchiveAvatarStyle.self, forKey: .avatarStyle)
+        voiceGender = try values.decodeIfPresent(MahjongVoiceGender.self, forKey: .voiceGender)
+            ?? MahjongVoiceGender.defaultProfile(for: id)
+        customAvatarFilename = try values.decodeIfPresent(String.self, forKey: .customAvatarFilename)
+        balance = try values.decode(Int.self, forKey: .balance)
+        wins = try values.decodeIfPresent(Int.self, forKey: .wins) ?? 0
+        losses = try values.decodeIfPresent(Int.self, forKey: .losses) ?? 0
+        escapes = try values.decodeIfPresent(Int.self, forKey: .escapes) ?? 0
+        eliminatedDay = try values.decodeIfPresent(String.self, forKey: .eliminatedDay)
+    }
+}
+
 struct MahjongPlayerRoundSettlement: Codable, Identifiable, Equatable {
-    var id: String { profileID }
+    var id: String {
+        profileID
+    }
+
     let profileID: String
     let nickname: String
     let balanceChange: Int
@@ -79,9 +125,9 @@ struct MahjongArchiveSettlement: Codable, Equatable {
 @MainActor
 @Observable
 final class MahjongArchiveStore {
-    static let initialBalance = 10_000
-    static let dailyReward = 5_000
-    static let bankruptcyAid = 5_000
+    static let initialBalance = 10000
+    static let dailyReward = 5000
+    static let bankruptcyAid = 5000
 
     private(set) var player: MahjongPlayerArchive
     private(set) var aiProfiles: [MahjongPlayerArchive]
@@ -106,7 +152,8 @@ final class MahjongArchiveStore {
         self.defaults = defaults
         self.calendar = calendar
         if let data = defaults.data(forKey: storageKey),
-           let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) {
+           let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data)
+        {
             player = snapshot.player
             let saved = Dictionary(uniqueKeysWithValues: snapshot.aiProfiles.map { ($0.id, $0) })
             aiProfiles = Self.roster.compactMap { seed in
@@ -125,15 +172,31 @@ final class MahjongArchiveStore {
             lastBankruptcyAidDay = nil
             lastAIRosterCheckDay = nil
         }
-        if player.id != Self.playerSeed.id { player = Self.playerSeed }
+        if player.id != Self.playerSeed.id {
+            player = Self.playerSeed
+        }
         save()
     }
 
-    var canClaimDailyReward: Bool { lastCheckInDay != dayKey }
-    var canClaimBankruptcyAid: Bool { lastBankruptcyAidDay != dayKey }
-    var totalAICount: Int { aiProfiles.count }
-    var eliminatedAICount: Int { aiProfiles.filter { $0.eliminatedDay == dayKey }.count }
-    func isEliminatedToday(_ profile: MahjongPlayerArchive) -> Bool { profile.eliminatedDay == dayKey }
+    var canClaimDailyReward: Bool {
+        lastCheckInDay != dayKey
+    }
+
+    var canClaimBankruptcyAid: Bool {
+        lastBankruptcyAidDay != dayKey
+    }
+
+    var totalAICount: Int {
+        aiProfiles.count
+    }
+
+    var eliminatedAICount: Int {
+        aiProfiles.filter { $0.eliminatedDay == dayKey }.count
+    }
+
+    func isEliminatedToday(_ profile: MahjongPlayerArchive) -> Bool {
+        profile.eliminatedDay == dayKey
+    }
 
     func claimDailyReward() -> Bool {
         guard canClaimDailyReward else { return false }
@@ -143,19 +206,38 @@ final class MahjongArchiveStore {
         return true
     }
 
-    func updatePlayerProfile(nickname: String? = nil, avatarStyle: MahjongArchiveAvatarStyle? = nil) {
+    func updatePlayerProfile(
+        nickname: String? = nil,
+        avatarStyle: MahjongArchiveAvatarStyle? = nil,
+        voiceGender: MahjongVoiceGender? = nil
+    ) {
         if let nickname {
             let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { player.nickname = String(trimmed.prefix(16)) }
+            if !trimmed.isEmpty {
+                player.nickname = String(trimmed.prefix(16))
+            }
         }
-        if let avatarStyle { player.avatarStyle = avatarStyle }
+        if let avatarStyle {
+            player.avatarStyle = avatarStyle
+        }
+        if let voiceGender {
+            player.voiceGender = voiceGender
+        }
+        save()
+    }
+
+    func updateAIVoiceGender(profileID: String, voiceGender: MahjongVoiceGender) {
+        guard let index = aiProfiles.firstIndex(where: { $0.id == profileID }) else { return }
+        aiProfiles[index].voiceGender = voiceGender
         save()
     }
 
     func updatePlayerAvatar(from sourceURL: URL) throws {
         let hasScopedAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
-            if hasScopedAccess { sourceURL.stopAccessingSecurityScopedResource() }
+            if hasScopedAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
         }
         guard let image = NSImage(contentsOf: sourceURL) else {
             throw CocoaError(.fileReadCorruptFile)
@@ -164,19 +246,20 @@ final class MahjongArchiveStore {
         let side = min(image.size.width, image.size.height)
         guard side > 0,
               let bitmap = NSBitmapImageRep(
-                bitmapDataPlanes: nil,
-                pixelsWide: 512,
-                pixelsHigh: 512,
-                bitsPerSample: 8,
-                samplesPerPixel: 4,
-                hasAlpha: true,
-                isPlanar: false,
-                colorSpaceName: .deviceRGB,
-                bitmapFormat: [],
-                bytesPerRow: 0,
-                bitsPerPixel: 0
+                  bitmapDataPlanes: nil,
+                  pixelsWide: 512,
+                  pixelsHigh: 512,
+                  bitsPerSample: 8,
+                  samplesPerPixel: 4,
+                  hasAlpha: true,
+                  isPlanar: false,
+                  colorSpaceName: .deviceRGB,
+                  bitmapFormat: [],
+                  bytesPerRow: 0,
+                  bitsPerPixel: 0
               ),
-              let context = NSGraphicsContext(bitmapImageRep: bitmap) else {
+              let context = NSGraphicsContext(bitmapImageRep: bitmap)
+        else {
             throw CocoaError(.fileReadUnknown)
         }
         bitmap.size = NSSize(width: 512, height: 512)
@@ -248,14 +331,14 @@ final class MahjongArchiveStore {
         byDiscard: Bool,
         seatProfileIDs: [String]
     ) -> MahjongArchiveSettlement {
-        guard (0..<4).contains(winnerSeat) else {
+        guard (0 ..< 4).contains(winnerSeat) else {
             return MahjongArchiveSettlement(transfers: [], notice: nil, campaignComplete: false, playerBankrupt: false, playerNeedsExit: false)
         }
 
         let amount = byDiscard ? handType.discardPayment : handType.selfDrawPayment
         let losers = byDiscard
             ? (discarderSeat.map { [$0] } ?? [])
-            : (0..<4).filter { $0 != winnerSeat }
+            : (0 ..< 4).filter { $0 != winnerSeat }
         guard !losers.isEmpty else {
             return MahjongArchiveSettlement(transfers: [], notice: nil, campaignComplete: false, playerBankrupt: false, playerNeedsExit: false)
         }
@@ -277,10 +360,14 @@ final class MahjongArchiveStore {
             transfers.append("\(payerName) 向 \(winnerName) 支付 \(amount.formatted()) 毛格子")
         }
         let winnerID = archiveID(for: winnerSeat, seatProfileIDs: seatProfileIDs)
-        if !winnerID.isEmpty { markResult(id: winnerID, won: true) }
-        for seat in 0..<4 where seat != winnerSeat {
+        if !winnerID.isEmpty {
+            markResult(id: winnerID, won: true)
+        }
+        for seat in 0 ..< 4 where seat != winnerSeat {
             let loserID = archiveID(for: seat, seatProfileIDs: seatProfileIDs)
-            if !loserID.isEmpty { markResult(id: loserID, won: false) }
+            if !loserID.isEmpty {
+                markResult(id: loserID, won: false)
+            }
         }
 
         var notice: String?
@@ -310,7 +397,7 @@ final class MahjongArchiveStore {
             notice = playerChange.map { "本局结算：\($0) 毛格子" }
         }
         let seatNames = ["东家", "南家", "西家", "北家"]
-        let playerResults = (0..<4).map { seat in
+        let playerResults = (0 ..< 4).map { seat in
             let profileID = archiveID(for: seat, seatProfileIDs: seatProfileIDs)
             let profile = profileID.isEmpty ? nil : self.profile(id: profileID)
             return MahjongPlayerRoundSettlement(
@@ -340,16 +427,16 @@ final class MahjongArchiveStore {
         byDiscard: Bool,
         seatProfiles: [MahjongPlayerArchive]
     ) -> (settlement: MahjongArchiveSettlement, profiles: [MahjongPlayerArchive]) {
-        guard (0..<4).contains(winnerSeat), seatProfiles.count == 4 else {
+        guard (0 ..< 4).contains(winnerSeat), seatProfiles.count == 4 else {
             return (MahjongArchiveSettlement(transfers: [], campaignComplete: false, playerBankrupt: false, playerNeedsExit: false), seatProfiles)
         }
 
         var profiles = seatProfiles
         let amount = byDiscard ? handType.discardPayment : handType.selfDrawPayment
-        let losers = byDiscard ? (discarderSeat.map { [$0] } ?? []) : (0..<4).filter { $0 != winnerSeat }
+        let losers = byDiscard ? (discarderSeat.map { [$0] } ?? []) : (0 ..< 4).filter { $0 != winnerSeat }
         var changes = Array(repeating: 0, count: 4)
         var transfers: [String] = []
-        for loser in losers where (0..<4).contains(loser) {
+        for loser in losers where (0 ..< 4).contains(loser) {
             profiles[loser].balance -= amount
             profiles[winnerSeat].balance += amount
             changes[loser] -= amount
@@ -357,8 +444,11 @@ final class MahjongArchiveStore {
             transfers.append("\(profiles[loser].nickname) 向 \(profiles[winnerSeat].nickname) 支付 \(amount.formatted()) 毛格子")
         }
         for seat in profiles.indices {
-            if seat == winnerSeat { profiles[seat].wins += 1 }
-            else { profiles[seat].losses += 1 }
+            if seat == winnerSeat {
+                profiles[seat].wins += 1
+            } else {
+                profiles[seat].losses += 1
+            }
         }
 
         // LAN AI profiles belong to the host's archive; the visiting player's own device
@@ -410,13 +500,18 @@ final class MahjongArchiveStore {
     }
 
     func recordVoluntaryEscape(profileID: String = "player") {
-        if profileID == Self.playerSeed.id { player.escapes += 1 }
-        else if let index = aiProfiles.firstIndex(where: { $0.id == profileID }) { aiProfiles[index].escapes += 1 }
+        if profileID == Self.playerSeed.id {
+            player.escapes += 1
+        } else if let index = aiProfiles.firstIndex(where: { $0.id == profileID }) {
+            aiProfiles[index].escapes += 1
+        }
         save()
     }
 
     func profile(id: String) -> MahjongPlayerArchive? {
-        if id == player.id { return player }
+        if id == player.id {
+            return player
+        }
         return aiProfiles.first(where: { $0.id == id })
     }
 
@@ -434,20 +529,34 @@ final class MahjongArchiveStore {
     }
 
     private func credit(_ id: String, amount: Int) {
-        if id == player.id { player.balance += amount }
-        else if let index = aiProfiles.firstIndex(where: { $0.id == id }) { aiProfiles[index].balance += amount }
+        if id == player.id {
+            player.balance += amount
+        } else if let index = aiProfiles.firstIndex(where: { $0.id == id }) {
+            aiProfiles[index].balance += amount
+        }
     }
 
     private func debit(_ id: String, amount: Int) {
-        if id == player.id { player.balance -= amount }
-        else if let index = aiProfiles.firstIndex(where: { $0.id == id }) { aiProfiles[index].balance -= amount }
+        if id == player.id {
+            player.balance -= amount
+        } else if let index = aiProfiles.firstIndex(where: { $0.id == id }) {
+            aiProfiles[index].balance -= amount
+        }
     }
 
     private func markResult(id: String, won: Bool) {
         if id == player.id {
-            if won { player.wins += 1 } else { player.losses += 1 }
+            if won {
+                player.wins += 1
+            } else {
+                player.losses += 1
+            }
         } else if let index = aiProfiles.firstIndex(where: { $0.id == id }) {
-            if won { aiProfiles[index].wins += 1 } else { aiProfiles[index].losses += 1 }
+            if won {
+                aiProfiles[index].wins += 1
+            } else {
+                aiProfiles[index].losses += 1
+            }
         }
     }
 
@@ -459,18 +568,20 @@ final class MahjongArchiveStore {
             lastBankruptcyAidDay: lastBankruptcyAidDay,
             lastAIRosterCheckDay: lastAIRosterCheckDay
         )
-        if let data = try? JSONEncoder().encode(snapshot) { defaults.set(data, forKey: storageKey) }
+        if let data = try? JSONEncoder().encode(snapshot) {
+            defaults.set(data, forKey: storageKey)
+        }
     }
 
-    private static let playerSeed = MahjongPlayerArchive(id: "player", nickname: "玩家", avatarStyle: .player, balance: initialBalance)
+    private static let playerSeed = MahjongPlayerArchive(id: "player", nickname: "玩家", avatarStyle: .player, voiceGender: .female, balance: initialBalance)
     private static let roster: [MahjongPlayerArchive] = [
-        MahjongPlayerArchive(id: "iron-man", nickname: "团团", avatarStyle: .panda, balance: initialBalance),
-        MahjongPlayerArchive(id: "spider-man", nickname: "小橘", avatarStyle: .cat, balance: initialBalance),
-        MahjongPlayerArchive(id: "captain-america", nickname: "云朵兔", avatarStyle: .rabbit, balance: initialBalance),
-        MahjongPlayerArchive(id: "thor", nickname: "星星鸮", avatarStyle: .owl, balance: initialBalance),
-        MahjongPlayerArchive(id: "hulk", nickname: "阿福熊", avatarStyle: .bear, balance: initialBalance),
-        MahjongPlayerArchive(id: "black-widow", nickname: "机灵狐", avatarStyle: .fox, balance: initialBalance),
-        MahjongPlayerArchive(id: "hawkeye", nickname: "小斑", avatarStyle: .tiger, balance: initialBalance)
+        MahjongPlayerArchive(id: "iron-man", nickname: "团团", avatarStyle: .panda, voiceGender: .male, balance: initialBalance),
+        MahjongPlayerArchive(id: "spider-man", nickname: "小橘", avatarStyle: .cat, voiceGender: .female, balance: initialBalance),
+        MahjongPlayerArchive(id: "captain-america", nickname: "云朵兔", avatarStyle: .rabbit, voiceGender: .female, balance: initialBalance),
+        MahjongPlayerArchive(id: "thor", nickname: "星星鸮", avatarStyle: .owl, voiceGender: .male, balance: initialBalance),
+        MahjongPlayerArchive(id: "hulk", nickname: "阿福熊", avatarStyle: .bear, voiceGender: .male, balance: initialBalance),
+        MahjongPlayerArchive(id: "black-widow", nickname: "机灵狐", avatarStyle: .fox, voiceGender: .female, balance: initialBalance),
+        MahjongPlayerArchive(id: "hawkeye", nickname: "小斑", avatarStyle: .tiger, voiceGender: .male, balance: initialBalance)
     ]
 }
 
@@ -481,9 +592,9 @@ enum MahjongWinningHandType: String, Codable {
 
     var discardPayment: Int {
         switch self {
-        case .standard: 1_000
-        case .sevenPairs: 1_500
-        case .thirteenOrphans: 2_000
+        case .standard: 1000
+        case .sevenPairs: 1500
+        case .thirteenOrphans: 2000
         }
     }
 

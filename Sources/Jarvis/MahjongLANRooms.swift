@@ -6,7 +6,9 @@ struct MahjongLANRoom: Identifiable {
     let code: String
     let endpoint: NWEndpoint
     let serviceName: String
-    var id: String { code }
+    var id: String {
+        code
+    }
 }
 
 enum MahjongLANAction: Codable {
@@ -23,6 +25,7 @@ private struct MahjongLANMessage: Codable {
     var action: MahjongLANAction?
     var snapshot: MahjongGameSnapshot?
     var settlement: MahjongArchiveSettlement?
+    var voiceCue: MahjongVoiceCue?
     var error: String?
 }
 
@@ -39,6 +42,7 @@ final class MahjongLANRoomService: ObservableObject {
     @Published private(set) var remoteNickname = "局域网玩家"
     @Published private(set) var syncedProfiles: [Int: MahjongPlayerArchive] = [:]
     @Published private(set) var settlement: MahjongArchiveSettlement?
+    @Published private(set) var lastVoiceCue: MahjongVoiceCue?
     @Published private(set) var hostLeft = false
 
     private let queue = DispatchQueue(label: "com.jarvis.mahjong.lan")
@@ -60,7 +64,9 @@ final class MahjongLANRoomService: ObservableObject {
         browser?.cancel()
         isSearching = true
         rooms = []
-        if !isHosting && !isConnecting { status = "正在搜索局域网房间…" }
+        if !isHosting, !isConnecting {
+            status = "正在搜索局域网房间…"
+        }
         let browser = NWBrowser(for: .bonjour(type: Self.bonjourServiceType, domain: nil), using: .tcp)
         self.browser = browser
         browser.browseResultsChangedHandler = { [weak self] results, _ in
@@ -73,7 +79,7 @@ final class MahjongLANRoomService: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.rooms = foundRooms.filter { $0.code != self.roomCode }.sorted { $0.code < $1.code }
-                if !self.isHosting && !self.isConnecting {
+                if !self.isHosting, !self.isConnecting {
                     self.status = foundRooms.isEmpty ? "搜索中，确认双方已连接同一局域网" : "发现 \(foundRooms.count) 个可加入的房间"
                 }
             }
@@ -101,7 +107,7 @@ final class MahjongLANRoomService: ObservableObject {
     func createRoom() {
         guard listener == nil else { return }
         do {
-            let code = String(format: "%06d", Int.random(in: 0...999_999))
+            let code = String(format: "%06d", Int.random(in: 0 ... 999_999))
             let listener = try NWListener(using: .tcp)
             self.listener = listener
             roomCode = code
@@ -139,7 +145,8 @@ final class MahjongLANRoomService: ObservableObject {
         guard !isConnecting else { return }
         let normalized = String(code.filter(\.isNumber).suffix(6))
         guard normalized.count == 6,
-              let room = rooms.first(where: { $0.code == normalized }) else {
+              let room = rooms.first(where: { $0.code == normalized })
+        else {
             status = rooms.isEmpty ? "未发现匹配码对应的房间，请确认双方处于同一局域网" : "没有找到匹配码 \(normalized) 的房间"
             return
         }
@@ -168,15 +175,19 @@ final class MahjongLANRoomService: ObservableObject {
 
     func startHostGame(_ game: MahjongGame, profile: MahjongPlayerArchive, aiProfiles: [MahjongPlayerArchive]) {
         self.game = game
-        aiSeatProfiles = (0..<3).map { index in
+        aiSeatProfiles = (0 ..< 3).map { index in
             aiProfiles.indices.contains(index) ? aiProfiles[index] : Self.emptySeat(index + 1)
         }
         hostProfiles = [profile] + aiSeatProfiles
-        for (seat, guest) in guestProfiles { hostProfiles[seat] = guest }
+        for (seat, guest) in guestProfiles {
+            hostProfiles[seat] = guest
+        }
         syncedProfiles = Dictionary(uniqueKeysWithValues: hostProfiles.enumerated().map { ($0.offset, $0.element) })
         game.configureLAN(humanSeats: [0] + Array(connectionSeats.values), localSeat: 0, authority: true)
         game.setLANNickname(profile.nickname, for: 0)
-        for (seat, guest) in guestProfiles { game.setLANNickname(guest.nickname, for: seat) }
+        for (seat, guest) in guestProfiles {
+            game.setLANNickname(guest.nickname, for: seat)
+        }
         game.onLANAction = nil
         beginSnapshots()
     }
@@ -194,7 +205,7 @@ final class MahjongLANRoomService: ObservableObject {
         guard isHosting else { return }
         hostSettlement = settlement
         hostProfiles = profiles
-        for seat in 1..<4 where !(game?.humanSeats.contains(seat) ?? false) {
+        for seat in 1 ..< 4 where !(game?.humanSeats.contains(seat) ?? false) {
             aiSeatProfiles[seat - 1] = profiles[seat]
         }
         self.settlement = settlement
@@ -209,6 +220,11 @@ final class MahjongLANRoomService: ObservableObject {
         sendSnapshot()
     }
 
+    func broadcastVoiceCue(_ cue: MahjongVoiceCue) {
+        guard isHosting else { return }
+        send(MahjongLANMessage(type: "voice", seat: cue.seat, voiceCue: cue), to: Array(hostConnections.values))
+    }
+
     func stop() {
         snapshotTask?.cancel(); snapshotTask = nil
         browser?.cancel(); browser = nil
@@ -218,7 +234,8 @@ final class MahjongLANRoomService: ObservableObject {
         let shouldSendLeave = !isHosting && clientConnection != nil
         joinedConnection = nil
         if let clientConnection, shouldSendLeave,
-           var data = try? JSONEncoder().encode(MahjongLANMessage(type: "action", action: .leave)) {
+           var data = try? JSONEncoder().encode(MahjongLANMessage(type: "action", action: .leave))
+        {
             data.append(10)
             clientConnection.send(content: data, completion: .contentProcessed { _ in clientConnection.cancel() })
         } else {
@@ -243,14 +260,14 @@ final class MahjongLANRoomService: ObservableObject {
         return detail
     }
 
-    private func accept(_ connection: NWConnection, roomCode: String) {
+    private func accept(_ connection: NWConnection, roomCode _: String) {
         connection.start(queue: queue)
         receiveLoop(from: connection)
     }
 
     private func receiveLoop(from connection: NWConnection) {
         let id = ObjectIdentifier(connection)
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self, weak connection] data, _, complete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self, weak connection] data, _, complete, error in
             guard let self, let connection else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -270,7 +287,9 @@ final class MahjongLANRoomService: ObservableObject {
                         let seat = self.connectionSeats.removeValue(forKey: id)
                         self.connected = !self.hostConnections.isEmpty
                         self.status = "局域网玩家已断开 · 当前 \(self.hostConnections.count) / 3 人"
-                        if let seat { self.restoreAISeat(seat) }
+                        if let seat {
+                            self.restoreAISeat(seat)
+                        }
                         hostConnection.cancel()
                         self.sendSnapshot()
                     }
@@ -296,23 +315,22 @@ final class MahjongLANRoomService: ObservableObject {
             case "join":
                 let id = ObjectIdentifier(connection)
                 let occupiedSeats = Set(connectionSeats.values)
-                guard let seat = (1..<4).first(where: { !occupiedSeats.contains($0) }) else {
+                guard let seat = (1 ..< 4).first(where: { !occupiedSeats.contains($0) }) else {
                     send(MahjongLANMessage(type: "rejected", error: "房间已满，最多支持四位真人玩家"), on: connection)
                     connection.cancel(); return
                 }
                 hostConnections[id] = connection
                 connectionSeats[id] = seat
                 remoteNickname = String((message.nickname ?? "局域网玩家").prefix(16))
-                var guestProfile: MahjongPlayerArchive
-                if let profile = message.profile {
-                    guestProfile = profile
+                var guestProfile: MahjongPlayerArchive = if let profile = message.profile {
+                    profile
                 } else {
-                    guestProfile = MahjongPlayerArchive(id: Self.localPlayerID, nickname: remoteNickname, avatarStyle: .player, balance: MahjongArchiveStore.initialBalance)
+                    MahjongPlayerArchive(id: Self.localPlayerID, nickname: remoteNickname, avatarStyle: .player, balance: MahjongArchiveStore.initialBalance)
                 }
                 guestProfile.nickname = remoteNickname
                 guestProfiles[seat] = guestProfile
                 if hostProfiles.count != 4 {
-                    hostProfiles = (0..<4).map { seat in Self.emptySeat(seat) }
+                    hostProfiles = (0 ..< 4).map { seat in Self.emptySeat(seat) }
                 }
                 hostProfiles[seat] = guestProfile
                 game?.addLANGuest(seat: seat, nickname: remoteNickname)
@@ -330,7 +348,9 @@ final class MahjongLANRoomService: ObservableObject {
                         }
                         connection.cancel()
                     } else {
-                        if let seat { game?.performRemoteAction(action, seat: seat) }
+                        if let seat {
+                            game?.performRemoteAction(action, seat: seat)
+                        }
                     }
                 }
             default: break
@@ -340,14 +360,22 @@ final class MahjongLANRoomService: ObservableObject {
             case "joined":
                 localSeat = message.seat ?? 1
                 remoteNickname = message.nickname ?? "房主"
-                if let profiles = message.profiles { updateSyncedProfiles(profiles) }
+                if let profiles = message.profiles {
+                    updateSyncedProfiles(profiles)
+                }
                 isConnecting = false; connected = true
                 status = "已加入房间，正在同步牌局…"
             case "snapshot":
-                if let snapshot = message.snapshot { game?.applyLANSnapshot(snapshot) }
-                if let profiles = message.profiles { updateSyncedProfiles(profiles) }
+                if let snapshot = message.snapshot {
+                    game?.applyLANSnapshot(snapshot)
+                }
+                if let profiles = message.profiles {
+                    updateSyncedProfiles(profiles)
+                }
                 settlement = message.settlement
                 isConnecting = false; connected = true
+            case "voice":
+                lastVoiceCue = message.voiceCue
             case "rejected":
                 isConnecting = false; connected = false
                 status = message.error ?? "房间已满"
@@ -374,7 +402,7 @@ final class MahjongLANRoomService: ObservableObject {
             guard let localSeat = connectionSeats[id] else { continue }
             var snapshot = baseSnapshot
             if snapshot.phase != .roundEnded {
-                for seat in 0..<snapshot.hands.count where seat != localSeat {
+                for seat in 0 ..< snapshot.hands.count where seat != localSeat {
                     snapshot.hands[seat] = Array(repeating: .honor(6), count: snapshot.hands[seat].count)
                 }
                 snapshot.pendingOptions = snapshot.pendingOptions.filter { $0.key == localSeat }
@@ -401,7 +429,7 @@ final class MahjongLANRoomService: ObservableObject {
 
     private func restoreAISeat(_ seat: Int) {
         guestProfiles.removeValue(forKey: seat)
-        guard (1..<4).contains(seat), hostProfiles.indices.contains(seat) else { return }
+        guard (1 ..< 4).contains(seat), hostProfiles.indices.contains(seat) else { return }
         let aiProfile = aiSeatProfiles.indices.contains(seat - 1) ? aiSeatProfiles[seat - 1] : Self.emptySeat(seat)
         hostProfiles[seat] = aiProfile
         game?.removeLANGuest(seat: seat, aiNickname: aiProfile.nickname)
@@ -414,7 +442,9 @@ final class MahjongLANRoomService: ObservableObject {
     }
 
     private func send(_ message: MahjongLANMessage, to connections: [NWConnection]) {
-        for connection in connections { send(message, on: connection) }
+        for connection in connections {
+            send(message, on: connection)
+        }
     }
 
     private func send(_ message: MahjongLANMessage, on connection: NWConnection) {
@@ -425,7 +455,9 @@ final class MahjongLANRoomService: ObservableObject {
 
     private static var localPlayerID: String {
         let key = "jarvis.mahjong.lan.player-id.v1"
-        if let id = UserDefaults.standard.string(forKey: key) { return "lan-player-\(id)" }
+        if let id = UserDefaults.standard.string(forKey: key) {
+            return "lan-player-\(id)"
+        }
         let id = UUID().uuidString
         UserDefaults.standard.set(id, forKey: key)
         return "lan-player-\(id)"
