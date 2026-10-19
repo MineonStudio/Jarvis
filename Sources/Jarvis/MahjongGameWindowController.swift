@@ -23,7 +23,7 @@ final class MahjongGameWindowModel {
     }
 }
 
-/// Separate mahjong window with a fixed 16:9 table surface.
+/// Separate mahjong window with a 16:9 table surface and a dedicated top control strip.
 /// One controller for the process, so a recreated plaza cannot open a second table.
 @MainActor
 final class MahjongGameWindowController: NSObject, NSWindowDelegate {
@@ -34,9 +34,14 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
     private var suppressCloseCallback = false
     var onUserClose: (() -> Void)?
 
-    private static let windowAspectRatio = NSSize(width: 16, height: 9)
-    private static let defaultWindowSize = NSSize(width: 1280, height: 720)
-    private static let minimumWindowSize = NSSize(width: 960, height: 540)
+    private static let tableSize = NSSize(width: 1280, height: 720)
+    private static let topBarHeight: CGFloat = 42
+    private static let windowAspectRatio = NSSize(
+        width: tableSize.width,
+        height: tableSize.height + topBarHeight
+    )
+    private static let defaultWindowSize = windowAspectRatio
+    private static let minimumWindowSize = NSSize(width: 960, height: 540 + topBarHeight)
     func show(model: MahjongGameWindowModel) {
         if window == nil {
             makeWindow(model: model)
