@@ -23,7 +23,7 @@ final class MahjongGameWindowModel {
     }
 }
 
-/// Separate mahjong window with a native titlebar toolbar and a 16:9 table surface.
+/// Separate mahjong window with a 16:9 table surface and a dedicated top control strip.
 /// One controller for the process, so a recreated plaza cannot open a second table.
 @MainActor
 final class MahjongGameWindowController: NSObject, NSWindowDelegate {
@@ -34,8 +34,14 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
     private var suppressCloseCallback = false
     var onUserClose: (() -> Void)?
 
-    private static let defaultTableSize = NSSize(width: 1280, height: 720)
-    private static let minimumTableSize = NSSize(width: 960, height: 540)
+    private static let tableSize = NSSize(width: 1280, height: 720)
+    private static let topBarHeight: CGFloat = 42
+    private static let windowAspectRatio = NSSize(
+        width: tableSize.width,
+        height: tableSize.height + topBarHeight
+    )
+    private static let defaultWindowSize = windowAspectRatio
+    private static let minimumWindowSize = NSSize(width: 960, height: 540 + topBarHeight)
     func show(model: MahjongGameWindowModel) {
         if window == nil {
             makeWindow(model: model)
@@ -62,23 +68,28 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
 
     private func makeWindow(model: MahjongGameWindowModel) {
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: Self.defaultTableSize),
+            contentRect: NSRect(origin: .zero, size: Self.defaultWindowSize),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "麻将"
-        JarvisWindowAppearance.configureTransparentTitlebar(for: window)
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.styleMask.insert(.fullSizeContentView)
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentAspectRatio = NSSize(width: 16, height: 9)
-        window.contentMinSize = Self.minimumTableSize
+        window.aspectRatio = Self.windowAspectRatio
+        window.minSize = Self.minimumWindowSize
+        window.setFrame(NSRect(origin: .zero, size: Self.defaultWindowSize), display: false)
         window.backgroundColor = NSColor(red: 0.055, green: 0.22, blue: 0.11, alpha: 1)
         let hosting = NSHostingView(rootView: MahjongTableView(model: model))
         hosting.sizingOptions = []
         window.contentView = hosting
         self.window = window
         hostedModel = model
+        window.setFrame(NSRect(origin: .zero, size: Self.defaultWindowSize), display: false)
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
