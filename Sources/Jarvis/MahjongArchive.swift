@@ -336,7 +336,8 @@ final class MahjongArchiveStore {
         handType: MahjongWinningHandType,
         byDiscard: Bool,
         winnerConcealed: Bool,
-        seatProfileIDs: [String]
+        seatProfileIDs: [String],
+        multipliers: [Int] = [1, 1, 1, 1]
     ) -> MahjongArchiveSettlement {
         guard (0 ..< 4).contains(winnerSeat) else {
             return MahjongArchiveSettlement(transfers: [], notice: nil, campaignComplete: false, playerBankrupt: false, playerNeedsExit: false)
@@ -360,10 +361,13 @@ final class MahjongArchiveStore {
                   payerID != winnerID,
                   let payer = profile(id: payerID), profile(id: winnerID) != nil
             else { continue }
-            let amount = MahjongCompetitionPayout.payment(
+            let baseAmount = MahjongCompetitionPayout.payment(
                 handType: handType, byDiscard: byDiscard, winnerConcealed: winnerConcealed,
                 isDiscarder: loserSeat == discarderSeat
             )
+            let winnerMultiplier = multipliers.indices.contains(winnerSeat) ? multipliers[winnerSeat] : 1
+            let payerMultiplier = multipliers.indices.contains(loserSeat) ? multipliers[loserSeat] : 1
+            let amount = baseAmount * winnerMultiplier * payerMultiplier
             let paid = min(amount, max(0, payer.balance))
             guard paid > 0 else { continue }
             debit(payerID, amount: paid)
@@ -373,7 +377,7 @@ final class MahjongArchiveStore {
             totalPaid += paid
             let payerName = nickname(for: payerID)
             let winnerName = nickname(for: winnerID)
-            transfers.append("\(payerName) 向 \(winnerName) 支付 \(paid.formatted()) 毛格子")
+            transfers.append("\(payerName) → \(winnerName)：基础 \(baseAmount) × 胜方 \(winnerMultiplier) × 支付方 \(payerMultiplier) = \(amount.formatted())，实付 \(paid.formatted()) 毛格子")
         }
         let winnerID = archiveID(for: winnerSeat, seatProfileIDs: seatProfileIDs)
         if !winnerID.isEmpty {
@@ -442,7 +446,8 @@ final class MahjongArchiveStore {
         handType: MahjongWinningHandType,
         byDiscard: Bool,
         winnerConcealed: Bool,
-        seatProfiles: [MahjongPlayerArchive]
+        seatProfiles: [MahjongPlayerArchive],
+        multipliers: [Int] = [1, 1, 1, 1]
     ) -> (settlement: MahjongArchiveSettlement, profiles: [MahjongPlayerArchive]) {
         guard (0 ..< 4).contains(winnerSeat), seatProfiles.count == 4 else {
             return (MahjongArchiveSettlement(transfers: [], campaignComplete: false, playerBankrupt: false, playerNeedsExit: false), seatProfiles)
@@ -459,17 +464,20 @@ final class MahjongArchiveStore {
         var changes = Array(repeating: 0, count: 4)
         var transfers: [String] = []
         for loser in losers where (0 ..< 4).contains(loser) && loser != winnerSeat {
-            let amount = MahjongCompetitionPayout.payment(
+            let baseAmount = MahjongCompetitionPayout.payment(
                 handType: handType, byDiscard: byDiscard, winnerConcealed: winnerConcealed,
                 isDiscarder: loser == discarderSeat
             )
+            let winnerMultiplier = multipliers.indices.contains(winnerSeat) ? multipliers[winnerSeat] : 1
+            let payerMultiplier = multipliers.indices.contains(loser) ? multipliers[loser] : 1
+            let amount = baseAmount * winnerMultiplier * payerMultiplier
             let paid = min(amount, max(0, profiles[loser].balance))
             guard paid > 0 else { continue }
             profiles[loser].balance -= paid
             profiles[winnerSeat].balance += paid
             changes[loser] -= paid
             changes[winnerSeat] += paid
-            transfers.append("\(profiles[loser].nickname) 向 \(profiles[winnerSeat].nickname) 支付 \(paid.formatted()) 毛格子")
+            transfers.append("\(profiles[loser].nickname) → \(profiles[winnerSeat].nickname)：基础 \(baseAmount) × 胜方 \(winnerMultiplier) × 支付方 \(payerMultiplier) = \(amount.formatted())，实付 \(paid.formatted()) 毛格子")
         }
         for seat in profiles.indices {
             if seat == winnerSeat {

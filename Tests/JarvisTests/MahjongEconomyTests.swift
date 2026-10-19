@@ -3,6 +3,87 @@ import XCTest
 
 @MainActor
 final class MahjongEconomyTests: XCTestCase {
+    func testMultiplierEligibilityAndAIRollBoundaries() {
+        XCTAssertEqual(MahjongDoubling.options(for: 2_999), [1])
+        XCTAssertEqual(MahjongDoubling.options(for: 3_000), [1, 2])
+        XCTAssertEqual(MahjongDoubling.options(for: 7_999), [1, 2])
+        XCTAssertEqual(MahjongDoubling.options(for: 8_000), [1, 2, 4])
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 2_999, roll: 99), 1)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 3_000, roll: 59), 1)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 3_000, roll: 60), 2)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8_000, roll: 49), 1)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8_000, roll: 50), 2)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8_000, roll: 84), 2)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8_000, roll: 85), 4)
+    }
+
+    func testMultiplierChoiceValidatesOpeningBalanceAndResumesPlay() {
+        let game = MahjongGame()
+        var snapshot = game.makeLANSnapshot()
+        snapshot.phase = .choosingMultiplier
+        snapshot.isStarted = true
+        snapshot.roundStartingBalances = [5_000, 8_000, 2_000, 8_000]
+        snapshot.multipliers = [nil, 4, 1, 2]
+        snapshot.pendingMultiplierSeats = [0]
+        game.configureLAN(humanSeats: [0], localSeat: 0, authority: false)
+        game.applyLANSnapshot(snapshot)
+        game.configureLAN(humanSeats: [0], localSeat: 0, authority: true)
+
+        game.chooseMultiplier(4)
+        XCTAssertEqual(game.phase, .choosingMultiplier)
+        XCTAssertNil(game.multipliers[0])
+
+        game.chooseMultiplier(2)
+        XCTAssertEqual(game.phase, .playing)
+        XCTAssertEqual(game.multipliers.compactMap { $0 }, [2, 4, 1, 2])
+    }
+
+    func testLANMultiplierSnapshotLetsGuestChooseOnlyAffordableOption() throws {
+        let host = MahjongGame()
+        var snapshot = host.makeLANSnapshot()
+        snapshot.mode = .lan
+        snapshot.phase = .choosingMultiplier
+        snapshot.roundStartingBalances = [10_000, 2_000, 3_000, 8_000]
+        snapshot.multipliers = [nil, 1, nil, 4]
+        snapshot.pendingMultiplierSeats = [0, 2]
+        snapshot.multiplierDeadline = Date().addingTimeInterval(10)
+
+        let guest = MahjongGame()
+        guest.mode = .lan
+        guest.configureLAN(humanSeats: [0, 2], localSeat: 2, authority: false)
+        guest.applyLANSnapshot(try JSONDecoder().decode(
+            MahjongGameSnapshot.self, from: JSONEncoder().encode(snapshot)
+        ))
+
+        XCTAssertEqual(guest.localMultiplierOptions, [1, 2])
+        XCTAssertNotNil(guest.multiplierDeadline)
+        var sentValue: Int?
+        guest.onLANAction = { action in
+            if case let .multiplier(value) = action { sentValue = value }
+        }
+        guest.chooseMultiplier(4)
+        XCTAssertNil(sentValue)
+        guest.chooseMultiplier(2)
+        XCTAssertEqual(sentValue, 2)
+    }
+
+    func testLANPaymentsMultiplyPerOpponentAndCapAtAvailableBalance() {
+        let archive = MahjongArchiveStore(defaults: makeDefaults())
+        let seats = [10_000, 500, 10_000, 10_000].enumerated().map { seat, balance in
+            MahjongPlayerArchive(id: "seat-\(seat)", nickname: "玩家\(seat)", avatarStyle: .player, balance: balance)
+        }
+        let result = archive.settleLAN(
+            winnerSeat: 0, discarderSeat: nil, handType: .standard,
+            byDiscard: false, winnerConcealed: false, seatProfiles: seats,
+            multipliers: [2, 4, 1, 2]
+        )
+        // Standard self draw is 340: 340×2×4 is capped by seat 1's 500.
+        XCTAssertEqual(result.settlement.playerResults.map(\.balanceChange), [2_540, -500, -680, -1_360])
+        XCTAssertEqual(result.profiles.map(\.balance).reduce(0, +), seats.map(\.balance).reduce(0, +))
+        XCTAssertTrue(result.settlement.transfers[0].contains("2,720"))
+        XCTAssertTrue(result.settlement.transfers[0].contains("实付 500"))
+    }
+
     func testDailyRewardIs2500AndCanOnlyBeClaimedOncePerDay() {
         let archive = MahjongArchiveStore(defaults: makeDefaults())
 

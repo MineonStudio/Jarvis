@@ -403,8 +403,14 @@ struct GamePlazaView: View {
             return
         }
         game.mode = .solo
+        game.configureLAN(humanSeats: [0], localSeat: 0, authority: true)
+        game.onLANAction = nil
         game.assignAIProfiles(profiles)
         let archive = archive
+        game.onRoundBalancesRequested = { [weak game] in
+            guard let game else { return [] }
+            return [archive.player.balance] + game.aiProfileIDs.map { archive.profile(id: $0)?.balance ?? 0 }
+        }
         let aiProfileIDs = game.aiProfileIDs
         game.onMahjongVoiceCue = { cue in
             let gender: MahjongVoiceGender = if cue.seat == 0 {
@@ -514,7 +520,8 @@ struct GamePlazaView: View {
             handType: game.winningHandType,
             byDiscard: game.winByDiscard,
             winnerConcealed: game.melds[winner].allSatisfy { $0.kind == .concealedKong },
-            seatProfileIDs: ["player"] + game.aiProfileIDs
+            seatProfileIDs: ["player"] + game.aiProfileIDs,
+            multipliers: game.multipliers.map { $0 ?? 1 }
         )
         latestSettlement = settlement
         if settlement.playerNeedsExit {
@@ -538,19 +545,14 @@ struct GamePlazaView: View {
             )
         }
         seats[0] = archive.player
-        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(1) ? game.aiProfileIDs[1] : "") {
-            seats[2] = profile
-        }
-        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(2) ? game.aiProfileIDs[2] : "") {
-            seats[3] = profile
-        }
         let result = archive.settleLAN(
             winnerSeat: winner,
             discarderSeat: game.discarder,
             handType: game.winningHandType,
             byDiscard: game.winByDiscard,
             winnerConcealed: game.melds[winner].allSatisfy { $0.kind == .concealedKong },
-            seatProfiles: seats
+            seatProfiles: seats,
+            multipliers: game.multipliers.map { $0 ?? 1 }
         )
         latestSettlement = result.settlement
         service.publishSettlement(result.settlement, profiles: result.profiles)
@@ -1020,6 +1022,15 @@ struct MahjongTableView: View {
                 }
                 .padding(12)
             }
+
+        case .choosingMultiplier:
+            HStack(spacing: 8) {
+                ForEach(game.localMultiplierOptions, id: \.self) { value in
+                    Button(value == 1 ? "不加倍" : "×\(value)") { game.chooseMultiplier(value) }
+                        .buttonStyle(JarvisSecondaryButtonStyle())
+                }
+            }
+            .padding(12)
 
         case .responding:
             HStack(spacing: 8) {

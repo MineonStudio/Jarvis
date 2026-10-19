@@ -13,7 +13,7 @@ struct MahjongLANRoom: Identifiable {
 }
 
 enum MahjongLANAction: Codable {
-    case start, ready, missingSuit(MahjongSuit), discard(MahjongTile, drawnTile: Bool), discardDrawn
+    case start, ready, missingSuit(MahjongSuit), multiplier(Int), discard(MahjongTile, drawnTile: Bool), discardDrawn
     case respond(MahjongCallOption), selfDraw, kong(MahjongTile), nextRound, leave
 }
 
@@ -197,6 +197,9 @@ final class MahjongLANRoomService: ObservableObject {
             game.setLANNickname(guest.nickname, for: seat)
         }
         game.onLANAction = nil
+        game.onRoundBalancesRequested = { [weak self] in
+            self?.hostProfiles.map(\.balance) ?? []
+        }
         beginSnapshots()
         send(MahjongLANMessage(type: "avatars", avatarImages: avatarImages()), to: Array(hostConnections.values))
     }
@@ -207,6 +210,7 @@ final class MahjongLANRoomService: ObservableObject {
         game.configureLAN(humanSeats: [0, seat], localSeat: seat, authority: false)
         game.setLANNickname(profile.nickname, for: seat)
         game.onLANAction = { [weak self] action in self?.sendAction(action) }
+        game.onRoundBalancesRequested = nil
         status = "已加入对局 · 你是\(game.seatName(seat))"
     }
 

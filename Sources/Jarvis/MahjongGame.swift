@@ -75,7 +75,7 @@ enum MahjongRuleset: String, CaseIterable, Identifiable, Codable {
     }
 
     var detail: String {
-        switch self {
+        let rules: String = switch self {
         case .national:
             "## 🎯 核心规则：四组面子加一对将\n\n国标麻将使用万、筒、条和东南西北、中发白共一百三十六张牌。和牌的基础结构通常是四组面子加一对将牌：面子可以是同花色的连续三张组成的顺子，也可以是三张相同牌组成的刻子；将牌是两张相同的牌。\n\n### 🀄 起手与回合\n\n* 庄家起手十四张，其余玩家各十三张；庄家先打出一张开始对局。\n* 四家按逆时针顺序行动。轮到自己时，从牌墙摸一张，再从手牌中打出一张。\n* 别人打出的牌可以被响应：下一家可以吃，任意一家可以碰或明杠；满足和牌牌型时可以胡牌。若无人响应，则由下一家摸牌。\n\n### 🔁 吃、碰、杠怎么组成\n\n* **吃**：用上家打出的牌和手中的两张牌组成同花色、连续的三张，例如二万、三万、四万。\n* **碰**：手中有两张相同牌时，可以拿别人打出的第三张组成刻子。\n* **明杠**：手中已有三张相同牌时，拿别人打出的第四张组成杠；已碰出的刻子摸到第四张时也可以补杠。\n* **暗杠**：自己手中有四张相同牌时可以暗杠。杠后从牌墙补摸一张；吃、碰、明杠公开展示，暗杠保留暗牌。\n\n### ✅ 胡牌条件与例子\n\n常见牌型是“顺子 / 刻子 × 四组 + 将牌 × 一对”。例如：一二三万、四五六万、七八九条、三个东风，再加一对五筒。也支持七对和十三幺。胡牌可以来自自己摸牌，也可以来自其他玩家打出的牌。\n\n### ⚠️ 计分说明\n\n本版本采用简化竞赛计分：普通胡牌按 8 分、七对 24 分、十三幺 88 分；点炮时三家各付 8 分基础分，点炮者另付牌型分；自摸时三家各付基础分与牌型分。暂未计算完整的 81 种番种与起和门槛。\n\n### 🏁 本局结束\n\n有人胡牌后本局结束并展示各家手牌；牌墙摸完仍无人胡牌时流局。"
         case .sichuan:
@@ -83,6 +83,7 @@ enum MahjongRuleset: String, CaseIterable, Identifiable, Codable {
         case .cantonese:
             "## 🎯 核心规则：推倒胡，成牌即可胡\n\n广东推倒胡通常使用万、筒、条和东南西北、中发白，共一百三十六张牌。这里采用易上手的基础推倒胡规则：牌型满足和牌结构即可胡，不要求先凑够复杂番种或最低番数。\n\n### 🀄 起手与回合\n\n* 庄家起手十四张，其余三家各十三张；庄家先打出一张，之后按逆时针轮流行动。\n* 每回合摸一张、打一张。上家打出的牌可以被吃，任意一家打出的牌可以被碰或明杠；达到和牌条件时可以胡牌。\n* 没有人响应弃牌时，由下一家摸牌。有人响应时，优先处理胡牌，再处理杠、碰、吃。\n\n### 🔁 吃、碰、杠\n\n* **吃**：用上家的一张弃牌和手中的两张同花色序数牌组成连续顺子。\n* **碰**：手里有两张相同牌时，用别人的弃牌组成三张相同的刻子。\n* **明杠**：手中已有三张相同牌时接入弃牌，或将已碰的刻子补成四张。\n* **暗杠**：自己摸到四张相同牌时可以暗杠。杠后从牌墙补摸一张；公开副露会展示吃、碰和明杠，暗杠保留暗牌。\n\n### ✅ 和牌牌型与示例\n\n常规牌型为四组顺子或刻子加一对将牌；也支持七对与十三幺。比如“一二三万、四五六万、七八九条、三个东风、一对五筒”即可组成常规牌型。自摸和点和都可胡；达到牌型即可和牌，不设置最低番数门槛。\n\n### ⚠️ 玩法范围说明\n\n“广东麻将”各地规则差异较大。本版本采用简化推倒胡：暂不含花牌、买马、鸡平胡 / 新章等地区计番差异，输赢统一采用简化竞赛计分，不计算完整的地方番种与台数。\n\n### 🏁 本局结束\n\n有人和牌后本局结束并展示四家手牌；牌墙耗尽仍无人和牌时流局。"
         }
+        return rules + "\n\n### ✨ 本局加倍\n\n发牌后、首张出牌前，每人有 10 秒选择不加倍（×1）、加倍（×2）或超级加倍（×4）；四川麻将在定缺后选择。开局余额满 3,000 毛格子可选 ×2，满 8,000 可选 ×4；超时按 ×1。AI 只根据开局余额按随机权重选择。结算时，每位支付方的基础金额分别乘以赢家倍数和自己的倍数，最多支付其实际余额；流局不结算。"
     }
 
     var includesHonors: Bool {
@@ -104,9 +105,29 @@ enum MahjongRoundPhase: Equatable, Codable {
     case waitingForReady
     case dealing
     case choosingMissingSuit
+    case choosingMultiplier
     case playing
     case responding
     case roundEnded
+}
+
+enum MahjongDoubling {
+    static let duration: TimeInterval = 10
+
+    static func options(for balance: Int) -> [Int] {
+        if balance >= 8_000 { return [1, 2, 4] }
+        if balance >= 3_000 { return [1, 2] }
+        return [1]
+    }
+
+    /// The roll is uniform in 0..<100. Eligibility is based only on the balance
+    /// captured before this round, never on the AI's hand or later balance changes.
+    static func aiChoice(balance: Int, roll: Int) -> Int {
+        if balance < 3_000 { return 1 }
+        if balance < 8_000 { return roll < 60 ? 1 : 2 }
+        if roll < 50 { return 1 }
+        return roll < 85 ? 2 : 4
+    }
 }
 
 enum MahjongMeldKind: String, Codable {
@@ -219,6 +240,10 @@ final class MahjongGame {
     private(set) var phase: MahjongRoundPhase = .idle
     private(set) var readySeats: [Bool] = Array(repeating: false, count: 4)
     private(set) var missingSuits: [MahjongSuit?] = Array(repeating: nil, count: 4)
+    private(set) var roundStartingBalances = Array(repeating: 0, count: 4)
+    private(set) var multipliers: [Int?] = Array(repeating: nil, count: 4)
+    private(set) var multiplierDeadline: Date?
+    private(set) var pendingMultiplierSeats: [Int] = []
     private(set) var roundResult = ""
     private(set) var turnSecondsRemaining: Int?
     private(set) var turnTimerSeat: Int?
@@ -233,6 +258,7 @@ final class MahjongGame {
     private(set) var seatNicknames = ["玩家", "局域网玩家", "AI", "AI"]
     var onLANAction: ((MahjongLANAction) -> Void)?
     var onMahjongVoiceCue: ((MahjongVoiceCue) -> Void)?
+    var onRoundBalancesRequested: (() -> [Int])?
     private var applyingRemoteAction = false
     private var remoteActionSeat: Int?
 
@@ -262,6 +288,8 @@ final class MahjongGame {
             discarder: discarder, winningTile: winningTile, winningHandType: winningHandType,
             aiProfileIDs: aiProfileIDs, winByDiscard: winByDiscard, isStarted: isStarted, phase: phase,
             readySeats: readySeats, missingSuits: missingSuits, roundResult: roundResult,
+            roundStartingBalances: roundStartingBalances, multipliers: multipliers,
+            multiplierDeadline: multiplierDeadline, pendingMultiplierSeats: pendingMultiplierSeats,
             turnSecondsRemaining: turnSecondsRemaining, turnTimerSeat: turnTimerSeat,
             responseCountdowns: responseCountdowns, turnCountdownDeadline: turnCountdownDeadline,
             responseCountdownDeadlines: responseCountdownDeadlines, pendingTile: pendingTile,
@@ -283,6 +311,8 @@ final class MahjongGame {
         winningHandType = snapshot.winningHandType; aiProfileIDs = snapshot.aiProfileIDs
         winByDiscard = snapshot.winByDiscard; isStarted = snapshot.isStarted; phase = snapshot.phase
         readySeats = snapshot.readySeats; missingSuits = snapshot.missingSuits; roundResult = snapshot.roundResult
+        roundStartingBalances = snapshot.roundStartingBalances; multipliers = snapshot.multipliers
+        multiplierDeadline = snapshot.multiplierDeadline; pendingMultiplierSeats = snapshot.pendingMultiplierSeats
         turnSecondsRemaining = snapshot.turnSecondsRemaining; turnTimerSeat = snapshot.turnTimerSeat
         responseCountdowns = snapshot.responseCountdowns; turnCountdownDeadline = snapshot.turnCountdownDeadline
         responseCountdownDeadlines = snapshot.responseCountdownDeadlines; pendingTile = snapshot.pendingTile
@@ -303,6 +333,7 @@ final class MahjongGame {
         case .start: start()
         case .ready: markReady()
         case let .missingSuit(suit): chooseMissingSuit(suit)
+        case let .multiplier(value): chooseMultiplier(value)
         case let .discard(tile, drawnTile): discard(tile, drawnTile: drawnTile)
         case .discardDrawn: discardDrawnTile()
         case let .respond(option): respond(to: option)
@@ -315,6 +346,31 @@ final class MahjongGame {
 
     func assignAIProfiles(_ profileIDs: [String]) {
         aiProfileIDs = Array(profileIDs.prefix(3)) + Array(repeating: "", count: max(0, 3 - profileIDs.count))
+    }
+
+    func setRoundStartingBalances(_ balances: [Int]) {
+        guard isLANAuthority, balances.count == 4 else { return }
+        roundStartingBalances = balances.map { max(0, $0) }
+    }
+
+    var localMultiplierOptions: [Int] {
+        guard phase == .choosingMultiplier, pendingMultiplierSeats.contains(localSeat) else { return [] }
+        return MahjongDoubling.options(for: roundStartingBalances[localSeat])
+    }
+
+    func chooseMultiplier(_ value: Int) {
+        if mode == .lan, !isLANAuthority, !applyingRemoteAction {
+            guard localMultiplierOptions.contains(value) else { return }
+            onLANAction?(.multiplier(value))
+            return
+        }
+        let seat = remoteActionSeat ?? localSeat
+        guard phase == .choosingMultiplier, pendingMultiplierSeats.contains(seat),
+              MahjongDoubling.options(for: roundStartingBalances[seat]).contains(value) else { return }
+        multipliers[seat] = value
+        pendingMultiplierSeats.removeAll { $0 == seat }
+        message = "\(seatName(seat)) 已选择 ×\(value)"
+        if pendingMultiplierSeats.isEmpty { finishMultiplierChoices() }
     }
 
     func declareCampaignComplete() {
@@ -334,6 +390,7 @@ final class MahjongGame {
     private var timedSeat: Int?
     private var preservedTurnDeadline: Date?
     private var responseTimerTasks: [Int: Task<Void, Never>] = [:]
+    private var multiplierTimerTask: Task<Void, Never>?
 
     var humanCount: Int {
         humanSeats.count
@@ -427,7 +484,11 @@ final class MahjongGame {
         if mode == .lan, !isLANAuthority {
             onLANAction?(.start); return
         }
+        if let balances = onRoundBalancesRequested?() {
+            setRoundStartingBalances(balances)
+        }
         stopTurnTimer()
+        stopMultiplierTimer()
         clearPendingResponses()
         let tiles = Self.makeWall(for: ruleset).shuffled()
         if !isStarted, phase == .idle {
@@ -440,6 +501,8 @@ final class MahjongGame {
         melds = Array(repeating: [], count: 4)
         discards = Array(repeating: [], count: 4)
         missingSuits = Array(repeating: nil, count: 4)
+        multipliers = Array(repeating: nil, count: 4)
+        pendingMultiplierSeats = []
         dice = []
         dealtCount = 0
         turn = dealer
@@ -465,6 +528,7 @@ final class MahjongGame {
 
     func leaveTableLocally() {
         stopTurnTimer()
+        stopMultiplierTimer()
         clearPendingResponses()
         isStarted = false
         phase = .idle
@@ -487,6 +551,10 @@ final class MahjongGame {
         }
         if phase == .choosingMissingSuit, missingSuits[seat] == nil, !pendingHumanSeats.contains(seat) {
             pendingHumanSeats.append(seat)
+        }
+        if phase == .choosingMultiplier {
+            multipliers[seat] = nil
+            if !pendingMultiplierSeats.contains(seat) { pendingMultiplierSeats.append(seat) }
         }
         if phase == .responding, pendingAISeats.contains(seat) {
             if pendingAIStarted {
@@ -521,12 +589,15 @@ final class MahjongGame {
             pendingHumanSeats.removeAll { $0 == seat }
             missingSuits[seat] = Self.leastFrequentSuit(in: hands[seat])
             if pendingHumanSeats.isEmpty {
-                phase = .playing
-                turn = dealer
-                justDrew = true
-                needsDiscard = true
-                Task { await runAutomatedTurns() }
+                prepareMultiplierChoices()
             }
+        }
+        if phase == .choosingMultiplier, pendingMultiplierSeats.contains(seat) {
+            multipliers[seat] = MahjongDoubling.aiChoice(
+                balance: roundStartingBalances[seat], roll: Int.random(in: 0..<100)
+            )
+            pendingMultiplierSeats.removeAll { $0 == seat }
+            if pendingMultiplierSeats.isEmpty { finishMultiplierChoices() }
         }
         if phase == .responding, pendingHumanSeats.contains(seat) {
             pendingHumanSeats.removeAll { $0 == seat }
@@ -589,8 +660,7 @@ final class MahjongGame {
         if ruleset == .sichuan {
             prepareMissingSuitChoices()
         } else {
-            phase = .playing
-            message = "庄家 \(seatName(dealer)) 起手 14 张 · 请出牌或宣告自摸"
+            prepareMultiplierChoices()
         }
         await runAutomatedTurns()
     }
@@ -612,12 +682,7 @@ final class MahjongGame {
             message = "等待\(seatName(waitingSeat))选择定缺花色"
             return
         }
-        phase = .playing
-        turn = dealer
-        justDrew = true
-        needsDiscard = true
-        message = "定缺完成 · 庄家 \(seatName(dealer)) 起手 14 张"
-        Task { await runAutomatedTurns() }
+        prepareMultiplierChoices()
     }
 
     func discard(_ tile: MahjongTile) {
@@ -730,6 +795,46 @@ final class MahjongGame {
         if let first = currentResponderSeat {
             message = "四川麻将 · \(seatName(first)) 请选择定缺花色"
         }
+    }
+
+    private func prepareMultiplierChoices() {
+        phase = .choosingMultiplier
+        turn = dealer
+        justDrew = true
+        needsDiscard = true
+        pendingMultiplierSeats = humanSeats.sorted()
+        for seat in 0..<4 where !humanSeats.contains(seat) {
+            multipliers[seat] = MahjongDoubling.aiChoice(
+                balance: roundStartingBalances[seat], roll: Int.random(in: 0..<100)
+            )
+        }
+        message = "请选择本局倍数 · 10 秒后默认不加倍"
+        multiplierDeadline = Date().addingTimeInterval(MahjongDoubling.duration)
+        multiplierTimerTask?.cancel()
+        multiplierTimerTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(MahjongDoubling.duration))
+            guard let self, !Task.isCancelled, self.phase == .choosingMultiplier else { return }
+            for seat in self.pendingMultiplierSeats {
+                self.multipliers[seat] = 1
+            }
+            self.pendingMultiplierSeats = []
+            self.finishMultiplierChoices()
+        }
+        if pendingMultiplierSeats.isEmpty { finishMultiplierChoices() }
+    }
+
+    private func finishMultiplierChoices() {
+        guard phase == .choosingMultiplier, pendingMultiplierSeats.isEmpty else { return }
+        stopMultiplierTimer()
+        phase = .playing
+        message = "加倍完成 · 庄家 \(seatName(dealer)) 起手 14 张"
+        Task { await runAutomatedTurns() }
+    }
+
+    private func stopMultiplierTimer() {
+        multiplierTimerTask?.cancel()
+        multiplierTimerTask = nil
+        multiplierDeadline = nil
     }
 
     private func performDiscard(_ tile: MahjongTile, by player: Int, preserveOrder: Bool = false) {
@@ -1537,6 +1642,10 @@ struct MahjongGameSnapshot: Codable {
     var readySeats: [Bool]
     var missingSuits: [MahjongSuit?]
     var roundResult: String
+    var roundStartingBalances: [Int]
+    var multipliers: [Int?]
+    var multiplierDeadline: Date?
+    var pendingMultiplierSeats: [Int]
     var turnSecondsRemaining: Int?
     var turnTimerSeat: Int?
     var responseCountdowns: [Int: Int]

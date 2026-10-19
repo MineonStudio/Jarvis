@@ -233,6 +233,8 @@ private struct MahjongOverheadFelt: View {
                 MahjongSeatPlaque(
                     profile: profile(for: seat(at: view)),
                     missingSuit: missingSuit(for: seat(at: view)),
+                    multiplier: game.multipliers[seat(at: view)],
+                    showsMultiplier: game.phase == .choosingMultiplier || game.phase == .playing || game.phase == .responding || game.phase == .roundEnded,
                     isDealer: game.dealer == seat(at: view),
                     viewPosition: view,
                     titlebarInset: titlebarInset
@@ -262,6 +264,8 @@ private struct MahjongOverheadFelt: View {
     private var ceremony: some View {
         if game.phase == .waitingForReady {
             MahjongReadyCard(game: game, archive: archive, lanRoomService: lanRoomService)
+        } else if game.phase == .choosingMultiplier {
+            MahjongMultiplierCard(game: game)
         } else if game.phase == .roundEnded {
             MahjongSettlementCard(
                 game: game,
@@ -694,6 +698,8 @@ private struct MahjongLocalDiscardButton<Content: View>: View {
 private struct MahjongSeatPlaque: View {
     let profile: MahjongPlayerArchive
     let missingSuit: MahjongSuit?
+    let multiplier: Int?
+    let showsMultiplier: Bool
     let isDealer: Bool
     let viewPosition: Int
     let titlebarInset: CGFloat
@@ -762,11 +768,23 @@ private struct MahjongSeatPlaque: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 
+    private var multiplierBadge: some View {
+        Text(multiplier.map { "×\($0)" } ?? "选择中")
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .foregroundStyle(Color(red: 0.98, green: 0.87, blue: 0.54))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.black.opacity(0.38), in: Capsule())
+    }
+
     private var avatar: some View {
         Button {
             showsDetail = true
         } label: {
             MahjongArchiveAvatar(profile: profile, size: 60)
+                .overlay(alignment: .topLeading) {
+                    if showsMultiplier { multiplierBadge.offset(x: -5, y: -5) }
+                }
                 .overlay(alignment: .topTrailing) {
                     if isDealer {
                         statusBadge("庄")
@@ -1024,6 +1042,43 @@ private struct MahjongActionTray: View {
     }
 }
 
+private struct MahjongMultiplierCard: View {
+    let game: MahjongGame
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("本局加倍")
+                .font(.custom("Kaiti SC", size: 23))
+            TimelineView(.periodic(from: .now, by: 0.2)) { context in
+                Text("剩余 \(max(0, Int(ceil(game.multiplierDeadline?.timeIntervalSince(context.date) ?? 0)))) 秒")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+            }
+            if game.localMultiplierOptions.isEmpty {
+                Text("已选择，等待其他玩家")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 8) {
+                    ForEach(game.localMultiplierOptions, id: \.self) { value in
+                        Button(value == 1 ? "不加倍" : "×\(value)") {
+                            game.chooseMultiplier(value)
+                        }
+                        .buttonStyle(JarvisSecondaryButtonStyle(tint: value == 4 ? .orange : nil))
+                    }
+                }
+            }
+            Text("开局余额满 3,000 可选 ×2，满 8,000 可选 ×4；超时选 ×1")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 20)
+        .jarvisGlass(cornerRadius: 22, interactive: false)
+        .position(MahjongOverheadMetrics.compass)
+    }
+}
+
 private struct MahjongReadyCard: View {
     let game: MahjongGame
     let archive: MahjongArchiveStore
@@ -1081,6 +1136,19 @@ private struct MahjongSettlementCard: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             results
+            if let transfers = roundSettlement?.transfers, !transfers.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(Array(transfers.enumerated()), id: \.offset) { _, transfer in
+                            Text(transfer)
+                                .font(.system(size: 10, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxWidth: 330, maxHeight: 62)
+            }
             if roundNotice?.contains("挑战获胜") == true || roundNotice?.contains("挑战已完成") == true {
                 Button("返回档案", action: onNextRound)
                     .buttonStyle(JarvisSecondaryButtonStyle())
