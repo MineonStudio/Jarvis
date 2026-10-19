@@ -134,8 +134,20 @@ final class MahjongSceneHandInteractionTests: XCTestCase {
     }
 
     @MainActor
-    private func makeHand() -> MahjongSceneHandInteraction {
-        let interaction = MahjongSceneHandInteraction()
+    func testReducedMotionMovesImmediatelyWithoutSchedulingAnimation() {
+        let interaction = makeHand(reduceMotion: true)
+        let tile = interaction.tiles[0]
+        interaction.updatePointer(CGPoint(x: 0, y: CGFloat(tile.rest.z)))
+        XCTAssertEqual(tile.node.simdPosition.z, tile.rest.z - 0.275, accuracy: 0.00001)
+        XCTAssertFalse(interaction.isAnimating)
+        interaction.updatePointer(nil)
+        XCTAssertEqual(tile.node.simdPosition, tile.rest)
+        XCTAssertFalse(interaction.isAnimating)
+    }
+
+    @MainActor
+    private func makeHand(reduceMotion: Bool = false) -> MahjongSceneHandInteraction {
+        let interaction = MahjongSceneHandInteraction(reduceMotion: reduceMotion)
         let node = SCNNode(geometry: SCNBox(width: 0.78, height: 1.10, length: 0.53, chamferRadius: 0.1))
         node.simdPosition = SIMD3(0, 0.285, MahjongHandLayout.localRowDepth)
         let drawn = node.clone()

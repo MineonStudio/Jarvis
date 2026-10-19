@@ -20,6 +20,11 @@ final class MahjongSceneHandInteraction {
     private(set) var tiles: [Tile] = []
     private(set) var hoveredIndex: Int?
     var onAnimation: (() -> Void)?
+    private let reduceMotionOverride: Bool?
+
+    init(reduceMotion: Bool? = nil) {
+        reduceMotionOverride = reduceMotion
+    }
 
     var isAnimating: Bool {
         tiles.contains { $0.node.action(forKey: "hand.hover") != nil }
@@ -84,7 +89,8 @@ final class MahjongSceneHandInteraction {
     private func move(_ tile: Tile, raised: Bool, animated: Bool) {
         let travel = raised ? MahjongHandLayout.hoverTravel(tileHeight: MahjongHandLayout.tileHeight) : 0
         let target = tile.rest - SIMD3(0, 0, travel)
-        let animates = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let reduceMotion = reduceMotionOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let animates = animated && !reduceMotion
         let visible = tile.node.action(forKey: "hand.hover") == nil
             ? tile.node.simdPosition : tile.node.presentation.simdPosition
         tile.node.removeAction(forKey: "hand.hover")
