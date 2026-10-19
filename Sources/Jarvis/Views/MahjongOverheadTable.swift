@@ -12,23 +12,34 @@ struct MahjongOverheadTable: View {
     let onExit: () -> Void
 
     var body: some View {
-        MahjongOverheadFelt(
-            game: game,
-            archive: archive,
-            lanRoomService: lanRoomService,
-            roundNotice: roundNotice,
-            roundSettlement: roundSettlement,
-            onNextRound: onNextRound,
-            onExit: onExit
-        )
+        ZStack(alignment: .top) {
+            MahjongOverheadFelt(
+                game: game,
+                archive: archive,
+                lanRoomService: lanRoomService,
+                roundNotice: roundNotice,
+                roundSettlement: roundSettlement,
+                onNextRound: onNextRound,
+                onExit: onExit
+            )
+
+            MahjongTableTopBar(
+                game: game,
+                lanRoomService: lanRoomService,
+                onExit: onExit
+            )
+            .padding(.leading, 86)
+            .padding(.trailing, 22)
+            .padding(.top, 5)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
 
 private enum MahjongOverheadMetrics {
-    static let canvas = CGSize(width: 1280, height: 1000)
-    static let compass = CGPoint(x: 640, y: 488)
+    static let canvas = CGSize(width: 1280, height: 720)
+    static func y(_ original: CGFloat) -> CGFloat { original * 0.57 + 42 }
+    static let compass = CGPoint(x: 640, y: y(488))
     static let riverBreadth: CGFloat = 30
     static let riverLength: CGFloat = 42
     static let meldBreadth: CGFloat = 36
@@ -57,28 +68,28 @@ private enum MahjongOverheadMetrics {
 
     static func plaqueCenter(_ view: Int) -> CGPoint {
         switch view {
-        case 0: CGPoint(x: 640, y: 960)
-        case 1: CGPoint(x: 90, y: 488)
-        case 2: CGPoint(x: 640, y: 112)
-        default: CGPoint(x: 1190, y: 488)
+        case 0: CGPoint(x: 640, y: 650)
+        case 1: CGPoint(x: 90, y: y(488))
+        case 2: CGPoint(x: 640, y: y(112))
+        default: CGPoint(x: 1190, y: y(488))
         }
     }
 
     static func handCenter(_ view: Int) -> CGPoint {
         switch view {
-        case 0: CGPoint(x: 640, y: 856)
-        case 1: CGPoint(x: 187, y: 488)
-        case 2: CGPoint(x: 640, y: 131)
-        default: CGPoint(x: 1093, y: 488)
+        case 0: CGPoint(x: 640, y: y(856))
+        case 1: CGPoint(x: 187, y: y(488))
+        case 2: CGPoint(x: 640, y: y(131))
+        default: CGPoint(x: 1093, y: y(488))
         }
     }
 
     static func meldCenter(_ view: Int) -> CGPoint {
         switch view {
-        case 0: CGPoint(x: 640, y: 783)
-        case 1: CGPoint(x: 247, y: 488)
-        case 2: CGPoint(x: 640, y: 193)
-        default: CGPoint(x: 1033, y: 488)
+        case 0: CGPoint(x: 640, y: y(783))
+        case 1: CGPoint(x: 247, y: y(488))
+        case 2: CGPoint(x: 640, y: y(193))
+        default: CGPoint(x: 1033, y: y(488))
         }
     }
 
@@ -89,13 +100,13 @@ private enum MahjongOverheadMetrics {
         let depth: CGFloat = riverLength + 4
         switch view {
         case 0:
-            return CGPoint(x: 640 + (column - 2.5) * along, y: 721 - row * depth)
+            return CGPoint(x: 640 + (column - 2.5) * along, y: y(721 - row * depth))
         case 2:
-            return CGPoint(x: 640 - (column - 2.5) * along, y: 255 + row * depth)
+            return CGPoint(x: 640 - (column - 2.5) * along, y: y(255 + row * depth))
         case 1:
-            return CGPoint(x: 309 + row * depth, y: 488 + (2.5 - column) * along)
+            return CGPoint(x: 309 + row * depth, y: y(488 + (2.5 - column) * along))
         default:
-            return CGPoint(x: 971 - row * depth, y: 488 + (column - 2.5) * along)
+            return CGPoint(x: 971 - row * depth, y: y(488 + (column - 2.5) * along))
         }
     }
 
@@ -114,6 +125,73 @@ private enum MahjongOverheadMetrics {
 
     static func viewPosition(of seat: Int, localSeat: Int) -> Int {
         (seat - localSeat + 4) % 4
+    }
+}
+
+private struct MahjongTableTopBar: View {
+    let game: MahjongGame
+    @ObservedObject var lanRoomService: MahjongLANRoomService
+    let onExit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 7) {
+                tag("麻将")
+                tag(game.ruleset.rawValue)
+                tag(game.mode.rawValue)
+                if game.mode == .lan, let roomCode = lanRoomService.roomCode {
+                    tag("房间码 \(roomCode)")
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            Text(game.message)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .glassEffect(in: Capsule())
+                .help(game.message)
+
+            Spacer(minLength: 4)
+
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                HStack(spacing: 8) {
+                    Text("时长 \(roundDuration(at: context.date))")
+                    Text("余牌 \(game.wall.count)")
+                }
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .glassEffect(in: Capsule())
+            }
+
+            Button(action: onExit) {
+                Label("退出", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+            .controlSize(.small)
+            .buttonStyle(.glass)
+        }
+        .frame(maxWidth: .infinity, minHeight: 36, maxHeight: 36)
+    }
+
+    private func tag(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .glassEffect(in: Capsule())
+    }
+
+    private func roundDuration(at date: Date) -> String {
+        let end = game.roundEndedAt ?? date
+        guard let start = game.roundStartedAt else { return "00:00" }
+        let seconds = max(0, Int(end.timeIntervalSince(start)))
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 }
 
@@ -171,7 +249,7 @@ private struct MahjongOverheadFelt: View {
             ceremony
             MahjongActionTray(game: game)
                 .fixedSize()
-                .position(x: 640, y: 770)
+                .position(x: 640, y: MahjongOverheadMetrics.y(770))
         }
         .frame(width: MahjongOverheadMetrics.canvas.width, height: MahjongOverheadMetrics.canvas.height)
     }
