@@ -372,7 +372,7 @@ struct GamePlazaView: View {
             checkInFailed = !succeeded
             if succeeded {
                 latestSettlement = MahjongArchiveSettlement(
-                    transfers: [], notice: "每日签到已领取 +5,000 毛格子", campaignComplete: false,
+                    transfers: [], notice: "每日签到已领取 +\(MahjongArchiveStore.dailyReward.formatted()) 毛格子", campaignComplete: false,
                     playerBankrupt: false, playerNeedsExit: false
                 )
             }
@@ -513,6 +513,7 @@ struct GamePlazaView: View {
             discarderSeat: game.discarder,
             handType: game.winningHandType,
             byDiscard: game.winByDiscard,
+            winnerConcealed: game.melds[winner].allSatisfy { $0.kind == .concealedKong },
             seatProfileIDs: ["player"] + game.aiProfileIDs
         )
         latestSettlement = settlement
@@ -548,6 +549,7 @@ struct GamePlazaView: View {
             discarderSeat: game.discarder,
             handType: game.winningHandType,
             byDiscard: game.winByDiscard,
+            winnerConcealed: game.melds[winner].allSatisfy { $0.kind == .concealedKong },
             seatProfiles: seats
         )
         latestSettlement = result.settlement
@@ -584,7 +586,7 @@ private struct MahjongArchiveDashboardView: View {
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button(archive.canClaimDailyReward ? "领取每日签到 · +5,000" : "今日签到已领取") {
+                Button(archive.canClaimDailyReward ? "领取每日签到 · +\(MahjongArchiveStore.dailyReward.formatted())" : "今日签到已领取") {
                     _ = archive.claimDailyReward()
                 }
                 .buttonStyle(JarvisSecondaryButtonStyle())
@@ -618,8 +620,29 @@ private struct MahjongArchiveDashboardView: View {
             }
             .scrollIndicators(.hidden)
             VStack(alignment: .leading, spacing: 7) {
-                Text("单局赔付标准").font(.system(size: 12, weight: .semibold))
-                Text("普通胡牌：点炮 1,000 / 自摸每家 500　 ·　 七对：点炮 1,500 / 自摸每家 700　 ·　 十三幺：点炮 2,000 / 自摸每家 900")
+                Text("简化竞赛赔付 · 1 分 = 20 毛格子")
+                    .font(.system(size: 12, weight: .semibold))
+                ForEach(MahjongWinningHandType.allCases, id: \.rawValue) { handType in
+                    let concealed = handType != .standard
+                    let discarderPayment = MahjongCompetitionPayout.payment(
+                        handType: handType, byDiscard: true, winnerConcealed: concealed, isDiscarder: true
+                    )
+                    let otherPayment = MahjongCompetitionPayout.payment(
+                        handType: handType, byDiscard: true, winnerConcealed: concealed, isDiscarder: false
+                    )
+                    let selfDrawPayment = MahjongCompetitionPayout.payment(
+                        handType: handType, byDiscard: false, winnerConcealed: concealed, isDiscarder: false
+                    )
+                    Text("\(handType.rawValue) \(handType.competitionPoints) 分：点炮者 \(discarderPayment.formatted())，其余两家各 \(otherPayment.formatted())；自摸三家各 \(selfDrawPayment.formatted())")
+                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                let concealedDiscarder = MahjongCompetitionPayout.payment(
+                    handType: .standard, byDiscard: true, winnerConcealed: true, isDiscarder: true
+                )
+                let concealedSelfDraw = MahjongCompetitionPayout.payment(
+                    handType: .standard, byDiscard: false, winnerConcealed: true, isDiscarder: false
+                )
+                Text("普通牌门清：点炮者 \(concealedDiscarder.formatted())，自摸三家各 \(concealedSelfDraw.formatted())。余额不足时按实际余额支付。")
                     .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
@@ -1000,12 +1023,20 @@ struct MahjongTableView: View {
 
         case .responding:
             HStack(spacing: 8) {
-                ForEach(game.humanResponseOptions) { option in
-                    Button(callTitle(option)) { game.respond(to: option) }
-                        .buttonStyle(JarvisSecondaryButtonStyle(tint: option.kind == .win ? .orange : nil))
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(game.humanResponseOptions.filter { $0.kind != .pass }) { option in
+                            Button(callTitle(option)) { game.respond(to: option) }
+                                .buttonStyle(JarvisSecondaryButtonStyle(tint: option.kind == .win ? .orange : nil))
+                        }
+                    }
                 }
+                .scrollIndicators(.automatic)
+                Button("过") { game.respond(to: MahjongCallOption(kind: .pass, heldTiles: [])) }
+                    .buttonStyle(JarvisSecondaryButtonStyle())
             }
             .padding(12)
+            .frame(maxWidth: 560)
 
         case .playing where game.isHumanTurn:
             if game.canSelfDraw || !game.availableKongTiles.isEmpty {
@@ -1544,7 +1575,6 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 workflowControls()
-                    .fixedSize()
                     .padding(16)
             }
         }
@@ -2509,7 +2539,7 @@ private struct MahjongLANRoomView: View {
                 .disabled(roomCode.count != 6 || service.isConnecting)
                 Spacer()
                 if !service.isHosting {
-                    Button("创建房间") { service.createRoom() }
+                    Button("创建房间") { service.createRoom(profile: localProfile) }
                         .buttonStyle(JarvisSecondaryButtonStyle())
                 }
             }

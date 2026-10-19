@@ -2,7 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_DIR="$ROOT_DIR/.build/release"
+# File Provider can attach FinderInfo to SwiftPM resource bundles inside the
+# project directory, which prevents SwiftPM's own code-signing step.
+SWIFTPM_SCRATCH_DIR="${JARVIS_SWIFTPM_SCRATCH_DIR:-/Users/Shared/Jarvis/SwiftPM}"
+BUILD_DIR="$SWIFTPM_SCRATCH_DIR/release"
 JARVIS_DEV_BUILD="${JARVIS_DEV_BUILD:-0}"
 if [[ "$JARVIS_DEV_BUILD" == "1" ]]; then
   DEFAULT_APP_DIR="$ROOT_DIR/dist/Jarvis-Dev.app"
@@ -33,7 +36,7 @@ JARVIS_BUILD="${JARVIS_BUILD:-370}"
 ICON_ASSET_NAME="jarvis-${JARVIS_VERSION//./-}"
 
 cd "$ROOT_DIR"
-swift build -c release
+swift build -c release --scratch-path "$SWIFTPM_SCRATCH_DIR"
 
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$BUILD_DIR/Jarvis" "$APP_DIR/Contents/MacOS/Jarvis"

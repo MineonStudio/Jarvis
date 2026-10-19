@@ -240,14 +240,19 @@ private struct MahjongOverheadFelt: View {
             }
             MahjongTurnCompass(
                 winds: (0 ..< 4).map { game.seatName(seat(at: $0)).replacingOccurrences(of: "家", with: "") },
-                seatName: indicatedSeat.map { game.seatName($0) } ?? "",
+                seatName: game.phase == .responding ? "吃碰杠" : (indicatedSeat.map { game.seatName($0) } ?? ""),
                 viewPosition: indicatedSeat.map { MahjongOverheadMetrics.viewPosition(of: $0, localSeat: game.localSeat) },
-                deadline: indicatedSeat.flatMap { game.countdownDeadline(for: $0) },
-                counting: indicatedSeat.map { game.isCountdownActive(for: $0) } ?? false
+                deadline: game.phase == .responding
+                    ? game.responseDecisionDeadline
+                    : indicatedSeat.flatMap { game.countdownDeadline(for: $0) },
+                counting: game.phase == .responding
+                    ? game.responseDecisionDeadline != nil
+                    : (indicatedSeat.map { game.isCountdownActive(for: $0) } ?? false),
+                countdownDuration: game.phase == .responding ? game.responseDecisionDuration : 20
             )
             ceremony
             MahjongActionTray(game: game)
-                .frame(width: 340, height: 52)
+                .frame(width: 560, height: 52)
                 .position(x: 640, y: 600)
         }
         .frame(width: MahjongOverheadMetrics.canvas.width, height: MahjongOverheadMetrics.canvas.height)
@@ -271,7 +276,7 @@ private struct MahjongOverheadFelt: View {
 
     private var indicatedSeat: Int? {
         switch game.phase {
-        case .playing, .responding, .choosingMissingSuit, .dealing:
+        case .playing, .choosingMissingSuit, .dealing:
             game.activeSeat
         default:
             nil
@@ -804,11 +809,12 @@ private struct MahjongSeatPlaque: View {
 
 private struct MahjongTurnRing: View {
     let deadline: Date?
+    let duration: TimeInterval
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
             let remaining = deadline?.timeIntervalSince(context.date) ?? 0
-            let progress = min(max(remaining / 20, 0), 1)
+            let progress = min(max(remaining / duration, 0), 1)
             Circle()
                 .trim(from: 0, to: progress)
                 .stroke(
@@ -839,6 +845,7 @@ private struct MahjongTurnCompass: View {
     let viewPosition: Int?
     let deadline: Date?
     let counting: Bool
+    let countdownDuration: TimeInterval
 
     private let plate: CGFloat = 108
     private let gold = Color(red: 0.78, green: 0.64, blue: 0.36)
@@ -852,7 +859,7 @@ private struct MahjongTurnCompass: View {
                 .fill(Color(red: 0.10, green: 0.06, blue: 0.03))
                 .overlay {
                     if counting, let deadline {
-                        MahjongTurnRing(deadline: deadline)
+                        MahjongTurnRing(deadline: deadline, duration: countdownDuration)
                             .padding(4)
                     }
                 }
@@ -876,7 +883,7 @@ private struct MahjongTurnCompass: View {
         .position(MahjongOverheadMetrics.compass)
         .animation(.easeInOut(duration: 0.25), value: viewPosition)
         .allowsHitTesting(false)
-        .accessibilityLabel(counting ? "\(seatName) 出牌倒计时" : "\(seatName) 当前")
+        .accessibilityLabel(counting ? "\(seatName) 倒计时" : (viewPosition == nil ? "方位指示器" : "\(seatName) 当前"))
     }
 
     private var plateBody: some View {
@@ -953,13 +960,7 @@ private struct MahjongActionTray: View {
 
     var body: some View {
         if actionsVisible {
-            ViewThatFits(in: .horizontal) {
-                tray
-                ScrollView(.horizontal) {
-                    tray.padding(.horizontal, 4)
-                }
-                .scrollIndicators(.automatic)
-            }
+            tray
         }
     }
 
@@ -988,10 +989,17 @@ private struct MahjongActionTray: View {
             }
         case .responding:
             HStack(spacing: 8) {
-                ForEach(game.humanResponseOptions) { option in
-                    Button(callTitle(option)) { game.respond(to: option) }
-                        .buttonStyle(JarvisSecondaryButtonStyle(tint: option.kind == .win ? .orange : nil))
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(game.humanResponseOptions.filter { $0.kind != .pass }) { option in
+                            Button(callTitle(option)) { game.respond(to: option) }
+                                .buttonStyle(JarvisSecondaryButtonStyle(tint: option.kind == .win ? .orange : nil))
+                        }
+                    }
                 }
+                .scrollIndicators(.automatic)
+                Button("过") { game.respond(to: MahjongCallOption(kind: .pass, heldTiles: [])) }
+                    .buttonStyle(JarvisSecondaryButtonStyle())
             }
         case .playing where game.isHumanTurn && (game.canSelfDraw || !game.availableKongTiles.isEmpty):
             HStack(spacing: 8) {

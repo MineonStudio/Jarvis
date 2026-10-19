@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import Foundation
 import Network
 
@@ -22,6 +23,8 @@ private struct MahjongLANMessage: Codable {
     var nickname: String?
     var profile: MahjongPlayerArchive?
     var profiles: [MahjongPlayerArchive]?
+    var avatarData: Data?
+    var avatarImages: [Int: Data]?
     var action: MahjongLANAction?
     var snapshot: MahjongGameSnapshot?
     var settlement: MahjongArchiveSettlement?
@@ -58,6 +61,7 @@ final class MahjongLANRoomService: ObservableObject {
     private var hostProfiles: [MahjongPlayerArchive] = []
     private var aiSeatProfiles: [MahjongPlayerArchive] = []
     private var guestProfiles: [Int: MahjongPlayerArchive] = [:]
+    private var cachedAvatarFilenames: [Int: String] = [:]
     private var hostSettlement: MahjongArchiveSettlement?
 
     func startBrowsing() {
@@ -104,8 +108,11 @@ final class MahjongLANRoomService: ObservableObject {
         browser.start(queue: queue)
     }
 
-    func createRoom() {
+    func createRoom(profile: MahjongPlayerArchive) {
         guard listener == nil else { return }
+        localProfile = profile
+        hostProfiles = [profile] + (1 ..< 4).map(Self.emptySeat)
+        syncedProfiles = Dictionary(uniqueKeysWithValues: hostProfiles.enumerated().map { ($0.offset, $0.element) })
         do {
             let code = String(format: "%06d", Int.random(in: 0 ... 999_999))
             let listener = try NWListener(using: .tcp)
@@ -162,7 +169,8 @@ final class MahjongLANRoomService: ObservableObject {
             Task { @MainActor [weak self, weak connection] in
                 guard let self, let connection else { return }
                 if case .ready = state {
-                    self.send(MahjongLANMessage(type: "join", nickname: wireProfile.nickname, profile: wireProfile), on: connection)
+                    self.send(MahjongLANMessage(type: "join", nickname: wireProfile.nickname, profile: wireProfile,
+                                                avatarData: Self.avatarData(for: wireProfile)), on: connection)
                     self.receiveLoop(from: connection)
                 } else if case let .failed(error) = state {
                     self.isConnecting = false
@@ -190,6 +198,7 @@ final class MahjongLANRoomService: ObservableObject {
         }
         game.onLANAction = nil
         beginSnapshots()
+        send(MahjongLANMessage(type: "avatars", avatarImages: avatarImages()), to: Array(hostConnections.values))
     }
 
     func startJoinedGame(_ game: MahjongGame, profile: MahjongPlayerArchive) {
@@ -244,6 +253,9 @@ final class MahjongLANRoomService: ObservableObject {
         hostConnections.values.forEach { $0.cancel() }
         hostConnections.removeAll(); receiveBuffers.removeAll()
         connectionSeats.removeAll(); guestProfiles.removeAll()
+        cachedAvatarFilenames.removeAll()
+        hostProfiles.removeAll(); aiSeatProfiles.removeAll(); syncedProfiles.removeAll()
+        localProfile = nil
         isHosting = false; isConnecting = false; connected = false; localSeat = nil
         game?.onLANAction = nil; game = nil
         roomCode = nil
@@ -328,6 +340,7 @@ final class MahjongLANRoomService: ObservableObject {
                     MahjongPlayerArchive(id: Self.localPlayerID, nickname: remoteNickname, avatarStyle: .player, balance: MahjongArchiveStore.initialBalance)
                 }
                 guestProfile.nickname = remoteNickname
+                guestProfile.customAvatarFilename = Self.cacheRemoteAvatar(message.avatarData)
                 guestProfiles[seat] = guestProfile
                 if hostProfiles.count != 4 {
                     hostProfiles = (0 ..< 4).map { seat in Self.emptySeat(seat) }
@@ -337,7 +350,12 @@ final class MahjongLANRoomService: ObservableObject {
                 syncedProfiles = Dictionary(uniqueKeysWithValues: hostProfiles.enumerated().map { ($0.offset, $0.element) })
                 connected = true
                 status = "已连接 \(hostConnections.count) / 3 位局域网玩家"
-                send(MahjongLANMessage(type: "joined", seat: seat, nickname: remoteNickname, profiles: hostProfiles), on: connection)
+                send(MahjongLANMessage(type: "joined", seat: seat, nickname: hostProfiles[0].nickname,
+                                       profiles: hostProfiles, avatarImages: avatarImages()), on: connection)
+                if let avatarData = message.avatarData {
+                    send(MahjongLANMessage(type: "avatar", seat: seat, avatarData: avatarData),
+                         to: hostConnections.filter { $0.key != id }.map(\.value))
+                }
                 sendSnapshot()
             case "action":
                 if let action = message.action {
@@ -363,6 +381,9 @@ final class MahjongLANRoomService: ObservableObject {
                 if let profiles = message.profiles {
                     updateSyncedProfiles(profiles)
                 }
+                if let images = message.avatarImages {
+                    updateAvatarImages(images)
+                }
                 isConnecting = false; connected = true
                 status = "已加入房间，正在同步牌局…"
             case "snapshot":
@@ -376,6 +397,14 @@ final class MahjongLANRoomService: ObservableObject {
                 isConnecting = false; connected = true
             case "voice":
                 lastVoiceCue = message.voiceCue
+            case "avatar":
+                if let seat = message.seat, let data = message.avatarData {
+                    cacheAvatar(data, for: seat)
+                }
+            case "avatars":
+                if let images = message.avatarImages {
+                    updateAvatarImages(images)
+                }
             case "rejected":
                 isConnecting = false; connected = false
                 status = message.error ?? "房间已满"
@@ -414,7 +443,54 @@ final class MahjongLANRoomService: ObservableObject {
 
     private func updateSyncedProfiles(_ profiles: [MahjongPlayerArchive]) {
         guard profiles.count == 4 else { return }
-        syncedProfiles = Dictionary(uniqueKeysWithValues: profiles.enumerated().map { ($0.offset, $0.element) })
+        syncedProfiles = Dictionary(uniqueKeysWithValues: profiles.enumerated().map { seat, profile in
+            var profile = profile
+            if let filename = cachedAvatarFilenames[seat] {
+                profile.customAvatarFilename = filename
+            }
+            return (seat, profile)
+        })
+    }
+
+    private func avatarImages() -> [Int: Data] {
+        Dictionary(uniqueKeysWithValues: hostProfiles.enumerated().compactMap { seat, profile in
+            Self.avatarData(for: profile).map { (seat, $0) }
+        })
+    }
+
+    private func updateAvatarImages(_ images: [Int: Data]) {
+        cachedAvatarFilenames.removeAll()
+        for (seat, data) in images { cacheAvatar(data, for: seat) }
+    }
+
+    private func cacheAvatar(_ data: Data, for seat: Int) {
+        guard let filename = Self.cacheRemoteAvatar(data),
+              var profile = syncedProfiles[seat] else { return }
+        cachedAvatarFilenames[seat] = filename
+        profile.customAvatarFilename = filename
+        syncedProfiles[seat] = profile
+    }
+
+    private static func avatarData(for profile: MahjongPlayerArchive) -> Data? {
+        guard let filename = profile.customAvatarFilename,
+              URL(fileURLWithPath: filename).lastPathComponent == filename,
+              let data = try? Data(contentsOf: MahjongArchiveStore.avatarDirectoryURL.appendingPathComponent(filename)),
+              data.count <= 2_000_000 else { return nil }
+        return data
+    }
+
+    private static func cacheRemoteAvatar(_ data: Data?) -> String? {
+        guard let data, !data.isEmpty, data.count <= 2_000_000 else { return nil }
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let filename = "lan-avatar-\(digest).png"
+        let directory = MahjongArchiveStore.avatarDirectoryURL
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: directory.appendingPathComponent(filename), options: .atomic)
+            return filename
+        } catch {
+            return nil
+        }
     }
 
     private func removeGuest(connection: NWConnection, seat: Int) {
@@ -434,6 +510,7 @@ final class MahjongLANRoomService: ObservableObject {
         hostProfiles[seat] = aiProfile
         game?.removeLANGuest(seat: seat, aiNickname: aiProfile.nickname)
         syncedProfiles = Dictionary(uniqueKeysWithValues: hostProfiles.enumerated().map { ($0.offset, $0.element) })
+        send(MahjongLANMessage(type: "avatars", avatarImages: avatarImages()), to: Array(hostConnections.values))
     }
 
     private func sendAction(_ action: MahjongLANAction) {
