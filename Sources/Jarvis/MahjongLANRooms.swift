@@ -23,6 +23,7 @@ private struct MahjongLANMessage: Codable {
     var action: MahjongLANAction?
     var snapshot: MahjongGameSnapshot?
     var settlement: MahjongArchiveSettlement?
+    var voiceCue: MahjongVoiceCue?
     var error: String?
 }
 
@@ -39,6 +40,7 @@ final class MahjongLANRoomService: ObservableObject {
     @Published private(set) var remoteNickname = "局域网玩家"
     @Published private(set) var syncedProfiles: [Int: MahjongPlayerArchive] = [:]
     @Published private(set) var settlement: MahjongArchiveSettlement?
+    @Published private(set) var lastVoiceCue: MahjongVoiceCue?
     @Published private(set) var hostLeft = false
 
     private let queue = DispatchQueue(label: "com.jarvis.mahjong.lan")
@@ -209,6 +211,11 @@ final class MahjongLANRoomService: ObservableObject {
         sendSnapshot()
     }
 
+    func broadcastVoiceCue(_ cue: MahjongVoiceCue) {
+        guard isHosting else { return }
+        send(MahjongLANMessage(type: "voice", seat: cue.seat, voiceCue: cue), to: Array(hostConnections.values))
+    }
+
     func stop() {
         snapshotTask?.cancel(); snapshotTask = nil
         browser?.cancel(); browser = nil
@@ -348,6 +355,8 @@ final class MahjongLANRoomService: ObservableObject {
                 if let profiles = message.profiles { updateSyncedProfiles(profiles) }
                 settlement = message.settlement
                 isConnecting = false; connected = true
+            case "voice":
+                lastVoiceCue = message.voiceCue
             case "rejected":
                 isConnecting = false; connected = false
                 status = message.error ?? "房间已满"
