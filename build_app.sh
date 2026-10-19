@@ -80,6 +80,11 @@ if [[ -d "$ROOT_DIR/Resources/GameArtwork" ]]; then
   fi
 fi
 
+if [[ -d "$ROOT_DIR/Resources/MahjongAudio" ]]; then
+  rm -rf "$APP_DIR/Contents/Resources/MahjongAudio"
+  ditto "$ROOT_DIR/Resources/MahjongAudio" "$APP_DIR/Contents/Resources/MahjongAudio"
+fi
+
 # Keep production builds compatible with the installed app. Development
 # builds opt into a separate identity so LaunchServices, TCC, preferences,
 # Keychain entries, and application data remain isolated from production.
