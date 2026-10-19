@@ -12,16 +12,7 @@ struct MahjongOverheadTable: View {
     let onExit: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            MahjongTableTopBar(
-                game: game,
-                lanRoomService: lanRoomService,
-                onExit: onExit
-            )
-            .padding(.leading, 86)
-            .padding(.trailing, 22)
-            .frame(height: 42)
-
+        ZStack(alignment: .top) {
             MahjongOverheadFelt(
                 game: game,
                 archive: archive,
@@ -31,8 +22,15 @@ struct MahjongOverheadTable: View {
                 onNextRound: onNextRound,
                 onExit: onExit
             )
-            .aspectRatio(16.0 / 9.0, contentMode: .fit)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            MahjongTableTopBar(
+                game: game,
+                lanRoomService: lanRoomService,
+                onExit: onExit
+            )
+            .padding(.leading, 86)
+            .padding(.trailing, 22)
+            .padding(.top, 5)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
