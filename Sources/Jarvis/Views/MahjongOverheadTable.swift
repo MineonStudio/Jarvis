@@ -26,69 +26,6 @@ struct MahjongOverheadTable: View {
     }
 }
 
-private struct MahjongMatchRail: View {
-    let game: MahjongGame
-    let roomCode: String?
-    let onExit: () -> Void
-
-    var body: some View {
-        HStack(spacing: 16) {
-            railFacts
-            Spacer(minLength: 12)
-            Text(game.message)
-                .font(.system(size: 15, weight: .medium, design: .serif))
-                .foregroundStyle(MahjongMatchRail.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Spacer(minLength: 12)
-            clockAndWall
-            Button("退出游戏", action: onExit)
-                .buttonStyle(JarvisSecondaryButtonStyle())
-        }
-        .padding(.horizontal, 22)
-    }
-
-    private static let ink = Color(red: 0.96, green: 0.93, blue: 0.86)
-
-    private var railFacts: some View {
-        HStack(spacing: 8) {
-            Text(game.ruleset.rawValue)
-            Text(game.mode.rawValue)
-            if game.mode == .lan, let roomCode {
-                Text("房间 \(roomCode)")
-            }
-        }
-        .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(Self.ink.opacity(0.82))
-        .lineLimit(1)
-    }
-
-    @ViewBuilder
-    private var clockAndWall: some View {
-        HStack(spacing: 10) {
-            if let endedAt = game.roundEndedAt {
-                Text(Self.duration(from: game.roundStartedAt, to: endedAt))
-            } else if game.roundStartedAt != nil {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text(Self.duration(from: game.roundStartedAt, to: context.date))
-                }
-            } else {
-                Text("00:00")
-            }
-            Text("余 \(game.wall.count)")
-        }
-        .font(.system(size: 13, weight: .semibold, design: .rounded))
-        .foregroundStyle(Self.ink.opacity(0.82))
-        .monospacedDigit()
-    }
-
-    private static func duration(from start: Date?, to date: Date) -> String {
-        guard let start else { return "00:00" }
-        let seconds = max(0, Int(date.timeIntervalSince(start)))
-        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
-    }
-}
-
 private enum MahjongOverheadMetrics {
     static let canvas = CGSize(width: 1280, height: 1000)
     static let compass = CGPoint(x: 640, y: 488)
@@ -232,9 +169,6 @@ private struct MahjongOverheadFelt: View {
                 counting: indicatedSeat.map { game.isCountdownActive(for: $0) } ?? false
             )
             ceremony
-            MahjongMatchRail(game: game, roomCode: lanRoomService.roomCode, onExit: onExit)
-                .frame(width: MahjongOverheadMetrics.canvas.width, height: 44)
-                .position(x: MahjongOverheadMetrics.canvas.width / 2, y: 28)
             MahjongActionTray(game: game)
                 .fixedSize()
                 .position(x: 640, y: 770)
