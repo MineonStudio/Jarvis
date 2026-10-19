@@ -91,7 +91,6 @@ private struct MahjongMatchRail: View {
 
 private enum MahjongOverheadMetrics {
     static let canvas = CGSize(width: 1280, height: 1000)
-    static let headerHeight: CGFloat = 58
     static let compass = CGPoint(x: 640, y: 488)
     static let riverBreadth: CGFloat = 30
     static let riverLength: CGFloat = 42
@@ -210,19 +209,6 @@ private struct MahjongOverheadFelt: View {
                         height: MahjongOverheadMetrics.canvas.height * scale
                     )
             }
-            // Keep the match header outside the table's tile area. SceneKit melds
-            // can reach the top edge, so reserve a real strip instead of drawing
-            // the header over the felt.
-            .scaleEffect(
-                x: 1,
-                y: (proxy.size.height - MahjongOverheadMetrics.headerHeight) / proxy.size.height,
-                anchor: .top
-            )
-            .offset(y: MahjongOverheadMetrics.headerHeight)
-            .overlay(alignment: .top) {
-                MahjongMatchRail(game: game, roomCode: lanRoomService.roomCode, onExit: onExit)
-                    .frame(height: MahjongOverheadMetrics.headerHeight)
-            }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
@@ -246,6 +232,9 @@ private struct MahjongOverheadFelt: View {
                 counting: indicatedSeat.map { game.isCountdownActive(for: $0) } ?? false
             )
             ceremony
+            MahjongMatchRail(game: game, roomCode: lanRoomService.roomCode, onExit: onExit)
+                .frame(width: MahjongOverheadMetrics.canvas.width, height: 44)
+                .position(x: MahjongOverheadMetrics.canvas.width / 2, y: 28)
             MahjongActionTray(game: game)
                 .fixedSize()
                 .position(x: 640, y: 770)
