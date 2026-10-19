@@ -2,21 +2,6 @@ import Foundation
 import Observation
 import AppKit
 
-enum MahjongVoiceGender: String, Codable, CaseIterable, Identifiable {
-    case male
-    case female
-
-    var id: String { rawValue }
-    var displayName: String { self == .male ? "男声" : "女声" }
-
-    static func defaultProfile(for id: String) -> MahjongVoiceGender {
-        switch id {
-        case "iron-man", "thor", "hulk", "hawkeye": .male
-        default: .female
-        }
-    }
-}
-
 enum MahjongArchiveAvatarStyle: String, Codable, CaseIterable {
     case player, iron, spider, captain, thor, hulk, widow, hawkeye
     case panda, fox, cat, rabbit, bear, tiger, owl
@@ -60,7 +45,6 @@ struct MahjongPlayerArchive: Codable, Identifiable, Equatable {
     var id: String
     var nickname: String
     var avatarStyle: MahjongArchiveAvatarStyle
-    var voiceGender: MahjongVoiceGender = .female
     var customAvatarFilename: String? = nil
     var balance: Int
     var wins: Int = 0
@@ -72,29 +56,6 @@ struct MahjongPlayerArchive: Codable, Identifiable, Equatable {
         let decidedGames = wins + losses
         guard decidedGames > 0 else { return 0 }
         return Int((Double(wins) / Double(decidedGames) * 100).rounded())
-    }
-
-}
-
-extension MahjongPlayerArchive {
-    private enum CodingKeys: String, CodingKey {
-        case id, nickname, avatarStyle, voiceGender, customAvatarFilename
-        case balance, wins, losses, escapes, eliminatedDay
-    }
-
-    init(from decoder: Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        id = try values.decode(String.self, forKey: .id)
-        nickname = try values.decode(String.self, forKey: .nickname)
-        avatarStyle = try values.decode(MahjongArchiveAvatarStyle.self, forKey: .avatarStyle)
-        voiceGender = try values.decodeIfPresent(MahjongVoiceGender.self, forKey: .voiceGender)
-            ?? MahjongVoiceGender.defaultProfile(for: id)
-        customAvatarFilename = try values.decodeIfPresent(String.self, forKey: .customAvatarFilename)
-        balance = try values.decode(Int.self, forKey: .balance)
-        wins = try values.decodeIfPresent(Int.self, forKey: .wins) ?? 0
-        losses = try values.decodeIfPresent(Int.self, forKey: .losses) ?? 0
-        escapes = try values.decodeIfPresent(Int.self, forKey: .escapes) ?? 0
-        eliminatedDay = try values.decodeIfPresent(String.self, forKey: .eliminatedDay)
     }
 }
 
@@ -182,23 +143,12 @@ final class MahjongArchiveStore {
         return true
     }
 
-    func updatePlayerProfile(
-        nickname: String? = nil,
-        avatarStyle: MahjongArchiveAvatarStyle? = nil,
-        voiceGender: MahjongVoiceGender? = nil
-    ) {
+    func updatePlayerProfile(nickname: String? = nil, avatarStyle: MahjongArchiveAvatarStyle? = nil) {
         if let nickname {
             let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { player.nickname = String(trimmed.prefix(16)) }
         }
         if let avatarStyle { player.avatarStyle = avatarStyle }
-        if let voiceGender { player.voiceGender = voiceGender }
-        save()
-    }
-
-    func updateAIVoiceGender(profileID: String, voiceGender: MahjongVoiceGender) {
-        guard let index = aiProfiles.firstIndex(where: { $0.id == profileID }) else { return }
-        aiProfiles[index].voiceGender = voiceGender
         save()
     }
 
@@ -512,15 +462,15 @@ final class MahjongArchiveStore {
         if let data = try? JSONEncoder().encode(snapshot) { defaults.set(data, forKey: storageKey) }
     }
 
-    private static let playerSeed = MahjongPlayerArchive(id: "player", nickname: "玩家", avatarStyle: .player, voiceGender: .female, balance: initialBalance)
+    private static let playerSeed = MahjongPlayerArchive(id: "player", nickname: "玩家", avatarStyle: .player, balance: initialBalance)
     private static let roster: [MahjongPlayerArchive] = [
-        MahjongPlayerArchive(id: "iron-man", nickname: "团团", avatarStyle: .panda, voiceGender: .male, balance: initialBalance),
-        MahjongPlayerArchive(id: "spider-man", nickname: "小橘", avatarStyle: .cat, voiceGender: .female, balance: initialBalance),
-        MahjongPlayerArchive(id: "captain-america", nickname: "云朵兔", avatarStyle: .rabbit, voiceGender: .female, balance: initialBalance),
-        MahjongPlayerArchive(id: "thor", nickname: "星星鸮", avatarStyle: .owl, voiceGender: .male, balance: initialBalance),
-        MahjongPlayerArchive(id: "hulk", nickname: "阿福熊", avatarStyle: .bear, voiceGender: .male, balance: initialBalance),
-        MahjongPlayerArchive(id: "black-widow", nickname: "机灵狐", avatarStyle: .fox, voiceGender: .female, balance: initialBalance),
-        MahjongPlayerArchive(id: "hawkeye", nickname: "小斑", avatarStyle: .tiger, voiceGender: .male, balance: initialBalance)
+        MahjongPlayerArchive(id: "iron-man", nickname: "团团", avatarStyle: .panda, balance: initialBalance),
+        MahjongPlayerArchive(id: "spider-man", nickname: "小橘", avatarStyle: .cat, balance: initialBalance),
+        MahjongPlayerArchive(id: "captain-america", nickname: "云朵兔", avatarStyle: .rabbit, balance: initialBalance),
+        MahjongPlayerArchive(id: "thor", nickname: "星星鸮", avatarStyle: .owl, balance: initialBalance),
+        MahjongPlayerArchive(id: "hulk", nickname: "阿福熊", avatarStyle: .bear, balance: initialBalance),
+        MahjongPlayerArchive(id: "black-widow", nickname: "机灵狐", avatarStyle: .fox, balance: initialBalance),
+        MahjongPlayerArchive(id: "hawkeye", nickname: "小斑", avatarStyle: .tiger, balance: initialBalance)
     ]
 }
 
