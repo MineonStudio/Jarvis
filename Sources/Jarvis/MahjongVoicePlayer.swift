@@ -16,6 +16,8 @@ final class MahjongVoicePlayer {
         guard let url else { return }
         player.volume = 0.9
         player.insert(AVPlayerItem(url: url), after: nil)
-        if player.rate == 0 { player.play() }
+        if player.rate == 0 {
+            player.play()
+        }
     }
 }

@@ -64,7 +64,7 @@ struct JarvisHomeView: View {
                                 .frame(width: min(300, geometry.size.width * 0.52), height: 176)
                         )
                     )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .padding(40)
             }

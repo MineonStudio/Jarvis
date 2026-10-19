@@ -5,7 +5,9 @@ import UniformTypeIdentifiers
 private enum GameLibrarySelection: String, CaseIterable, Identifiable, Hashable {
     case all = "全部游戏"
     case mahjong = "麻将"
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 }
 
 struct GamePlazaView: View {
@@ -25,7 +27,9 @@ struct GamePlazaView: View {
     @State private var avatarImportError: String?
     @State private var gameWindowModel: MahjongGameWindowModel?
 
-    private var gameWindow: MahjongGameWindowController { .shared }
+    private var gameWindow: MahjongGameWindowController {
+        .shared
+    }
 
     var body: some View {
         JarvisContentArea(
@@ -103,7 +107,9 @@ struct GamePlazaView: View {
             librarySelection = .mahjong
         }
         .onChange(of: game.isStarted) { _, started in
-            if !started { gameWindow.hide() }
+            if !started {
+                gameWindow.hide()
+            }
         }
         .onChange(of: latestSettlement) { _, settlement in
             gameWindowModel?.roundNotice = settlement?.notice
@@ -271,8 +277,8 @@ struct GamePlazaView: View {
                 archiveMetric("逃跑", "\(archive.player.escapes)")
                 Spacer(minLength: 8)
                 Button(checkInButtonTitle, action: startDailyCheckIn)
-                .buttonStyle(JarvisSecondaryButtonStyle())
-                .disabled(!archive.canClaimDailyReward || isCheckingIn)
+                    .buttonStyle(JarvisSecondaryButtonStyle())
+                    .disabled(!archive.canClaimDailyReward || isCheckingIn)
                 Button("查看档案") { showsArchive = true }
                     .buttonStyle(JarvisSecondaryButtonStyle())
             }
@@ -294,7 +300,9 @@ struct GamePlazaView: View {
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
         }
         .onAppear {
-            if playerNicknameDraft.isEmpty { playerNicknameDraft = archive.player.nickname }
+            if playerNicknameDraft.isEmpty {
+                playerNicknameDraft = archive.player.nickname
+            }
         }
         .onChange(of: archive.player.nickname) { _, nickname in
             playerNicknameDraft = nickname
@@ -316,9 +324,15 @@ struct GamePlazaView: View {
     }
 
     private var checkInButtonTitle: String {
-        if isCheckingIn { return "开始签到" }
-        if checkInFailed { return "签到失败" }
-        if !archive.canClaimDailyReward { return "签到成功" }
+        if isCheckingIn {
+            return "开始签到"
+        }
+        if checkInFailed {
+            return "签到失败"
+        }
+        if !archive.canClaimDailyReward {
+            return "签到成功"
+        }
         return "开始签到"
     }
 
@@ -329,12 +343,19 @@ struct GamePlazaView: View {
 
     private func voiceGender(for seat: Int) -> MahjongVoiceGender {
         if game.mode == .lan {
-            if let profile = lanRoomService?.syncedProfiles[seat] { return profile.voiceGender }
-            if seat == game.localSeat { return archive.player.voiceGender }
+            if let profile = lanRoomService?.syncedProfiles[seat] {
+                return profile.voiceGender
+            }
+            if seat == game.localSeat {
+                return archive.player.voiceGender
+            }
         }
-        if seat == 0 { return archive.player.voiceGender }
+        if seat == 0 {
+            return archive.player.voiceGender
+        }
         if game.aiProfileIDs.indices.contains(seat - 1),
-           let profile = archive.profile(id: game.aiProfileIDs[seat - 1]) {
+           let profile = archive.profile(id: game.aiProfileIDs[seat - 1])
+        {
             return profile.voiceGender
         }
         return .female
@@ -386,14 +407,14 @@ struct GamePlazaView: View {
         let archive = archive
         let aiProfileIDs = game.aiProfileIDs
         game.onMahjongVoiceCue = { cue in
-            let gender: MahjongVoiceGender
-            if cue.seat == 0 {
-                gender = archive.player.voiceGender
+            let gender: MahjongVoiceGender = if cue.seat == 0 {
+                archive.player.voiceGender
             } else if aiProfileIDs.indices.contains(cue.seat - 1),
-                      let profile = archive.profile(id: aiProfileIDs[cue.seat - 1]) {
-                gender = profile.voiceGender
+                      let profile = archive.profile(id: aiProfileIDs[cue.seat - 1])
+            {
+                profile.voiceGender
             } else {
-                gender = .female
+                .female
             }
             MahjongVoicePlayer.shared.play(cue.key, gender: gender)
         }
@@ -405,7 +426,7 @@ struct GamePlazaView: View {
     }
 
     private func exitMatch() {
-        if game.isStarted && game.phase != .roundEnded {
+        if game.isStarted, game.phase != .roundEnded {
             archive.recordVoluntaryEscape()
         }
         game.leaveTable()
@@ -499,7 +520,9 @@ struct GamePlazaView: View {
             game.leaveTable()
             return
         }
-        if settlement.campaignComplete { game.declareCampaignComplete() }
+        if settlement.campaignComplete {
+            game.declareCampaignComplete()
+        }
     }
 
     private func settleLANRound(using service: MahjongLANRoomService) {
@@ -508,14 +531,18 @@ struct GamePlazaView: View {
             latestSettlement = nil
             return
         }
-        var seats = (0..<4).map { seat in
+        var seats = (0 ..< 4).map { seat in
             service.syncedProfiles[seat] ?? MahjongPlayerArchive(
                 id: "empty-seat-\(seat)", nickname: game.seatName(seat), avatarStyle: .player, balance: 0
             )
         }
         seats[0] = archive.player
-        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(1) ? game.aiProfileIDs[1] : "") { seats[2] = profile }
-        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(2) ? game.aiProfileIDs[2] : "") { seats[3] = profile }
+        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(1) ? game.aiProfileIDs[1] : "") {
+            seats[2] = profile
+        }
+        if let profile = archive.profile(id: game.aiProfileIDs.indices.contains(2) ? game.aiProfileIDs[2] : "") {
+            seats[3] = profile
+        }
         let result = archive.settleLAN(
             winnerSeat: winner,
             discarderSeat: game.discarder,
@@ -662,7 +689,9 @@ struct MahjongArchiveAvatar: View {
     private var generatedImage: NSImage? {
         if let filename = profile.customAvatarFilename {
             let url = MahjongArchiveStore.avatarDirectoryURL.appendingPathComponent(filename)
-            if let image = NSImage(contentsOf: url) { return image }
+            if let image = NSImage(contentsOf: url) {
+                return image
+            }
         }
         guard let assetName = profile.avatarStyle.generatedAssetName,
               let url = Bundle.main.url(forResource: assetName, withExtension: "png", subdirectory: "GameArtwork/Avatars") else { return nil }
@@ -699,9 +728,10 @@ struct MahjongArchiveAvatar: View {
                     .foregroundStyle(.white.opacity(0.95))
                     .shadow(color: .black.opacity(0.3), radius: 5, y: 2)
                 VStack { Spacer(); Text(String(profile.nickname.prefix(1)))
-                        .font(.system(size: size * 0.15, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.68))
-                        .padding(.bottom, size * 0.055) }
+                    .font(.system(size: size * 0.15, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.68))
+                    .padding(.bottom, size * 0.055)
+                }
             }
         }
         .frame(width: size, height: size)
@@ -783,7 +813,9 @@ private struct GamePosterArtwork: View {
 private struct MahjongTablePalette {
     var scheme: ColorScheme
 
-    var isDark: Bool { scheme == .dark }
+    var isDark: Bool {
+        scheme == .dark
+    }
 
     var felt: Color {
         isDark
@@ -791,10 +823,18 @@ private struct MahjongTablePalette {
             : Color(red: 0.56, green: 0.76, blue: 0.66)
     }
 
-    var feltAccentTop: Double { isDark ? 0.68 : 0.22 }
-    var feltAccentBottom: Double { isDark ? 0.38 : 0.08 }
+    var feltAccentTop: Double {
+        isDark ? 0.68 : 0.22
+    }
 
-    var discardFill: Color { Color.black.opacity(isDark ? 0.14 : 0.08) }
+    var feltAccentBottom: Double {
+        isDark ? 0.38 : 0.08
+    }
+
+    var discardFill: Color {
+        Color.black.opacity(isDark ? 0.14 : 0.08)
+    }
+
     var discardStroke: Color {
         isDark ? Color.white.opacity(0.07) : Color(red: 0.10, green: 0.26, blue: 0.18).opacity(0.28)
     }
@@ -812,7 +852,9 @@ private struct MahjongTablePalette {
     }
 
     func tileShadowOpacity(compact: Bool) -> Double {
-        if isDark { return compact ? 0.08 : 0.18 }
+        if isDark {
+            return compact ? 0.08 : 0.18
+        }
         return compact ? 0.14 : 0.26
     }
 }
@@ -832,13 +874,33 @@ private extension View {
 struct MahjongTableView: View {
     var model: MahjongGameWindowModel
 
-    private var game: MahjongGame { model.game }
-    private var archive: MahjongArchiveStore { model.archive }
-    private var lanRoomService: MahjongLANRoomService { model.lanRoomService }
-    private var roundNotice: String? { model.roundNotice }
-    private var roundSettlement: MahjongArchiveSettlement? { model.roundSettlement }
-    private var onNextRound: () -> Void { model.onNextRound }
-    private var onExit: () -> Void { model.onExit }
+    private var game: MahjongGame {
+        model.game
+    }
+
+    private var archive: MahjongArchiveStore {
+        model.archive
+    }
+
+    private var lanRoomService: MahjongLANRoomService {
+        model.lanRoomService
+    }
+
+    private var roundNotice: String? {
+        model.roundNotice
+    }
+
+    private var roundSettlement: MahjongArchiveSettlement? {
+        model.roundSettlement
+    }
+
+    private var onNextRound: () -> Void {
+        model.onNextRound
+    }
+
+    private var onExit: () -> Void {
+        model.onExit
+    }
 
     var body: some View {
         MahjongOverheadTable(
@@ -973,7 +1035,6 @@ struct MahjongTableView: View {
         let tiles = option.heldTiles.map(\.accessibilityName).joined(separator: "、")
         return "\(option.kind.rawValue)【\(tiles)】"
     }
-
 }
 
 private enum MahjongDiscardMetrics {
@@ -1137,7 +1198,6 @@ private struct MahjongPlayerInfoCard: View {
         .popover(isPresented: $showsDetail, arrowEdge: detailArrowEdge) {
             MahjongPlayerDetailPanel(
                 profile: profile,
-                seatName: seatName,
                 missingSuit: missingSuit
             )
         }
@@ -1166,7 +1226,6 @@ private struct MahjongPlayerInfoCard: View {
 
 struct MahjongPlayerDetailPanel: View {
     let profile: MahjongPlayerArchive
-    let seatName: String
     let missingSuit: MahjongSuit?
 
     var body: some View {
@@ -1174,9 +1233,6 @@ struct MahjongPlayerDetailPanel: View {
             HStack(alignment: .center, spacing: 12) {
                 MahjongArchiveAvatar(profile: profile, size: 64)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(seatName)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
                     Text(profile.nickname)
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
@@ -1210,7 +1266,6 @@ struct MahjongPlayerDetailPanel: View {
 
     private var accessibilitySummary: String {
         var parts = [
-            seatName,
             profile.nickname,
             "余额\(profile.balance)毛格子",
             "胜率\(profile.winRate)%",
@@ -1220,7 +1275,7 @@ struct MahjongPlayerDetailPanel: View {
             "语音\(profile.voiceGender.displayName)"
         ]
         if let missingSuit {
-            parts.insert("缺门\(missingSuit.shortName)", at: 3)
+            parts.insert("缺门\(missingSuit.shortName)", at: 2)
         }
         return parts.joined(separator: "，")
     }
@@ -1255,7 +1310,7 @@ private struct MahjongCountdownRing: View {
             let segmentCount = Int((boundedProgress * 120).rounded(.up))
             guard segmentCount > 0 else { return }
             let activeColor = countdownColor(at: 1 - Double(boundedProgress))
-            for index in 0..<segmentCount {
+            for index in 0 ..< segmentCount {
                 let start = Double(index) / 120
                 let end = min(Double(index + 1) / 120, Double(boundedProgress))
                 let segment = track.trimmedPath(from: start, to: end)
@@ -1332,7 +1387,7 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
             let boardScale = max(
                 0.4,
                 min(
-                    min(width / 1_400, height / 920),
+                    min(width / 1400, height / 920),
                     min(1.22, min(width, height) / max(verticalDesign, horizontalDesign))
                 )
             )
@@ -1509,8 +1564,8 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
             stacksVertically: viewPosition == 1 || viewPosition == 3,
             detailArrowEdge: detailArrowEdge(for: viewPosition)
         )
-            .frame(width: width, height: height)
-            .accessibilityElement(children: .contain)
+        .frame(width: width, height: height)
+        .accessibilityElement(children: .contain)
     }
 
     private func detailArrowEdge(for viewPosition: Int) -> Edge {
@@ -1539,12 +1594,17 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
             return profile
         }
         if game.mode == .lan, game.humanSeats.contains(seat) {
-            if seat == game.localSeat { return archive.player }
+            if seat == game.localSeat {
+                return archive.player
+            }
             return MahjongPlayerArchive(id: "lan-seat-\(seat)", nickname: game.seatNicknames[seat], avatarStyle: .player, balance: 0)
         }
-        if seat == 0 { return archive.player }
+        if seat == 0 {
+            return archive.player
+        }
         if game.aiProfileIDs.indices.contains(seat - 1),
-           let storedProfile = archive.profile(id: game.aiProfileIDs[seat - 1]) {
+           let storedProfile = archive.profile(id: game.aiProfileIDs[seat - 1])
+        {
             return storedProfile
         }
         return MahjongPlayerArchive(
@@ -1554,70 +1614,6 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
             balance: 0,
             eliminatedDay: nil
         )
-    }
-
-    private func layoutDebugOverlay(
-        width: CGFloat,
-        height: CGFloat,
-        boardScale: CGFloat,
-        horizontalZoneWidth: CGFloat,
-        sideMeldWidth: CGFloat,
-        sideMeldX: CGFloat,
-        seatRegionLength: CGFloat,
-        operationWidth: CGFloat,
-        operationCenterY: CGFloat
-    ) -> some View {
-        let sideMeldHeight = seatRegionLength
-        let areaThickness = MahjongSeatAreaMetrics.areaThickness
-        let playerInfoGap = MahjongPlayerInfoCardMetrics.gap
-        let playerInfoHeight = MahjongPlayerInfoCardMetrics.height(areaThickness: areaThickness)
-        let playerInfoWidth = MahjongPlayerInfoCardMetrics.width(areaThickness: areaThickness)
-
-        return ZStack {
-            debugRegion("\(game.seatName(actualSeat(at: 2)))手牌区", width: horizontalZoneWidth, height: areaThickness, scale: boardScale)
-                .position(x: width / 2, y: 55 * boardScale)
-            debugRegion("\(game.seatName(actualSeat(at: 0)))手牌区", width: horizontalZoneWidth, height: areaThickness, scale: boardScale)
-                .position(x: width / 2, y: height - 55 * boardScale)
-            debugRegion("\(game.seatName(actualSeat(at: 1)))手牌区", width: areaThickness, height: sideMeldHeight, scale: boardScale)
-                .position(x: 52 * boardScale, y: height / 2)
-            debugRegion("\(game.seatName(actualSeat(at: 3)))手牌区", width: areaThickness, height: sideMeldHeight, scale: boardScale)
-                .position(x: width - 52 * boardScale, y: height / 2)
-
-            debugRegion("\(game.seatName(actualSeat(at: 0)))玩家信息区", width: playerInfoWidth, height: playerInfoHeight, scale: boardScale)
-                .position(
-                    x: width / 2 - (horizontalZoneWidth / 2 + playerInfoGap + playerInfoWidth / 2) * boardScale,
-                    y: height - (55 + (areaThickness + playerInfoGap) / 2) * boardScale
-                )
-            debugRegion("\(game.seatName(actualSeat(at: 2)))玩家信息区", width: playerInfoWidth, height: playerInfoHeight, scale: boardScale)
-                .position(
-                    x: width / 2 + (horizontalZoneWidth / 2 + playerInfoGap + playerInfoWidth / 2) * boardScale,
-                    y: (55 + (areaThickness + playerInfoGap) / 2) * boardScale
-                )
-            debugRegion("\(game.seatName(actualSeat(at: 1)))玩家信息区", width: playerInfoWidth, height: playerInfoHeight, scale: boardScale)
-                .position(
-                    x: ((52 + sideMeldX) / 2 + (playerInfoWidth - playerInfoHeight) / 2) * boardScale,
-                    y: height / 2 - (seatRegionLength / 2 + playerInfoGap + playerInfoHeight / 2) * boardScale
-                )
-            debugRegion("\(game.seatName(actualSeat(at: 3)))玩家信息区", width: playerInfoWidth, height: playerInfoHeight, scale: boardScale)
-                .position(
-                    x: width - ((52 + sideMeldX) / 2 + (playerInfoWidth - playerInfoHeight) / 2) * boardScale,
-                    y: height / 2 + (seatRegionLength / 2 + playerInfoGap + playerInfoHeight / 2) * boardScale
-                )
-
-            debugRegion("\(game.seatName(game.localSeat))玩家操作区", width: operationWidth, height: MahjongSeatAreaMetrics.operationHeight, scale: boardScale)
-                .position(x: width / 2, y: operationCenterY)
-
-            debugRegion("\(game.seatName(actualSeat(at: 1)))弃牌区", width: MahjongDiscardMetrics.sideWidth, height: MahjongDiscardMetrics.sideAreaHeight, scale: boardScale)
-                .position(MahjongDiscardMetrics.scaledCenter(for: 1, width: width, height: height, scale: boardScale))
-            debugRegion("\(game.seatName(actualSeat(at: 3)))弃牌区", width: MahjongDiscardMetrics.sideWidth, height: MahjongDiscardMetrics.sideAreaHeight, scale: boardScale)
-                .position(MahjongDiscardMetrics.scaledCenter(for: 3, width: width, height: height, scale: boardScale))
-            debugRegion("\(game.seatName(actualSeat(at: 2)))弃牌区", width: MahjongDiscardMetrics.horizontalWidth, height: MahjongDiscardMetrics.horizontalHeight, scale: boardScale)
-                .position(MahjongDiscardMetrics.scaledCenter(for: 2, width: width, height: height, scale: boardScale))
-            debugRegion("\(game.seatName(actualSeat(at: 0)))弃牌区", width: MahjongDiscardMetrics.horizontalWidth, height: MahjongDiscardMetrics.horizontalHeight, scale: boardScale)
-                .position(MahjongDiscardMetrics.scaledCenter(for: 0, width: width, height: height, scale: boardScale))
-            debugRegion("玩家准备区", width: 620, height: 100)
-                .position(x: width / 2, y: height / 2)
-        }
     }
 
     private var preparationControls: some View {
@@ -1678,7 +1674,7 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
 
     private var readyPlayerBadges: some View {
         HStack(spacing: 6) {
-            ForEach(0..<4, id: \.self) { seat in
+            ForEach(0 ..< 4, id: \.self) { seat in
                 if game.readySeats.indices.contains(seat), game.readySeats[seat] {
                     HStack(spacing: 5) {
                         Image(systemName: "checkmark.circle.fill")
@@ -1691,27 +1687,13 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
     }
 
     private func signedBalanceChange(_ value: Int) -> String {
-        if value > 0 { return "+\(value.formatted()) 毛格子" }
-        if value < 0 { return "−\(abs(value).formatted()) 毛格子" }
+        if value > 0 {
+            return "+\(value.formatted()) 毛格子"
+        }
+        if value < 0 {
+            return "−\(abs(value).formatted()) 毛格子"
+        }
         return "0 毛格子"
-    }
-
-    private func debugRegion(_ title: String, width: CGFloat, height: CGFloat, scale: CGFloat = 1) -> some View {
-        Rectangle()
-            .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-            .foregroundStyle(Color.red.opacity(0.9))
-            .frame(width: width, height: height)
-            .overlay(alignment: .topLeading) {
-                Text(title)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.red.opacity(0.9))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 3))
-                    .fixedSize()
-                    .offset(x: 3, y: -11)
-            }
-            .scaleEffect(scale)
     }
 
     private func discardArea(width: CGFloat, height: CGFloat) -> some View {
@@ -1772,7 +1754,7 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
         let localTiles = Array((game.discards.indices.contains(seat) ? game.discards[seat] : []).prefix(28))
         let columns = viewPosition == 1 || viewPosition == 3 ? 4 : 7
         let rows = viewPosition == 1 || viewPosition == 3 ? 7 : 4
-        var cells = Array<MahjongTile?>(repeating: nil, count: columns * rows)
+        var cells = [MahjongTile?](repeating: nil, count: columns * rows)
 
         for (index, tile) in localTiles.enumerated() {
             let localRow = index / 7
@@ -2086,7 +2068,7 @@ private struct MahjongDiscardBoard<WorkflowControls: View>: View {
         .accessibilityLabel("\(game.seatName(seat)) 的吃碰杠明牌")
     }
 
-    private func meldGroup(_ meld: MahjongMeld, seat: Int, viewPosition: Int, isSide: Bool) -> some View {
+    private func meldGroup(_ meld: MahjongMeld, seat _: Int, viewPosition: Int, isSide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             if isSide {
                 VStack(spacing: 2) {
@@ -2304,7 +2286,7 @@ struct MahjongTileFace: View {
         let radiusY = size.height * 0.21
         let petalRadiusX = size.width * 0.048
         let petalRadiusY = size.height * 0.049
-        for index in 0..<16 {
+        for index in 0 ..< 16 {
             let angle = CGFloat(index) * .pi * 2 / 16
             let point = CGPoint(x: center.x + cos(angle) * radiusX * 0.645, y: center.y + sin(angle) * radiusY * 0.645)
             let petal = CGRect(x: point.x - petalRadiusX, y: point.y - petalRadiusY, width: petalRadiusX * 2, height: petalRadiusY * 2)
@@ -2388,7 +2370,9 @@ struct MahjongTileFace: View {
         let green = color(for: .green), blue = color(for: .blue), red = color(for: .red)
         let sx = size.width / 104, sy = size.height / 148
         let line = min(sx, sy)
-        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * sx, y: y * sy) }
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: x * sx, y: y * sy)
+        }
         var branch = Path()
         branch.move(to: point(18, 116))
         branch.addQuadCurve(to: point(61, 65), control: point(35, 86))
@@ -2453,7 +2437,9 @@ struct MahjongTileFace: View {
     }
 
     private func dotPattern(_ rank: Int) -> [Pip] {
-        func p(_ x: CGFloat, _ y: CGFloat, _ ink: MahjongTileInk) -> Pip { Pip(x: x, y: y, ink: ink) }
+        func p(_ x: CGFloat, _ y: CGFloat, _ ink: MahjongTileInk) -> Pip {
+            Pip(x: x, y: y, ink: ink)
+        }
         switch rank {
         case 2: return [p(0.5, 0.32, .blue), p(0.5, 0.68, .green)]
         case 3: return [p(0.27, 0.25, .blue), p(0.5, 0.5, .red), p(0.73, 0.75, .green)]
@@ -2467,7 +2453,9 @@ struct MahjongTileFace: View {
     }
 
     private func bambooPattern(_ rank: Int) -> [Pip] {
-        func p(_ x: CGFloat, _ y: CGFloat, _ ink: MahjongTileInk = .green) -> Pip { Pip(x: x, y: y, ink: ink) }
+        func p(_ x: CGFloat, _ y: CGFloat, _ ink: MahjongTileInk = .green) -> Pip {
+            Pip(x: x, y: y, ink: ink)
+        }
         switch rank {
         case 2: return [p(0.5, 0.32), p(0.5, 0.68)]
         case 3: return [p(0.5, 0.26), p(0.28, 0.72), p(0.72, 0.72)]
@@ -2504,7 +2492,7 @@ private struct MahjongLANRoomView: View {
                     service.stop()
                     dismiss()
                 }
-                    .buttonStyle(.plain)
+                .buttonStyle(.plain)
             }
 
             HStack(spacing: 12) {
@@ -2588,7 +2576,6 @@ private struct MahjongLANRoomView: View {
             }
             .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity)
-
         }
         .padding(26)
         .onAppear {

@@ -66,11 +66,14 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
     private func makeWindow(model: MahjongGameWindowModel) {
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: Self.defaultContentSize),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "麻将"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentAspectRatio = Self.contentRatio
@@ -84,8 +87,10 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
         hostedModel = model
     }
 
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if suppressCloseCallback { return true }
+    func windowShouldClose(_: NSWindow) -> Bool {
+        if suppressCloseCallback {
+            return true
+        }
         let exit = onUserClose
         suppressCloseCallback = true
         exit?()

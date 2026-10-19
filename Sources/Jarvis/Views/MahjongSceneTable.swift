@@ -2,38 +2,43 @@ import SceneKit
 import SwiftUI
 
 /// Orthographic camera straight above the felt. North is the top of the window.
-/// One tile size. The other three hands stand, so the camera sees their tops.
+/// Shared base tile size; crowded rivers compact within their own regions.
+/// The other three hands stand, so the camera sees their tops.
 /// The local hand, melds, and discards lie face-up.
 struct MahjongSceneTable: View {
     let game: MahjongGame
 
     var body: some View {
-        MahjongSceneHost(model: MahjongSceneModel(game: game)) { tile in
-            game.discard(tile)
+        MahjongSceneHost(model: MahjongSceneModel(game: game)) { tile, drawn in
+            if drawn {
+                game.discardDrawnTile()
+            } else {
+                game.discard(tile)
+            }
         }
     }
 }
 
-private struct MahjongScenePiece: Equatable {
+struct MahjongScenePiece: Equatable {
     var tile: MahjongTile?
     var faceUp: Bool
     var missing: Bool
 }
 
-private struct MahjongSceneSeat: Equatable {
+struct MahjongSceneSeat: Equatable {
     var hand: [MahjongScenePiece]
     var melds: [[MahjongScenePiece]]
     var discards: [MahjongScenePiece]
 }
 
 @MainActor
-private struct MahjongSceneModel: Equatable {
+struct MahjongSceneModel: Equatable {
     var seats: [MahjongSceneSeat]
     var canDiscard: Bool
 
     init(game: MahjongGame) {
         canDiscard = game.isHumanTurn
-        seats = (0..<4).map { view in
+        seats = (0 ..< 4).map { view in
             let seat = (game.localSeat + view) % 4
             return MahjongSceneSeat(
                 hand: Self.hand(seat: seat, game: game),
@@ -46,11 +51,10 @@ private struct MahjongSceneModel: Equatable {
     private static func hand(seat: Int, game: MahjongGame) -> [MahjongScenePiece] {
         let reveal = game.phase == .roundEnded
         let face = reveal || seat == game.visibleHandSeat
-        let source: [MahjongTile]
-        if face, seat == game.visibleHandSeat, !reveal {
-            source = game.visibleHand
+        let source: [MahjongTile] = if face, seat == game.visibleHandSeat, !reveal {
+            game.visibleHand
         } else {
-            source = game.hands.indices.contains(seat) ? game.hands[seat] : []
+            game.hands.indices.contains(seat) ? game.hands[seat] : []
         }
         let separates = game.justDrew && seat == game.turn && source.count > 1
         let body = separates ? Array(source.dropLast()) : source
@@ -66,11 +70,10 @@ private struct MahjongSceneModel: Equatable {
         guard game.melds.indices.contains(seat) else { return [] }
         return game.melds[seat].map { meld in
             let sorted = meld.tiles.sorted { $0.sortKey < $1.sortKey }
-            let faced: [(MahjongTile, Bool)]
-            if meld.kind == .concealedKong, sorted.count == 4 {
-                faced = [(sorted[0], false), (sorted[1], true), (sorted[2], true), (sorted[3], false)]
+            let faced: [(MahjongTile, Bool)] = if meld.kind == .concealedKong, sorted.count == 4 {
+                [(sorted[0], false), (sorted[1], true), (sorted[2], true), (sorted[3], false)]
             } else {
-                faced = sorted.map { ($0, true) }
+                sorted.map { ($0, true) }
             }
             return faced.map { tile, up in
                 MahjongScenePiece(tile: tile, faceUp: up, missing: false)
@@ -97,16 +100,16 @@ private struct MahjongSceneModel: Equatable {
 }
 
 @MainActor
-private struct MahjongSceneHost: NSViewRepresentable {
+struct MahjongSceneHost: NSViewRepresentable {
     var model: MahjongSceneModel
-    var onDiscard: (MahjongTile) -> Void
+    var onDiscard: (MahjongTile, Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onDiscard: onDiscard)
     }
 
-    func makeNSView(context: Context) -> SCNView {
-        let view = SCNView()
+    func makeNSView(context: Context) -> MahjongSceneInteractionView {
+        let view = MahjongSceneInteractionView()
         view.scene = context.coordinator.scene
         view.pointOfView = context.coordinator.camera
         view.allowsCameraControl = false
@@ -114,96 +117,87 @@ private struct MahjongSceneHost: NSViewRepresentable {
         view.antialiasingMode = .multisampling4X
         view.backgroundColor = NSColor(red: 0.055, green: 0.22, blue: 0.11, alpha: 1)
         view.rendersContinuously = false
-        let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.click(_:)))
-        view.addGestureRecognizer(click)
-        let tracking = NSTrackingArea(
-            rect: view.bounds,
-            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
-            owner: context.coordinator,
-            userInfo: nil
-        )
-        view.addTrackingArea(tracking)
-        context.coordinator.view = view
-        context.coordinator.sync(model)
+        let coordinator = context.coordinator
+        coordinator.view = view
+        view.onPointer = { [weak coordinator, weak view] point in
+            coordinator?.handInteraction.updatePointer(point, animated: view?.window?.isKeyWindow == true && NSApp.isActive)
+        }
+        view.containsTile = { [weak coordinator] point in coordinator?.handInteraction.tile(at: point) != nil }
+        view.onTileClick = { [weak coordinator] point in coordinator?.discard(at: point) }
+        coordinator.sync(model)
         return view
     }
 
-    func updateNSView(_ view: SCNView, context: Context) {
-        view.window?.acceptsMouseMovedEvents = true
+    func updateNSView(_: MahjongSceneInteractionView, context: Context) {
         context.coordinator.onDiscard = onDiscard
-        context.coordinator.view = view
         context.coordinator.sync(model)
+    }
+
+    static func dismantleNSView(_ view: MahjongSceneInteractionView, coordinator _: Coordinator) {
+        view.stopMonitoring()
     }
 
     @MainActor
     final class Coordinator: NSObject {
-        var onDiscard: (MahjongTile) -> Void
-        weak var view: SCNView?
         let scene = SCNScene()
         let camera = SCNNode()
         let tileRoot = SCNNode()
+        private let handRoots = (0 ..< 4).map { _ in SCNNode() }
+        private let meldRoots = (0 ..< 4).map { _ in SCNNode() }
+        private let discardRoots = (0 ..< 4).map { _ in SCNNode() }
         private var applied: MahjongSceneModel?
-        private var hovered: SCNNode?
-        private var restPositions: [ObjectIdentifier: SIMD3<Float>] = [:]
-        /// Straight up, off the felt. A top-down tile has no camera-facing tilt to lift along.
-        private let handLift = SIMD3<Float>(0, 0.22, 0)
         private let textures = MahjongTileTextures()
+        let handInteraction = MahjongSceneHandInteraction()
+        weak var view: MahjongSceneInteractionView?
+        var onDiscard: (MahjongTile, Bool) -> Void
 
-        init(onDiscard: @escaping (MahjongTile) -> Void) {
+        init(onDiscard: @escaping (MahjongTile, Bool) -> Void) {
             self.onDiscard = onDiscard
             super.init()
             buildTable()
+            handInteraction.onAnimation = { [weak self] in self?.view?.needsDisplay = true }
+        }
+
+        func discard(at point: CGPoint) {
+            guard applied?.canDiscard == true, let tile = handInteraction.tile(at: point) else { return }
+            onDiscard(tile.value, tile.drawn)
         }
 
         func sync(_ model: MahjongSceneModel) {
             guard model != applied else { return }
+            let previous = applied
             applied = model
-            hovered = nil
-            restPositions.removeAll()
-            tileRoot.childNodes.forEach { $0.removeFromParentNode() }
-            for view in 0..<4 {
-                placeHand(model.seats[view].hand, view: view, canDiscard: view == 0 && model.canDiscard)
-                placeMelds(model.seats[view].melds, view: view)
-                placeDiscards(model.seats[view].discards, view: view)
-            }
-        }
-
-        @objc func click(_ recognizer: NSClickGestureRecognizer) {
-            guard let view, let model = applied, model.canDiscard else { return }
-            let point = recognizer.location(in: view)
-            guard let node = view.hitTest(point, options: nil).first?.node else { return }
-            guard let index = Self.localIndex(of: node), model.seats[0].hand.indices.contains(index),
-                  let tile = model.seats[0].hand[index].tile else { return }
-            onDiscard(tile)
-        }
-
-        @objc func mouseMoved(with event: NSEvent) {
-            guard let view, applied?.canDiscard == true else { return }
-            let point = view.convert(event.locationInWindow, from: nil)
-            let node = view.hitTest(point, options: nil).first?.node
-            let target = node.flatMap { Self.carrier(of: $0) }
-            guard target !== hovered else { return }
             SCNTransaction.begin()
-            SCNTransaction.animationDuration = 0.12
-            if let hovered, let rest = restPositions[ObjectIdentifier(hovered)] {
-                hovered.simdPosition = rest
-            }
-            if let target, target.name?.hasPrefix("local:") == true, let rest = restPositions[ObjectIdentifier(target)] {
-                target.simdPosition = rest + handLift
-                hovered = target
-                NSCursor.pointingHand.set()
-            } else {
-                hovered = nil
-                NSCursor.arrow.set()
+            SCNTransaction.disableActions = true
+            for view in 0 ..< 4 {
+                if previous?.seats[view].hand != model.seats[view].hand {
+                    if view == 0 {
+                        handInteraction.replaceTiles([])
+                    }
+                    handRoots[view].childNodes.forEach { $0.removeFromParentNode() }
+                    placeHand(model.seats[view].hand, view: view)
+                }
+                if previous?.seats[view].melds != model.seats[view].melds {
+                    meldRoots[view].childNodes.forEach { $0.removeFromParentNode() }
+                    placeMelds(model.seats[view].melds, view: view)
+                }
+                if previous?.seats[view].discards != model.seats[view].discards {
+                    discardRoots[view].childNodes.forEach { $0.removeFromParentNode() }
+                    placeDiscards(model.seats[view].discards, view: view)
+                }
             }
             SCNTransaction.commit()
+            // Commit every deal packet now; a paused renderer must also redraw changed models.
+            SCNTransaction.flush()
+            view?.needsDisplay = true
+            view?.refreshPointer()
         }
 
         private func buildTable() {
             camera.camera = SCNCamera()
             camera.camera?.usesOrthographicProjection = true
             // Half the vertical world size. The window locks 1280:1000, so the horizontal half is 8.4 * 1.28.
-            camera.camera?.orthographicScale = 8.4
+            camera.camera?.orthographicScale = Double(MahjongHandLayout.cameraHalfHeight)
             camera.camera?.zNear = 0.05
             camera.camera?.zFar = 80
             camera.simdPosition = SIMD3(0, 30, 0)
@@ -246,24 +240,46 @@ private struct MahjongSceneHost: NSViewRepresentable {
             scene.rootNode.addChildNode(feltNode)
 
             scene.rootNode.addChildNode(tileRoot)
+            for root in handRoots + meldRoots + discardRoots {
+                tileRoot.addChildNode(root)
+            }
         }
 
-        private func placeHand(_ pieces: [MahjongScenePiece], view: Int, canDiscard: Bool) {
-            // Views 1–3 stand. A straight-down camera then sees edgeTop, not the indigo back.
+        private func placeHand(_ pieces: [MahjongScenePiece], view: Int) {
             let standing = view != 0
-            lay(
-                pieces,
-                view: view,
-                size: .tile,
-                distance: 0,
-                gap: 0.02,
-                standing: standing
-            ) { index, piece, node in
-                guard view == 0 else { return }
-                self.restPositions[ObjectIdentifier(node)] = node.simdPosition
-                if canDiscard, piece.faceUp {
-                    node.name = "local:\(index)"
+            let separator = pieces.firstIndex { $0.tile == nil }
+            let row = separator.map { Array(pieces[..<$0]) } ?? pieces
+            let drawn = separator == nil ? nil : pieces.last
+            let size = MahjongTileBox.tile
+            let seat = SeatAxes.frame(view)
+            let offsets = MahjongHandLayout.centeredOffsets(count: row.count, tileWidth: size.footprint, gap: MahjongHandLayout.tileGap)
+            var localTiles: [MahjongSceneHandInteraction.Tile] = []
+            @MainActor func add(_ piece: MahjongScenePiece, across: Float, isDrawn: Bool) {
+                guard let tile = piece.tile else { return }
+                let position = seat.origin + seat.right * across
+                let node = makeTile(
+                    tile: tile,
+                    faceUp: piece.faceUp,
+                    missing: piece.missing,
+                    size: size,
+                    yaw: standing ? seat.standingYaw : seat.lyingYaw,
+                    standing: standing
+                )
+                node.simdPosition = SIMD3(position.x, standing ? size.standingRestY : size.restY, position.z)
+                node.castsShadow = view != 0
+                handRoots[view].addChildNode(node)
+                if view == 0, piece.faceUp {
+                    localTiles.append(.init(node: node, value: tile, drawn: isDrawn))
                 }
+            }
+            for (index, piece) in row.enumerated() {
+                add(piece, across: offsets[index], isDrawn: false)
+            }
+            if let drawn {
+                add(drawn, across: MahjongHandLayout.drawnOffset(after: row.count, tileWidth: size.footprint, gap: MahjongHandLayout.tileGap), isDrawn: true)
+            }
+            if view == 0 {
+                handInteraction.replaceTiles(localTiles)
             }
         }
 
@@ -277,8 +293,8 @@ private struct MahjongSceneHost: NSViewRepresentable {
             let corner = Self.meldAnchor(view)
             let tileGap: Float = 0.012
             let tileStep = size.footprint + tileGap
-            let groupGap = size.footprint
-            let rowStep = size.depthStep + 0.10
+            let groupGap: Float = 0.16
+            let rowStep = size.depthStep + groupGap
             // The anchor is the outer corner on the player's left. A group runs toward
             // the hand along +right, and the next row steps toward the center along forward.
             // Check, south: left is screen-left, so the group runs rightward and the glyph
@@ -286,13 +302,15 @@ private struct MahjongSceneHost: NSViewRepresentable {
             let alongDir = seat.right
             let inward = seat.forward
             for row in stride(from: 0, to: groups.count, by: 2) {
-                let line = groups[row..<min(row + 2, groups.count)]
+                let line = groups[row ..< min(row + 2, groups.count)]
                 var cursor = size.footprint / 2
                 let depth = size.depthStep / 2 + rowStep * Float(row / 2)
+                // The inner horizontal row folds around the neighboring player's draw slot.
+                let rowInset: Float = row > 0 && (view == 0 || view == 2) ? 3.45 : 0
                 for group in line {
                     for (index, piece) in group.enumerated() {
                         guard let tile = piece.tile else { continue }
-                        let across = cursor + tileStep * Float(index)
+                        let across = rowInset + cursor + tileStep * Float(index)
                         let position = corner + alongDir * across + inward * depth
                         let node = makeTile(
                             tile: tile,
@@ -303,7 +321,7 @@ private struct MahjongSceneHost: NSViewRepresentable {
                         )
                         node.simdPosition = SIMD3(position.x, size.restY, position.z)
                         node.castsShadow = view != 0
-                        tileRoot.addChildNode(node)
+                        meldRoots[view].addChildNode(node)
                     }
                     cursor += tileStep * Float(group.count) - tileGap + groupGap
                 }
@@ -314,64 +332,51 @@ private struct MahjongSceneHost: NSViewRepresentable {
         /// At orthographicScale 8.4 the cloth runs about x ±10.75 and z ±8.4.
         private static func meldAnchor(_ view: Int) -> SIMD3<Float> {
             switch view {
-            case 1: return SIMD3(-10.40, 0, -8.26) // west, top-left
-            case 2: return SIMD3(10.40, 0, -8.26) // north, top-right
-            case 3: return SIMD3(10.40, 0, 8.26) // east, bottom-right
-            default: return SIMD3(-10.40, 0, 8.26) // south, bottom-left
+            case 1: SIMD3(-10.40, 0, -7.50) // west, top-left
+            case 2: SIMD3(10.40, 0, -7.50) // north, top-right
+            case 3: SIMD3(10.40, 0, 8.30) // east, bottom-right
+            default: SIMD3(-10.40, 0, 8.30) // south, bottom-left
             }
         }
 
         private func placeDiscards(_ pieces: [MahjongScenePiece], view: Int) {
+            guard !pieces.isEmpty else { return }
             let seat = SeatAxes.frame(view)
-            let size = MahjongTileBox.tile
+            // Each river has a fixed region, clear of hands, other rivers and the compass.
+            // Fit a growing river inside that region instead of adding rows through the center.
+            let base = MahjongTileBox.tile
+            let regionWidth: Float = 6
+            let regionDepth: Float = 2.85
+            var columns = 1
+            var fit: Float = 0
+            for candidate in 1 ... min(12, pieces.count) {
+                let rows = (pieces.count + candidate - 1) / candidate
+                let scale = min(
+                    1,
+                    (regionWidth - Float(candidate - 1) * 0.03) / (Float(candidate) * base.footprint),
+                    (regionDepth - Float(rows - 1) * 0.08) / (Float(rows) * base.depthStep)
+                )
+                if scale > fit + 0.001 || (abs(scale - fit) < 0.001 && abs(candidate - 6) < abs(columns - 6)) {
+                    columns = candidate
+                    fit = scale
+                }
+            }
+            let size = MahjongTileBox(width: base.width * fit, height: base.height * fit, thickness: base.thickness * fit)
             let step = size.footprint + 0.03
-            // South sits farther out, with a gap above the hand for the action tray.
-            // The other rivers start just inside their walls and still stop short of the compass.
-            let start: Float = view == 0 ? 1.88 : 1.32
+            let handDepth = view == 0 ? base.depthStep : base.thickness
+            let handClearance: Float = view == 0 ? 0.34 : 0.22
+            let start = handDepth / 2 + handClearance + size.depthStep / 2
             for (index, piece) in pieces.enumerated() {
                 guard let tile = piece.tile else { continue }
-                let column = index % 6
-                let row = index / 6
-                let across = (Float(column) - 2.5) * step
+                let column = index % columns
+                let row = index / columns
+                let across = (Float(column) - Float(columns - 1) / 2) * step
                 let inward = start + Float(row) * (size.depthStep + 0.08)
                 let position = seat.origin + seat.right * across + seat.forward * inward
                 let node = makeTile(tile: tile, faceUp: true, missing: false, size: size, yaw: seat.lyingYaw)
                 node.simdPosition = SIMD3(position.x, size.restY, position.z)
                 node.castsShadow = view != 0
-                tileRoot.addChildNode(node)
-            }
-        }
-
-        private func lay(
-            _ pieces: [MahjongScenePiece],
-            view: Int,
-            size: MahjongTileBox,
-            distance: Float,
-            gap: Float,
-            standing: Bool = false,
-            tag: ((Int, MahjongScenePiece, SCNNode) -> Void)?
-        ) {
-            let seat = SeatAxes.frame(view)
-            let step = size.footprint + gap
-            let span = step * Float(max(pieces.count - 1, 0))
-            let yaw = standing ? seat.standingYaw : seat.lyingYaw
-            let lift = standing ? size.standingRestY : size.restY
-            for (index, piece) in pieces.enumerated() {
-                guard let tile = piece.tile else { continue }
-                let across = -span / 2 + step * Float(index)
-                let position = seat.origin + seat.right * across + seat.forward * distance
-                let node = makeTile(
-                    tile: tile,
-                    faceUp: piece.faceUp,
-                    missing: piece.missing,
-                    size: size,
-                    yaw: yaw,
-                    standing: standing
-                )
-                node.simdPosition = SIMD3(position.x, lift, position.z)
-                node.castsShadow = view != 0
-                tag?(index, piece, node)
-                tileRoot.addChildNode(node)
+                discardRoots[view].addChildNode(node)
             }
         }
 
@@ -406,20 +411,6 @@ private struct MahjongSceneHost: NSViewRepresentable {
             }
             return node
         }
-
-        private static func carrier(of node: SCNNode) -> SCNNode? {
-            var current: SCNNode? = node
-            while let cursor = current {
-                if cursor.name?.hasPrefix("local:") == true { return cursor }
-                current = cursor.parent
-            }
-            return nil
-        }
-
-        private static func localIndex(of node: SCNNode) -> Int? {
-            guard let name = carrier(of: node)?.name, name.hasPrefix("local:") else { return nil }
-            return Int(name.dropFirst("local:".count))
-        }
     }
 }
 
@@ -429,16 +420,26 @@ private struct MahjongTileBox {
     var thickness: Float
 
     /// Along the row. Standing and lying tiles both keep their width across the row.
-    var footprint: Float { width }
-    var depthStep: Float { height }
-    /// Lying center height. The box center is the node position.
-    var restY: Float { thickness / 2 + 0.02 }
-    /// Standing center height. The face length is vertical, so this is not restY.
-    var standingRestY: Float { height / 2 + 0.02 }
+    var footprint: Float {
+        width
+    }
 
-    /// One size for hands, melds, and discards. Face is 0.72 by 1.01.
-    /// Thickness is 0.48 so a top-down standing tile reads as a top, not a hairline.
-    static let tile = MahjongTileBox(width: 0.72, height: 1.01, thickness: 0.48)
+    var depthStep: Float {
+        height
+    }
+
+    /// Lying center height. The box center is the node position.
+    var restY: Float {
+        thickness / 2 + 0.02
+    }
+
+    /// Standing center height. The face length is vertical, so this is not restY.
+    var standingRestY: Float {
+        height / 2 + 0.02
+    }
+
+    /// Base size for hands and melds; rivers fit down only when their region fills up.
+    static let tile = MahjongTileBox(width: MahjongHandLayout.tileWidth, height: MahjongHandLayout.tileHeight, thickness: 0.53)
 }
 
 private struct SeatAxes {
@@ -455,25 +456,27 @@ private struct SeatAxes {
     // west seat) and local +X maps to world +Z, which is seat.right.
     // Check, yaw 0 lie: face +Z maps to +Y and the glyph top (local +Y) maps to world -Z.
     static func frame(_ view: Int) -> SeatAxes {
+        // Both side hands share one center and reserve a full draw slot at their right end.
+        let sideCenter: Float = 0.4
         switch view {
         case 0:
             return SeatAxes(
-                origin: SIMD3(0, 0, 5.48), right: SIMD3(1, 0, 0), forward: SIMD3(0, 0, -1),
+                origin: SIMD3(0, 0, MahjongHandLayout.localRowDepth), right: SIMD3(1, 0, 0), forward: SIMD3(0, 0, -1),
                 lyingYaw: 0, standingYaw: 0
             )
         case 1:
             return SeatAxes(
-                origin: SIMD3(-6.72, 0, 0), right: SIMD3(0, 0, 1), forward: SIMD3(1, 0, 0),
+                origin: SIMD3(-7.3, 0, sideCenter), right: SIMD3(0, 0, 1), forward: SIMD3(1, 0, 0),
                 lyingYaw: -.pi / 2, standingYaw: -.pi / 2
             )
         case 2:
             return SeatAxes(
-                origin: SIMD3(0, 0, -5.05), right: SIMD3(-1, 0, 0), forward: SIMD3(0, 0, 1),
+                origin: SIMD3(0, 0, -5.6), right: SIMD3(-1, 0, 0), forward: SIMD3(0, 0, 1),
                 lyingYaw: .pi, standingYaw: .pi
             )
         default:
             return SeatAxes(
-                origin: SIMD3(6.72, 0, 0), right: SIMD3(0, 0, -1), forward: SIMD3(-1, 0, 0),
+                origin: SIMD3(7.3, 0, sideCenter), right: SIMD3(0, 0, -1), forward: SIMD3(-1, 0, 0),
                 lyingYaw: .pi / 2, standingYaw: .pi / 2
             )
         }
@@ -498,7 +501,9 @@ private final class MahjongTileTextures {
         edgeBottom = Self.imageMaterial(Self.band(horizontal: false, backFirst: false))
     }
 
-    var back: SCNMaterial { backMaterial }
+    var back: SCNMaterial {
+        backMaterial
+    }
 
     private static let cream = NSColor(red: 0.98, green: 0.95, blue: 0.89, alpha: 1)
     /// Lacquered cobalt. Bright enough to read under the overhead light, and distinct from the green felt.
@@ -527,7 +532,9 @@ private final class MahjongTileTextures {
 
     func face(_ tile: MahjongTile, missing: Bool) -> SCNMaterial {
         let key = "\(tile.id)-\(missing)"
-        if let cached = faces[key] { return cached }
+        if let cached = faces[key] {
+            return cached
+        }
         let image = Self.render(Self.faceView(tile, missing: missing), size: CGSize(width: 48, height: 68))
         let material = Self.imageMaterial(image)
         faces[key] = material
@@ -552,7 +559,7 @@ private final class MahjongTileTextures {
         return material
     }
 
-    private static func render<V: View>(_ view: V, size: CGSize) -> NSImage {
+    private static func render(_ view: some View, size: CGSize) -> NSImage {
         let renderer = ImageRenderer(content: view.frame(width: size.width, height: size.height))
         renderer.scale = 4
         return renderer.nsImage ?? NSImage(size: size)
@@ -567,5 +574,4 @@ private final class MahjongTileTextures {
         .frame(width: 48, height: 68)
         .clipped()
     }
-
 }
