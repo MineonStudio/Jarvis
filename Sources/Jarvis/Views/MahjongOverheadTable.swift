@@ -12,29 +12,37 @@ struct MahjongOverheadTable: View {
     let onExit: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            MahjongTableTopBar(
-                game: game,
-                lanRoomService: lanRoomService,
-                onExit: onExit
-            )
-            .padding(.leading, 86)
-            .padding(.trailing, 22)
-            .frame(height: 42)
-
-            MahjongOverheadFelt(
-                game: game,
-                archive: archive,
-                lanRoomService: lanRoomService,
-                roundNotice: roundNotice,
-                roundSettlement: roundSettlement,
-                onNextRound: onNextRound,
-                onExit: onExit
-            )
-            .aspectRatio(16.0 / 9.0, contentMode: .fit)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        MahjongOverheadFelt(
+            game: game,
+            archive: archive,
+            lanRoomService: lanRoomService,
+            roundNotice: roundNotice,
+            roundSettlement: roundSettlement,
+            onNextRound: onNextRound,
+            onExit: onExit
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .toolbar {
+            JarvisToolbarSurface(id: "mahjong.facts", placement: .navigation) {
+                MahjongToolbarFacts(game: game, lanRoomService: lanRoomService)
+            }
+            ToolbarSpacer(.flexible, placement: .automatic)
+            JarvisToolbarSurface(id: "mahjong.message") {
+                MahjongToolbarMessage(game: game)
+            }
+            ToolbarSpacer(.flexible, placement: .automatic)
+            JarvisToolbarSurface(id: "mahjong.round") {
+                MahjongToolbarRoundInfo(game: game)
+            }
+            ToolbarItem(id: "mahjong.exit", placement: .primaryAction) {
+                Button(action: onExit) {
+                    Label("退出游戏", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                .buttonStyle(JarvisToolbarButtonStyle())
+                .help("退出游戏")
+            }
+        }
     }
 }
 
@@ -130,63 +138,59 @@ private enum MahjongOverheadMetrics {
     }
 }
 
-private struct MahjongTableTopBar: View {
+private struct MahjongToolbarFacts: View {
     let game: MahjongGame
     @ObservedObject var lanRoomService: MahjongLANRoomService
-    let onExit: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 7) {
-                tag("麻将")
-                tag(game.ruleset.rawValue)
-                tag(game.mode.rawValue)
-                if game.mode == .lan, let roomCode = lanRoomService.roomCode {
-                    tag("房间码 \(roomCode)")
-                }
+        HStack(spacing: 7) {
+            Text("麻将")
+                .fontWeight(.bold)
+            Text(game.ruleset.rawValue)
+            Text(game.mode.rawValue)
+            if game.mode == .lan, let roomCode = lanRoomService.roomCode {
+                Text("房间码 \(roomCode)")
             }
-
-            Spacer(minLength: 4)
-
-            Text(game.message)
-                .font(.system(size: 12, weight: .medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .glassEffect(in: Capsule())
-                .help(game.message)
-
-            Spacer(minLength: 4)
-
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                HStack(spacing: 8) {
-                    Text("时长 \(roundDuration(at: context.date))")
-                    Text("余牌 \(game.wall.count)")
-                }
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .glassEffect(in: Capsule())
-            }
-
-            Button(action: onExit) {
-                Label("退出", systemImage: "rectangle.portrait.and.arrow.right")
-            }
-            .controlSize(.small)
-            .buttonStyle(.glass)
         }
-        .frame(maxWidth: .infinity, minHeight: 36, maxHeight: 36)
+        .font(.system(size: 12, weight: .medium))
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 10)
+        .frame(height: JarvisToolbarMetrics.controlSize)
+        .background(.regularMaterial, in: Capsule())
     }
+}
 
-    private func tag(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold))
+private struct MahjongToolbarMessage: View {
+    let game: MahjongGame
+
+    var body: some View {
+        Text(game.message)
+            .font(.system(size: 12, weight: .medium))
             .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(width: 230, height: JarvisToolbarMetrics.controlSize)
             .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .glassEffect(in: Capsule())
+            .background(.regularMaterial, in: Capsule())
+            .help(game.message)
+    }
+}
+
+private struct MahjongToolbarRoundInfo: View {
+    let game: MahjongGame
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            HStack(spacing: 9) {
+                Text("时长 \(roundDuration(at: context.date))")
+                Text("余牌 \(game.wall.count)")
+            }
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .padding(.horizontal, 10)
+            .frame(height: JarvisToolbarMetrics.controlSize)
+            .background(.regularMaterial, in: Capsule())
+        }
     }
 
     private func roundDuration(at date: Date) -> String {
