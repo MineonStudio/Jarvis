@@ -80,9 +80,6 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
         )
         window.title = "麻将"
         window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.titlebarSeparatorStyle = .none
-        window.styleMask.insert(.fullSizeContentView)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.toolbarStyle = .unified
@@ -190,7 +187,7 @@ extension MahjongGameWindowController: NSToolbarDelegate {
                     Label("退出游戏", systemImage: "rectangle.portrait.and.arrow.right")
                 }
                 .controlSize(.small)
-                .buttonStyle(.glass)
+                .buttonStyle(.bordered)
             }
         default:
             return nil
@@ -213,11 +210,9 @@ private struct MahjongToolbarFacts: View {
             }
         }
         .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(.primary)
+        .foregroundStyle(.secondary)
         .lineLimit(1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .glassEffect(in: Capsule())
     }
 }
 
@@ -230,8 +225,6 @@ private struct MahjongToolbarMessage: View {
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 12)
-            .glassEffect(in: Capsule())
             .help(model.game.message)
     }
 }
@@ -247,10 +240,8 @@ private struct MahjongToolbarRoundInfo: View {
             }
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .monospacedDigit()
-            .foregroundStyle(.primary)
+            .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.horizontal, 12)
-            .glassEffect(in: Capsule())
         }
     }
 
