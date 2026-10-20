@@ -2,11 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_DIR="${JARVIS_APP_DIR:-$ROOT_DIR/dist/Jarvis.app}"
+# File Provider can immediately restore Finder metadata on bundles inside a
+# cloud-backed checkout, which invalidates their code signatures.
+APP_DIR="${JARVIS_APP_DIR:-/Users/Shared/Jarvis/Release/Jarvis.app}"
 OUTPUT_DIR="${JARVIS_OUTPUT_DIR:-$ROOT_DIR/dist/release}"
 
 cd "$ROOT_DIR"
-./build_app.sh
+JARVIS_APP_DIR="$APP_DIR" ./build_app.sh
 
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_DIR/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_DIR/Contents/Info.plist")

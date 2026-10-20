@@ -11,6 +11,10 @@ final class MahjongGameWindowModel {
     var lanRoomService: MahjongLANRoomService
     var roundNotice: String?
     var roundSettlement: MahjongArchiveSettlement?
+    let menuLANRoomService = MahjongLANRoomService()
+    var onStartSolo: (MahjongRuleset) -> Void
+    var onStartLAN: (MahjongLANRoomService) -> Void
+    var onCloseMenu: () -> Void
     var onNextRound: () -> Void
     var onExit: () -> Void
 
@@ -20,6 +24,9 @@ final class MahjongGameWindowModel {
         self.lanRoomService = lanRoomService
         onNextRound = {}
         onExit = {}
+        onStartSolo = { _ in }
+        onStartLAN = { _ in }
+        onCloseMenu = {}
     }
 }
 
@@ -70,7 +77,7 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "麻将"
+        window.title = "欢乐麻将"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none

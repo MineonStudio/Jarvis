@@ -2,7 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_DIR="$ROOT_DIR/.build/release"
+# File Provider can attach FinderInfo to SwiftPM resource bundles inside the
+# project directory, which prevents SwiftPM's own code-signing step.
+SWIFTPM_SCRATCH_DIR="${JARVIS_SWIFTPM_SCRATCH_DIR:-/Users/Shared/Jarvis/SwiftPM}"
+BUILD_DIR="$SWIFTPM_SCRATCH_DIR/release"
 JARVIS_DEV_BUILD="${JARVIS_DEV_BUILD:-0}"
 if [[ "$JARVIS_DEV_BUILD" == "1" ]]; then
   DEFAULT_APP_DIR="$ROOT_DIR/dist/Jarvis-Dev.app"
@@ -28,12 +31,12 @@ JARVIS_BUNDLE_IDENTIFIER="${JARVIS_BUNDLE_IDENTIFIER:-$DEFAULT_BUNDLE_IDENTIFIER
 JARVIS_DISPLAY_NAME="${JARVIS_DISPLAY_NAME:-$DEFAULT_DISPLAY_NAME}"
 JARVIS_BUNDLE_NAME="${JARVIS_BUNDLE_NAME:-$DEFAULT_BUNDLE_NAME}"
 JARVIS_INSTALL_SOURCE="${JARVIS_INSTALL_SOURCE:-$DEFAULT_INSTALL_SOURCE}"
-JARVIS_VERSION="${JARVIS_VERSION:-1.8.7}"
-JARVIS_BUILD="${JARVIS_BUILD:-370}"
+JARVIS_VERSION="${JARVIS_VERSION:-1.8.8}"
+JARVIS_BUILD="${JARVIS_BUILD:-371}"
 ICON_ASSET_NAME="jarvis-${JARVIS_VERSION//./-}"
 
 cd "$ROOT_DIR"
-swift build -c release
+swift build -c release --scratch-path "$SWIFTPM_SCRATCH_DIR"
 
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$BUILD_DIR/Jarvis" "$APP_DIR/Contents/MacOS/Jarvis"
@@ -69,6 +72,10 @@ fi
 if [[ -d "$ROOT_DIR/Resources/GameArtwork" ]]; then
   mkdir -p "$APP_DIR/Contents/Resources/GameArtwork"
   cp "$ROOT_DIR/Resources/GameArtwork"/*.svg \
+     "$APP_DIR/Contents/Resources/GameArtwork/"
+  cp "$ROOT_DIR/Resources/GameArtwork/mahjong-launch-background.png" \
+     "$APP_DIR/Contents/Resources/GameArtwork/"
+  cp "$ROOT_DIR/Resources/GameArtwork/mahjong-poster.png" \
      "$APP_DIR/Contents/Resources/GameArtwork/"
   if [[ -d "$ROOT_DIR/Resources/GameArtwork/Avatars" ]]; then
     mkdir -p "$APP_DIR/Contents/Resources/GameArtwork/Avatars"

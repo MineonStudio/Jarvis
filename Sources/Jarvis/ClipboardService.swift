@@ -419,6 +419,7 @@ final class ClipboardService: @unchecked Sendable {
         // 这里先同步记下 changeCount，避免两次 tick 重复处理同一份内容。
         lastChangeCount = changeCount
         DispatchQueue.global(qos: .utility).async { [weak self] in
+            let pasteboard = NSPasteboard.general
             let fileURLs = Self.fileURLs(from: pasteboard)
             let text = pasteboard.string(forType: .string)
             let pngData = pasteboard.data(forType: .png)

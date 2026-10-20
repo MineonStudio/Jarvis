@@ -26,6 +26,8 @@ enum MahjongArchiveAvatarStyle: String, Codable, CaseIterable {
     case player, iron, spider, captain, thor, hulk, widow, hawkeye
     case panda, fox, cat, rabbit, bear, tiger, owl
 
+    static let playerChoices: [Self] = [.player, .panda, .fox, .cat, .rabbit, .bear, .tiger, .owl]
+
     var displayName: String {
         switch self {
         case .player: "默认头像"
@@ -122,16 +124,55 @@ struct MahjongArchiveSettlement: Codable, Equatable {
     var playerNeedsExit: Bool
 }
 
+struct MahjongRoundArchiveInput {
+    let mode: MahjongPlayMode
+    let ruleset: MahjongRuleset
+    let roundNumber: Int
+    let winnerSeat: Int?
+    let localSeat: Int
+    let humanSeats: [Int]
+    let seatProfileIDs: [String]
+    let seatNames: [String]
+    let settlement: MahjongArchiveSettlement?
+}
+
+struct MahjongMatchRecord: Codable, Identifiable, Equatable {
+    enum Outcome: String, Codable {
+        case win, loss, draw
+
+        var title: String {
+            switch self {
+            case .win: "胜利"
+            case .loss: "失利"
+            case .draw: "流局"
+            }
+        }
+    }
+
+    var id = UUID()
+    var playedAt = Date()
+    var mode: MahjongPlayMode
+    var ruleset: MahjongRuleset
+    var roundNumber: Int
+    var outcome: Outcome
+    var winnerNickname: String?
+    var balanceChange: Int
+    var balanceAfter: Int
+}
+
 @MainActor
 @Observable
 final class MahjongArchiveStore {
     static let initialBalance = 10000
-    static let dailyReward = 5000
+    static let dailyReward = 2500
     static let bankruptcyAid = 5000
 
     private(set) var player: MahjongPlayerArchive
     private(set) var aiProfiles: [MahjongPlayerArchive]
     private(set) var lastCheckInDay: String?
+    private(set) var checkInDays: Set<String>
+    private(set) var matchHistory: [MahjongMatchRecord]
+    private(set) var aiMatchHistory: [String: [MahjongMatchRecord]]
     private(set) var lastBankruptcyAidDay: String?
     private(set) var lastAIRosterCheckDay: String?
     private(set) var lastNotice: String?
@@ -144,6 +185,9 @@ final class MahjongArchiveStore {
         var player: MahjongPlayerArchive
         var aiProfiles: [MahjongPlayerArchive]
         var lastCheckInDay: String?
+        var checkInDays: Set<String>?
+        var matchHistory: [MahjongMatchRecord]?
+        var aiMatchHistory: [String: [MahjongMatchRecord]]?
         var lastBankruptcyAidDay: String?
         var lastAIRosterCheckDay: String?
     }
@@ -163,17 +207,32 @@ final class MahjongArchiveStore {
                 return profile
             }
             lastCheckInDay = snapshot.lastCheckInDay
+            checkInDays = snapshot.checkInDays ?? Set(snapshot.lastCheckInDay.map { [$0] } ?? [])
+            matchHistory = snapshot.matchHistory ?? []
+            aiMatchHistory = snapshot.aiMatchHistory ?? [:]
             lastBankruptcyAidDay = snapshot.lastBankruptcyAidDay
             lastAIRosterCheckDay = snapshot.lastAIRosterCheckDay
         } else {
             player = Self.playerSeed
             aiProfiles = Self.roster
             lastCheckInDay = nil
+            checkInDays = []
+            matchHistory = []
+            aiMatchHistory = [:]
             lastBankruptcyAidDay = nil
             lastAIRosterCheckDay = nil
         }
         if player.id != Self.playerSeed.id {
             player = Self.playerSeed
+        }
+        if !MahjongArchiveAvatarStyle.playerChoices.contains(player.avatarStyle) {
+            player.avatarStyle = .player
+        }
+        // Older settlements could leave accounts in debt. Keep saved balances
+        // consistent with the amount a player can actually pay in a round.
+        player.balance = max(0, player.balance)
+        for index in aiProfiles.indices {
+            aiProfiles[index].balance = max(0, aiProfiles[index].balance)
         }
         save()
     }
@@ -201,9 +260,108 @@ final class MahjongArchiveStore {
     func claimDailyReward() -> Bool {
         guard canClaimDailyReward else { return false }
         lastCheckInDay = dayKey
+        checkInDays.insert(dayKey)
         player.balance += Self.dailyReward
         save()
         return true
+    }
+
+    func hasCheckedIn(on date: Date) -> Bool {
+        checkInDays.contains(dayKey(for: date))
+    }
+
+    var currentCheckInStreak: Int {
+        var date = Date()
+        if !hasCheckedIn(on: date) {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: date) else { return 0 }
+            date = yesterday
+        }
+        var count = 0
+        while hasCheckedIn(on: date) {
+            count += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: date) else { break }
+            date = previous
+        }
+        return count
+    }
+
+    func recordMatch(_ record: MahjongMatchRecord) {
+        matchHistory.insert(record, at: 0)
+        if matchHistory.count > 200 {
+            matchHistory.removeLast(matchHistory.count - 200)
+        }
+        save()
+    }
+
+    func history(for profileID: String) -> [MahjongMatchRecord] {
+        profileID == player.id ? matchHistory : (aiMatchHistory[profileID] ?? [])
+    }
+
+    /// Saves one local result and a result for every AI seat in the same round.
+    func recordRound(_ input: MahjongRoundArchiveInput) {
+        let playedAt = Date()
+        let winnerNickname = input.winnerSeat.flatMap { seat in
+            input.settlement?.playerResults.indices.contains(seat) == true
+                ? input.settlement?.playerResults[seat].nickname
+                : (input.seatNames.indices.contains(seat) ? input.seatNames[seat] : nil)
+        }
+        func makeRecord(seat: Int, fallbackBalance: Int) -> MahjongMatchRecord {
+            let result = input.settlement?.playerResults.indices.contains(seat) == true
+                ? input.settlement?.playerResults[seat] : nil
+            let outcome: MahjongMatchRecord.Outcome = switch input.winnerSeat {
+            case nil: .draw
+            case seat: .win
+            default: .loss
+            }
+            return MahjongMatchRecord(
+                playedAt: playedAt,
+                mode: input.mode,
+                ruleset: input.ruleset,
+                roundNumber: input.roundNumber,
+                outcome: outcome,
+                winnerNickname: winnerNickname,
+                balanceChange: result?.balanceChange ?? 0,
+                balanceAfter: result?.balanceAfter ?? fallbackBalance
+            )
+        }
+
+        matchHistory.insert(makeRecord(seat: input.localSeat, fallbackBalance: player.balance), at: 0)
+        if matchHistory.count > 200 {
+            matchHistory.removeLast(matchHistory.count - 200)
+        }
+        for seat in 0 ..< 4 where !input.humanSeats.contains(seat) && input.seatProfileIDs.indices.contains(seat) {
+            let profileID = input.seatProfileIDs[seat]
+            guard let profile = aiProfiles.first(where: { $0.id == profileID }) else { continue }
+            var records = aiMatchHistory[profileID] ?? []
+            records.insert(makeRecord(seat: seat, fallbackBalance: profile.balance), at: 0)
+            if records.count > 200 {
+                records.removeLast(records.count - 200)
+            }
+            aiMatchHistory[profileID] = records
+        }
+        save()
+    }
+
+    /// The LAN host owns settlement values; a guest mirrors the participating AI archives.
+    func applyLANAIProfiles(_ remoteProfiles: [MahjongPlayerArchive]) {
+        var changed = false
+        for remote in remoteProfiles {
+            guard let index = aiProfiles.firstIndex(where: { $0.id == remote.id }) else { continue }
+            let current = aiProfiles[index]
+            let balance = max(0, remote.balance)
+            guard current.balance != balance || current.wins != remote.wins
+                || current.losses != remote.losses || current.escapes != remote.escapes
+                || current.eliminatedDay != remote.eliminatedDay else { continue }
+            aiProfiles[index].balance = balance
+            aiProfiles[index].wins = remote.wins
+            aiProfiles[index].losses = remote.losses
+            aiProfiles[index].escapes = remote.escapes
+            aiProfiles[index].eliminatedDay = remote.eliminatedDay
+            changed = true
+        }
+        if changed {
+            save()
+        }
     }
 
     func updatePlayerProfile(
@@ -219,6 +377,7 @@ final class MahjongArchiveStore {
         }
         if let avatarStyle {
             player.avatarStyle = avatarStyle
+            player.customAvatarFilename = nil
         }
         if let voiceGender {
             player.voiceGender = voiceGender
@@ -329,16 +488,18 @@ final class MahjongArchiveStore {
         discarderSeat: Int?,
         handType: MahjongWinningHandType,
         byDiscard: Bool,
-        seatProfileIDs: [String]
+        winnerConcealed: Bool,
+        seatProfileIDs: [String],
+        multipliers: [Int] = [1, 1, 1, 1]
     ) -> MahjongArchiveSettlement {
         guard (0 ..< 4).contains(winnerSeat) else {
             return MahjongArchiveSettlement(transfers: [], notice: nil, campaignComplete: false, playerBankrupt: false, playerNeedsExit: false)
         }
 
-        let amount = byDiscard ? handType.discardPayment : handType.selfDrawPayment
-        let losers = byDiscard
-            ? (discarderSeat.map { [$0] } ?? [])
-            : (0 ..< 4).filter { $0 != winnerSeat }
+        let losers = (0 ..< 4).filter { $0 != winnerSeat }
+        guard !byDiscard || discarderSeat.map({ losers.contains($0) }) == true else {
+            return MahjongArchiveSettlement(transfers: [], notice: nil, campaignComplete: false, playerBankrupt: false, playerNeedsExit: false)
+        }
         guard !losers.isEmpty else {
             return MahjongArchiveSettlement(transfers: [], notice: nil, campaignComplete: false, playerBankrupt: false, playerNeedsExit: false)
         }
@@ -349,15 +510,27 @@ final class MahjongArchiveStore {
         for loserSeat in losers {
             let payerID = archiveID(for: loserSeat, seatProfileIDs: seatProfileIDs)
             let winnerID = archiveID(for: winnerSeat, seatProfileIDs: seatProfileIDs)
-            guard !payerID.isEmpty, !winnerID.isEmpty else { continue }
-            debit(payerID, amount: amount)
-            credit(winnerID, amount: amount)
-            balanceChanges[loserSeat] -= amount
-            balanceChanges[winnerSeat] += amount
-            totalPaid += amount
+            guard !payerID.isEmpty, !winnerID.isEmpty,
+                  payerID != winnerID,
+                  let payer = profile(id: payerID), profile(id: winnerID) != nil
+            else { continue }
+            let baseAmount = MahjongCompetitionPayout.payment(
+                handType: handType, byDiscard: byDiscard, winnerConcealed: winnerConcealed,
+                isDiscarder: loserSeat == discarderSeat
+            )
+            let winnerMultiplier = multipliers.indices.contains(winnerSeat) ? multipliers[winnerSeat] : 1
+            let payerMultiplier = multipliers.indices.contains(loserSeat) ? multipliers[loserSeat] : 1
+            let amount = baseAmount * winnerMultiplier * payerMultiplier
+            let paid = min(amount, max(0, payer.balance))
+            guard paid > 0 else { continue }
+            debit(payerID, amount: paid)
+            credit(winnerID, amount: paid)
+            balanceChanges[loserSeat] -= paid
+            balanceChanges[winnerSeat] += paid
+            totalPaid += paid
             let payerName = nickname(for: payerID)
             let winnerName = nickname(for: winnerID)
-            transfers.append("\(payerName) 向 \(winnerName) 支付 \(amount.formatted()) 毛格子")
+            transfers.append("\(payerName) → \(winnerName)：基础 \(baseAmount) × 胜方 \(winnerMultiplier) × 支付方 \(payerMultiplier) = \(amount.formatted())，实付 \(paid.formatted()) 毛格子")
         }
         let winnerID = archiveID(for: winnerSeat, seatProfileIDs: seatProfileIDs)
         if !winnerID.isEmpty {
@@ -393,7 +566,7 @@ final class MahjongArchiveStore {
             notice = "七位 AI 对手均已破产，本次挑战获胜！"
         }
         if totalPaid > 0, notice == nil {
-            let playerChange = winnerID == Self.playerSeed.id ? "+\(totalPaid)" : (losers.contains(where: { archiveID(for: $0, seatProfileIDs: seatProfileIDs) == Self.playerSeed.id }) ? "-\(amount)" : nil)
+            let playerChange = balanceChanges[0] > 0 ? "+\(balanceChanges[0])" : (balanceChanges[0] < 0 ? "\(balanceChanges[0])" : nil)
             notice = playerChange.map { "本局结算：\($0) 毛格子" }
         }
         let seatNames = ["东家", "南家", "西家", "北家"]
@@ -425,23 +598,39 @@ final class MahjongArchiveStore {
         discarderSeat: Int?,
         handType: MahjongWinningHandType,
         byDiscard: Bool,
-        seatProfiles: [MahjongPlayerArchive]
+        winnerConcealed: Bool,
+        seatProfiles: [MahjongPlayerArchive],
+        multipliers: [Int] = [1, 1, 1, 1]
     ) -> (settlement: MahjongArchiveSettlement, profiles: [MahjongPlayerArchive]) {
         guard (0 ..< 4).contains(winnerSeat), seatProfiles.count == 4 else {
             return (MahjongArchiveSettlement(transfers: [], campaignComplete: false, playerBankrupt: false, playerNeedsExit: false), seatProfiles)
         }
 
         var profiles = seatProfiles
-        let amount = byDiscard ? handType.discardPayment : handType.selfDrawPayment
-        let losers = byDiscard ? (discarderSeat.map { [$0] } ?? []) : (0 ..< 4).filter { $0 != winnerSeat }
+        for seat in profiles.indices {
+            profiles[seat].balance = max(0, profiles[seat].balance)
+        }
+        let losers = (0 ..< 4).filter { $0 != winnerSeat }
+        guard !byDiscard || discarderSeat.map({ losers.contains($0) }) == true else {
+            return (MahjongArchiveSettlement(transfers: [], campaignComplete: false, playerBankrupt: false, playerNeedsExit: false), seatProfiles)
+        }
         var changes = Array(repeating: 0, count: 4)
         var transfers: [String] = []
-        for loser in losers where (0 ..< 4).contains(loser) {
-            profiles[loser].balance -= amount
-            profiles[winnerSeat].balance += amount
-            changes[loser] -= amount
-            changes[winnerSeat] += amount
-            transfers.append("\(profiles[loser].nickname) 向 \(profiles[winnerSeat].nickname) 支付 \(amount.formatted()) 毛格子")
+        for loser in losers where (0 ..< 4).contains(loser) && loser != winnerSeat {
+            let baseAmount = MahjongCompetitionPayout.payment(
+                handType: handType, byDiscard: byDiscard, winnerConcealed: winnerConcealed,
+                isDiscarder: loser == discarderSeat
+            )
+            let winnerMultiplier = multipliers.indices.contains(winnerSeat) ? multipliers[winnerSeat] : 1
+            let payerMultiplier = multipliers.indices.contains(loser) ? multipliers[loser] : 1
+            let amount = baseAmount * winnerMultiplier * payerMultiplier
+            let paid = min(amount, max(0, profiles[loser].balance))
+            guard paid > 0 else { continue }
+            profiles[loser].balance -= paid
+            profiles[winnerSeat].balance += paid
+            changes[loser] -= paid
+            changes[winnerSeat] += paid
+            transfers.append("\(profiles[loser].nickname) → \(profiles[winnerSeat].nickname)：基础 \(baseAmount) × 胜方 \(winnerMultiplier) × 支付方 \(payerMultiplier) = \(amount.formatted())，实付 \(paid.formatted()) 毛格子")
         }
         for seat in profiles.indices {
             if seat == winnerSeat {
@@ -492,10 +681,14 @@ final class MahjongArchiveStore {
     /// Applies the authoritative LAN account data while preserving this device's
     /// local nickname/avatar and account identifier.
     func applyLANPlayerProfile(_ remote: MahjongPlayerArchive) {
-        guard player.balance != remote.balance || player.wins != remote.wins || player.losses != remote.losses else { return }
-        player.balance = remote.balance
+        let balance = max(0, remote.balance)
+        guard player.balance != balance || player.wins != remote.wins || player.losses != remote.losses
+            || player.escapes != remote.escapes || player.eliminatedDay != remote.eliminatedDay else { return }
+        player.balance = balance
         player.wins = remote.wins
         player.losses = remote.losses
+        player.escapes = remote.escapes
+        player.eliminatedDay = remote.eliminatedDay
         save()
     }
 
@@ -516,7 +709,11 @@ final class MahjongArchiveStore {
     }
 
     private var dayKey: String {
-        let components = calendar.dateComponents([.year, .month, .day], from: Date())
+        dayKey(for: Date())
+    }
+
+    private func dayKey(for date: Date) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
     }
 
@@ -565,6 +762,9 @@ final class MahjongArchiveStore {
             player: player,
             aiProfiles: aiProfiles,
             lastCheckInDay: lastCheckInDay,
+            checkInDays: checkInDays,
+            matchHistory: matchHistory,
+            aiMatchHistory: aiMatchHistory,
             lastBankruptcyAidDay: lastBankruptcyAidDay,
             lastAIRosterCheckDay: lastAIRosterCheckDay
         )
@@ -585,24 +785,40 @@ final class MahjongArchiveStore {
     ]
 }
 
-enum MahjongWinningHandType: String, Codable {
+enum MahjongWinningHandType: String, Codable, CaseIterable {
     case standard = "普通胡牌"
     case sevenPairs = "七对"
     case thirteenOrphans = "十三幺"
 
-    var discardPayment: Int {
+    var competitionPoints: Int {
         switch self {
-        case .standard: 1000
-        case .sevenPairs: 1500
-        case .thirteenOrphans: 2000
+        case .standard: 8
+        case .sevenPairs: 24
+        case .thirteenOrphans: 88
         }
     }
+}
 
-    var selfDrawPayment: Int {
-        switch self {
-        case .standard: 500
-        case .sevenPairs: 700
-        case .thirteenOrphans: 900
+/// A compact competition-style score: all non-winners pay the 8-point base;
+/// the discarder additionally pays the hand points, while every opponent pays
+/// the hand points on a self-draw. Only the three hand types recognized by the
+/// game are scored, so this does not implement the complete 81-fan ruleset.
+enum MahjongCompetitionPayout {
+    static let coinsPerPoint = 20
+    static let basePoints = 8
+
+    static func payment(
+        handType: MahjongWinningHandType,
+        byDiscard: Bool,
+        winnerConcealed: Bool,
+        isDiscarder: Bool
+    ) -> Int {
+        let concealed = winnerConcealed || handType != .standard
+        if byDiscard {
+            let handPoints = handType.competitionPoints + (concealed && handType == .standard ? 2 : 0)
+            return (basePoints + (isDiscarder ? handPoints : 0)) * coinsPerPoint
         }
+        let winMethodPoints = concealed ? 4 : 1
+        return (basePoints + handType.competitionPoints + winMethodPoints) * coinsPerPoint
     }
 }

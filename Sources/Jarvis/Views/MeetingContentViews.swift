@@ -2074,10 +2074,11 @@ private struct MeetingCitedSentence: View {
             .foregroundStyle(Color.primary)
             .strikethrough(isStrikethrough)
         guard let secondaryText, !secondaryText.isEmpty else { return heading }
-        return heading + Text("\n" + secondaryText)
+        let detail = Text(secondaryText)
             .font(MeetingDetailTypography.body)
             .foregroundStyle(Color.jarvisTextSecondary)
             .strikethrough(isStrikethrough)
+        return Text("\(heading)\n\(detail)")
     }
 
     private var hasSecondaryText: Bool {

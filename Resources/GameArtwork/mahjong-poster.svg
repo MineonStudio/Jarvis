@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
-  <title id="title">中国麻将</title>
+  <title id="title">欢乐麻将</title>
   <desc id="desc">青玉色麻将桌上摆着精致的竹、筒、红中牌，背景以金色回纹和祥云纹样装饰。</desc>
   <defs>
     <linearGradient id="felt" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#103E35"/><stop offset=".52" stop-color="#082D29"/><stop offset="1" stop-color="#061F20"/></linearGradient>
@@ -53,7 +53,7 @@
     </g>
   </g>
   <g text-anchor="middle">
-    <text x="600" y="584" font-family="Songti SC, STSong, serif" font-size="39" letter-spacing="14" fill="#F4E8C8">中国麻将</text>
+    <text x="600" y="584" font-family="Songti SC, STSong, serif" font-size="39" letter-spacing="14" fill="#F4E8C8">欢乐麻将</text>
     <text x="600" y="620" font-family="PingFang SC, sans-serif" font-size="15" letter-spacing="7" fill="#D3BD8C" fill-opacity=".78">牌 里 乾 坤 · 一 局 方 圆</text>
   </g>
 </svg>
