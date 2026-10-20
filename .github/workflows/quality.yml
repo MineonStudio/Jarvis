@@ -9,7 +9,7 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install static-analysis tools
         run: |
