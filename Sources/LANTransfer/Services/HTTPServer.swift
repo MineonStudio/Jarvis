@@ -116,7 +116,7 @@ final class HTTPServer: @unchecked Sendable {
 
     func offerDownloadText(_ text: String, to targetDeviceIP: String) async -> Bool {
         await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            queue.async {
+            queue.async { [self] in
                 let size = Int64(text.utf8.count)
                 guard !self.stopped, !self.hasCurrentTask, self.sessions.values.contains(where: { $0.ipAddress == targetDeviceIP }), size > 0, size <= 200_000 else {
                     continuation.resume(returning: false); return

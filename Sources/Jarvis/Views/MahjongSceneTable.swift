@@ -493,7 +493,7 @@ private final class MahjongTileTextures {
     let edgeBottom: SCNMaterial
 
     init() {
-        backMaterial = Self.colorMaterial(Self.indigo)
+        backMaterial = Self.colorMaterial(Self.jade)
         // Side UVs run from the face (+Z) to the back (-Z) in different directions on each side.
         edgeRight = Self.imageMaterial(Self.band(horizontal: true, backFirst: false))
         edgeLeft = Self.imageMaterial(Self.band(horizontal: true, backFirst: true))
@@ -506,10 +506,10 @@ private final class MahjongTileTextures {
     }
 
     private static let cream = NSColor(red: 0.98, green: 0.95, blue: 0.89, alpha: 1)
-    /// Lacquered cobalt. Bright enough to read under the overhead light, and distinct from the green felt.
-    private static let indigo = NSColor(red: 0.18, green: 0.34, blue: 0.68, alpha: 1)
+    /// Deep jade distinguishes the lacquered tile back from the brighter table felt.
+    private static let jade = NSColor(red: 0.12, green: 0.31, blue: 0.22, alpha: 1)
 
-    /// Two solid bands. Indigo is one third, toward the back of the tile. Cream is the other two thirds.
+    /// Two solid bands. Jade is one third, toward the back of the tile. Cream is the other two thirds.
     private static func band(horizontal: Bool, backFirst: Bool) -> NSImage {
         let pixels = 96
         let backSpan = pixels / 3
@@ -517,7 +517,7 @@ private final class MahjongTileTextures {
         image.lockFocus()
         Self.cream.setFill()
         NSRect(x: 0, y: 0, width: pixels, height: pixels).fill()
-        Self.indigo.setFill()
+        Self.jade.setFill()
         if horizontal {
             let x = backFirst ? 0 : pixels - backSpan
             NSRect(x: x, y: 0, width: backSpan, height: pixels).fill()

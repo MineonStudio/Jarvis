@@ -75,7 +75,7 @@ enum MahjongRuleset: String, CaseIterable, Identifiable, Codable {
     }
 
     var detail: String {
-        let rules: String = switch self {
+        let rules = switch self {
         case .national:
             "## 🎯 核心规则：四组面子加一对将\n\n国标麻将使用万、筒、条和东南西北、中发白共一百三十六张牌。和牌的基础结构通常是四组面子加一对将牌：面子可以是同花色的连续三张组成的顺子，也可以是三张相同牌组成的刻子；将牌是两张相同的牌。\n\n### 🀄 起手与回合\n\n* 庄家起手十四张，其余玩家各十三张；庄家先打出一张开始对局。\n* 四家按逆时针顺序行动。轮到自己时，从牌墙摸一张，再从手牌中打出一张。\n* 别人打出的牌可以被响应：下一家可以吃，任意一家可以碰或明杠；满足和牌牌型时可以胡牌。若无人响应，则由下一家摸牌。\n\n### 🔁 吃、碰、杠怎么组成\n\n* **吃**：用上家打出的牌和手中的两张牌组成同花色、连续的三张，例如二万、三万、四万。\n* **碰**：手中有两张相同牌时，可以拿别人打出的第三张组成刻子。\n* **明杠**：手中已有三张相同牌时，拿别人打出的第四张组成杠；已碰出的刻子摸到第四张时也可以补杠。\n* **暗杠**：自己手中有四张相同牌时可以暗杠。杠后从牌墙补摸一张；吃、碰、明杠公开展示，暗杠保留暗牌。\n\n### ✅ 胡牌条件与例子\n\n常见牌型是“顺子 / 刻子 × 四组 + 将牌 × 一对”。例如：一二三万、四五六万、七八九条、三个东风，再加一对五筒。也支持七对和十三幺。胡牌可以来自自己摸牌，也可以来自其他玩家打出的牌。\n\n### ⚠️ 计分说明\n\n本版本采用简化竞赛计分：普通胡牌按 8 分、七对 24 分、十三幺 88 分；点炮时三家各付 8 分基础分，点炮者另付牌型分；自摸时三家各付基础分与牌型分。暂未计算完整的 81 种番种与起和门槛。\n\n### 🏁 本局结束\n\n有人胡牌后本局结束并展示各家手牌；牌墙摸完仍无人胡牌时流局。"
         case .sichuan:
@@ -113,19 +113,34 @@ enum MahjongRoundPhase: Equatable, Codable {
 
 enum MahjongDoubling {
     static let duration: TimeInterval = 10
+    static let revealPause: TimeInterval = 1.4
+
+    static func aiRevealDelay(order: Int, jitter: TimeInterval) -> TimeInterval {
+        1.2 + Double(order) * 1.25 + jitter
+    }
 
     static func options(for balance: Int) -> [Int] {
-        if balance >= 8_000 { return [1, 2, 4] }
-        if balance >= 3_000 { return [1, 2] }
+        if balance >= 8000 {
+            return [1, 2, 4]
+        }
+        if balance >= 3000 {
+            return [1, 2]
+        }
         return [1]
     }
 
     /// The roll is uniform in 0..<100. Eligibility is based only on the balance
     /// captured before this round, never on the AI's hand or later balance changes.
     static func aiChoice(balance: Int, roll: Int) -> Int {
-        if balance < 3_000 { return 1 }
-        if balance < 8_000 { return roll < 60 ? 1 : 2 }
-        if roll < 50 { return 1 }
+        if balance < 3000 {
+            return 1
+        }
+        if balance < 8000 {
+            return roll < 60 ? 1 : 2
+        }
+        if roll < 50 {
+            return 1
+        }
         return roll < 85 ? 2 : 4
     }
 }
@@ -369,8 +384,17 @@ final class MahjongGame {
               MahjongDoubling.options(for: roundStartingBalances[seat]).contains(value) else { return }
         multipliers[seat] = value
         pendingMultiplierSeats.removeAll { $0 == seat }
+        announceVoice(Self.multiplierVoiceCue(for: value), for: seat)
         message = "\(seatName(seat)) 已选择 ×\(value)"
-        if pendingMultiplierSeats.isEmpty { finishMultiplierChoices() }
+        finishMultiplierChoices()
+    }
+
+    private static func multiplierVoiceCue(for value: Int) -> String {
+        switch value {
+        case 2: "action-double"
+        case 4: "action-super-double"
+        default: "action-no-double"
+        }
     }
 
     func declareCampaignComplete() {
@@ -391,6 +415,8 @@ final class MahjongGame {
     private var preservedTurnDeadline: Date?
     private var responseTimerTasks: [Int: Task<Void, Never>] = [:]
     private var multiplierTimerTask: Task<Void, Never>?
+    private var multiplierAIChoiceTasks: [Int: Task<Void, Never>] = [:]
+    private var multiplierCompletionTask: Task<Void, Never>?
 
     var humanCount: Int {
         humanSeats.count
@@ -413,12 +439,16 @@ final class MahjongGame {
     }
 
     func isCountdownActive(for seat: Int) -> Bool {
-        if phase == .responding { return false }
+        if phase == .responding {
+            return false
+        }
         return responseCountdowns[seat] != nil || (turnTimerSeat == seat && turnSecondsRemaining != nil)
     }
 
     func countdownDeadline(for seat: Int) -> Date? {
-        if phase == .responding { return nil }
+        if phase == .responding {
+            return nil
+        }
         return responseCountdownDeadlines[seat] ?? (turnTimerSeat == seat ? turnCountdownDeadline : nil)
     }
 
@@ -552,9 +582,11 @@ final class MahjongGame {
         if phase == .choosingMissingSuit, missingSuits[seat] == nil, !pendingHumanSeats.contains(seat) {
             pendingHumanSeats.append(seat)
         }
-        if phase == .choosingMultiplier {
-            multipliers[seat] = nil
-            if !pendingMultiplierSeats.contains(seat) { pendingMultiplierSeats.append(seat) }
+        if phase == .choosingMultiplier, multipliers[seat] == nil {
+            multiplierAIChoiceTasks.removeValue(forKey: seat)?.cancel()
+            if !pendingMultiplierSeats.contains(seat) {
+                pendingMultiplierSeats.append(seat)
+            }
         }
         if phase == .responding, pendingAISeats.contains(seat) {
             if pendingAIStarted {
@@ -593,11 +625,8 @@ final class MahjongGame {
             }
         }
         if phase == .choosingMultiplier, pendingMultiplierSeats.contains(seat) {
-            multipliers[seat] = MahjongDoubling.aiChoice(
-                balance: roundStartingBalances[seat], roll: Int.random(in: 0..<100)
-            )
             pendingMultiplierSeats.removeAll { $0 == seat }
-            if pendingMultiplierSeats.isEmpty { finishMultiplierChoices() }
+            scheduleAIChoice(for: seat, delay: 1.4)
         }
         if phase == .responding, pendingHumanSeats.contains(seat) {
             pendingHumanSeats.removeAll { $0 == seat }
@@ -763,7 +792,6 @@ final class MahjongGame {
         }
         roundNumber += 1
         start()
-        markReady()
     }
 
     func seatName(_ seat: Int) -> String {
@@ -798,42 +826,76 @@ final class MahjongGame {
     }
 
     private func prepareMultiplierChoices() {
+        stopMultiplierTimer()
         phase = .choosingMultiplier
         turn = dealer
         justDrew = true
         needsDiscard = true
         pendingMultiplierSeats = humanSeats.sorted()
-        for seat in 0..<4 where !humanSeats.contains(seat) {
-            multipliers[seat] = MahjongDoubling.aiChoice(
-                balance: roundStartingBalances[seat], roll: Int.random(in: 0..<100)
+        let aiSeats = (0 ..< 4).filter { !humanSeats.contains($0) }.shuffled()
+        for (order, seat) in aiSeats.enumerated() {
+            scheduleAIChoice(
+                for: seat,
+                delay: MahjongDoubling.aiRevealDelay(
+                    order: order, jitter: Double.random(in: 0.1 ... 0.45)
+                )
             )
         }
         message = "请选择本局倍数 · 10 秒后默认不加倍"
         multiplierDeadline = Date().addingTimeInterval(MahjongDoubling.duration)
-        multiplierTimerTask?.cancel()
         multiplierTimerTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(MahjongDoubling.duration))
             guard let self, !Task.isCancelled, self.phase == .choosingMultiplier else { return }
             for seat in self.pendingMultiplierSeats {
                 self.multipliers[seat] = 1
+                self.announceVoice(Self.multiplierVoiceCue(for: 1), for: seat)
             }
             self.pendingMultiplierSeats = []
             self.finishMultiplierChoices()
         }
-        if pendingMultiplierSeats.isEmpty { finishMultiplierChoices() }
+    }
+
+    private func scheduleAIChoice(for seat: Int, delay: TimeInterval) {
+        multiplierAIChoiceTasks.removeValue(forKey: seat)?.cancel()
+        multiplierAIChoiceTasks[seat] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled, self.phase == .choosingMultiplier,
+                  !self.humanSeats.contains(seat), self.multipliers[seat] == nil else { return }
+            let value = MahjongDoubling.aiChoice(
+                balance: self.roundStartingBalances[seat], roll: Int.random(in: 0 ..< 100)
+            )
+            self.multipliers[seat] = value
+            self.multiplierAIChoiceTasks[seat] = nil
+            self.announceVoice(Self.multiplierVoiceCue(for: value), for: seat)
+            self.message = "\(self.seatName(seat)) 已选择 ×\(value)"
+            self.finishMultiplierChoices()
+        }
     }
 
     private func finishMultiplierChoices() {
-        guard phase == .choosingMultiplier, pendingMultiplierSeats.isEmpty else { return }
-        stopMultiplierTimer()
-        phase = .playing
-        message = "加倍完成 · 庄家 \(seatName(dealer)) 起手 14 张"
-        Task { await runAutomatedTurns() }
+        guard phase == .choosingMultiplier, pendingMultiplierSeats.isEmpty,
+              multipliers.allSatisfy({ $0 != nil }), multiplierCompletionTask == nil else { return }
+        multiplierTimerTask?.cancel()
+        multiplierTimerTask = nil
+        multiplierCompletionTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(MahjongDoubling.revealPause))
+            guard let self, !Task.isCancelled, self.phase == .choosingMultiplier else { return }
+            self.stopMultiplierTimer()
+            self.phase = .playing
+            self.message = "加倍完成 · 庄家 \(self.seatName(self.dealer)) 起手 14 张"
+            Task { await self.runAutomatedTurns() }
+        }
     }
 
     private func stopMultiplierTimer() {
         multiplierTimerTask?.cancel()
         multiplierTimerTask = nil
+        for task in multiplierAIChoiceTasks.values {
+            task.cancel()
+        }
+        multiplierAIChoiceTasks = [:]
+        multiplierCompletionTask?.cancel()
+        multiplierCompletionTask = nil
         multiplierDeadline = nil
     }
 
@@ -1416,8 +1478,10 @@ final class MahjongGame {
         turnSecondsRemaining = nil
         turnCountdownDeadline = nil
     }
+}
 
-    private func aiKongTiles(for seat: Int) -> [MahjongTile] {
+private extension MahjongGame {
+    func aiKongTiles(for seat: Int) -> [MahjongTile] {
         let unique = Set(hands[seat]).sorted { $0.sortKey < $1.sortKey }
         return unique.filter { tile in
             hands[seat].filter { $0 == tile }.count == 4 ||

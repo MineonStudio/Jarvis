@@ -4,38 +4,80 @@ import XCTest
 @MainActor
 final class MahjongEconomyTests: XCTestCase {
     func testMultiplierEligibilityAndAIRollBoundaries() {
-        XCTAssertEqual(MahjongDoubling.options(for: 2_999), [1])
-        XCTAssertEqual(MahjongDoubling.options(for: 3_000), [1, 2])
-        XCTAssertEqual(MahjongDoubling.options(for: 7_999), [1, 2])
-        XCTAssertEqual(MahjongDoubling.options(for: 8_000), [1, 2, 4])
-        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 2_999, roll: 99), 1)
-        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 3_000, roll: 59), 1)
-        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 3_000, roll: 60), 2)
-        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8_000, roll: 49), 1)
-        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8_000, roll: 50), 2)
-        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8_000, roll: 84), 2)
-        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8_000, roll: 85), 4)
+        XCTAssertEqual(MahjongDoubling.options(for: 2999), [1])
+        XCTAssertEqual(MahjongDoubling.options(for: 3000), [1, 2])
+        XCTAssertEqual(MahjongDoubling.options(for: 7999), [1, 2])
+        XCTAssertEqual(MahjongDoubling.options(for: 8000), [1, 2, 4])
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 2999, roll: 99), 1)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 3000, roll: 59), 1)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 3000, roll: 60), 2)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8000, roll: 49), 1)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8000, roll: 50), 2)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8000, roll: 84), 2)
+        XCTAssertEqual(MahjongDoubling.aiChoice(balance: 8000, roll: 85), 4)
     }
 
-    func testMultiplierChoiceValidatesOpeningBalanceAndResumesPlay() {
+    func testMultiplierChoiceValidatesOpeningBalanceAndResumesPlay() async {
         let game = MahjongGame()
         var snapshot = game.makeLANSnapshot()
         snapshot.phase = .choosingMultiplier
         snapshot.isStarted = true
-        snapshot.roundStartingBalances = [5_000, 8_000, 2_000, 8_000]
+        snapshot.roundStartingBalances = [5000, 8000, 2000, 8000]
         snapshot.multipliers = [nil, 4, 1, 2]
         snapshot.pendingMultiplierSeats = [0]
         game.configureLAN(humanSeats: [0], localSeat: 0, authority: false)
         game.applyLANSnapshot(snapshot)
         game.configureLAN(humanSeats: [0], localSeat: 0, authority: true)
+        var spokenCue: String?
+        game.onMahjongVoiceCue = { spokenCue = $0.key }
 
         game.chooseMultiplier(4)
         XCTAssertEqual(game.phase, .choosingMultiplier)
         XCTAssertNil(game.multipliers[0])
 
         game.chooseMultiplier(2)
+        XCTAssertEqual(game.phase, .choosingMultiplier)
+        try? await Task.sleep(for: .seconds(MahjongDoubling.revealPause + 0.25))
         XCTAssertEqual(game.phase, .playing)
         XCTAssertEqual(game.multipliers.compactMap { $0 }, [2, 4, 1, 2])
+        XCTAssertEqual(spokenCue, "action-double")
+    }
+
+    func testNextRoundWaitsForHumanReadiness() {
+        let game = MahjongGame()
+        game.start()
+        var snapshot = game.makeLANSnapshot()
+        snapshot.phase = .roundEnded
+        snapshot.roundNumber = 2
+        snapshot.readySeats = [true, true, true, true]
+        game.configureLAN(humanSeats: [0, 2], localSeat: 0, authority: false)
+        game.applyLANSnapshot(snapshot)
+        game.configureLAN(humanSeats: [0, 2], localSeat: 0, authority: true)
+
+        game.nextRound()
+
+        XCTAssertEqual(game.phase, .waitingForReady)
+        XCTAssertEqual(game.roundNumber, 3)
+        XCTAssertEqual(game.readySeats, [false, true, false, true])
+    }
+
+    func testAIChoicesAppearAfterVisibleDelay() async {
+        let game = MahjongGame()
+        game.onRoundBalancesRequested = { [10000, 10000, 5000, 2000] }
+        game.start()
+        game.markReady()
+        for _ in 0 ..< 70 where game.phase != .choosingMultiplier {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertEqual(game.phase, .choosingMultiplier)
+        XCTAssertTrue(game.multipliers[1 ... 3].allSatisfy { $0 == nil })
+
+        try? await Task.sleep(for: .seconds(5))
+        XCTAssertTrue(game.multipliers[1 ... 3].allSatisfy { $0 != nil })
+        XCTAssertEqual(game.phase, .choosingMultiplier)
+        game.chooseMultiplier(1)
+        try? await Task.sleep(for: .seconds(MahjongDoubling.revealPause + 0.25))
+        XCTAssertEqual(game.phase, .playing)
     }
 
     func testLANMultiplierSnapshotLetsGuestChooseOnlyAffordableOption() throws {
@@ -43,7 +85,7 @@ final class MahjongEconomyTests: XCTestCase {
         var snapshot = host.makeLANSnapshot()
         snapshot.mode = .lan
         snapshot.phase = .choosingMultiplier
-        snapshot.roundStartingBalances = [10_000, 2_000, 3_000, 8_000]
+        snapshot.roundStartingBalances = [10000, 2000, 3000, 8000]
         snapshot.multipliers = [nil, 1, nil, 4]
         snapshot.pendingMultiplierSeats = [0, 2]
         snapshot.multiplierDeadline = Date().addingTimeInterval(10)
@@ -51,7 +93,7 @@ final class MahjongEconomyTests: XCTestCase {
         let guest = MahjongGame()
         guest.mode = .lan
         guest.configureLAN(humanSeats: [0, 2], localSeat: 2, authority: false)
-        guest.applyLANSnapshot(try JSONDecoder().decode(
+        try guest.applyLANSnapshot(JSONDecoder().decode(
             MahjongGameSnapshot.self, from: JSONEncoder().encode(snapshot)
         ))
 
@@ -59,7 +101,9 @@ final class MahjongEconomyTests: XCTestCase {
         XCTAssertNotNil(guest.multiplierDeadline)
         var sentValue: Int?
         guest.onLANAction = { action in
-            if case let .multiplier(value) = action { sentValue = value }
+            if case let .multiplier(value) = action {
+                sentValue = value
+            }
         }
         guest.chooseMultiplier(4)
         XCTAssertNil(sentValue)
@@ -69,7 +113,7 @@ final class MahjongEconomyTests: XCTestCase {
 
     func testLANPaymentsMultiplyPerOpponentAndCapAtAvailableBalance() {
         let archive = MahjongArchiveStore(defaults: makeDefaults())
-        let seats = [10_000, 500, 10_000, 10_000].enumerated().map { seat, balance in
+        let seats = [10000, 500, 10000, 10000].enumerated().map { seat, balance in
             MahjongPlayerArchive(id: "seat-\(seat)", nickname: "玩家\(seat)", avatarStyle: .player, balance: balance)
         }
         let result = archive.settleLAN(
@@ -78,7 +122,7 @@ final class MahjongEconomyTests: XCTestCase {
             multipliers: [2, 4, 1, 2]
         )
         // Standard self draw is 340: 340×2×4 is capped by seat 1's 500.
-        XCTAssertEqual(result.settlement.playerResults.map(\.balanceChange), [2_540, -500, -680, -1_360])
+        XCTAssertEqual(result.settlement.playerResults.map(\.balanceChange), [2540, -500, -680, -1360])
         XCTAssertEqual(result.profiles.map(\.balance).reduce(0, +), seats.map(\.balance).reduce(0, +))
         XCTAssertTrue(result.settlement.transfers[0].contains("2,720"))
         XCTAssertTrue(result.settlement.transfers[0].contains("实付 500"))
@@ -88,10 +132,101 @@ final class MahjongEconomyTests: XCTestCase {
         let archive = MahjongArchiveStore(defaults: makeDefaults())
 
         XCTAssertTrue(archive.claimDailyReward())
-        XCTAssertEqual(archive.player.balance, MahjongArchiveStore.initialBalance + 2_500)
+        XCTAssertEqual(archive.player.balance, MahjongArchiveStore.initialBalance + 2500)
         XCTAssertFalse(archive.claimDailyReward())
-        XCTAssertEqual(archive.player.balance, MahjongArchiveStore.initialBalance + 2_500)
-        XCTAssertEqual(MahjongArchiveStore.bankruptcyAid, 5_000)
+        XCTAssertEqual(archive.player.balance, MahjongArchiveStore.initialBalance + 2500)
+        XCTAssertEqual(MahjongArchiveStore.bankruptcyAid, 5000)
+    }
+
+    func testCheckInCalendarAndMatchHistorySurviveReload() {
+        let defaults = makeDefaults()
+        let archive = MahjongArchiveStore(defaults: defaults)
+        XCTAssertTrue(archive.claimDailyReward())
+        archive.recordMatch(MahjongMatchRecord(
+            mode: .solo, ruleset: .national, roundNumber: 3,
+            outcome: .win, winnerNickname: "玩家", balanceChange: 340,
+            balanceAfter: archive.player.balance
+        ))
+
+        let reloaded = MahjongArchiveStore(defaults: defaults)
+        XCTAssertTrue(reloaded.hasCheckedIn(on: Date()))
+        XCTAssertEqual(reloaded.checkInDays.count, 1)
+        XCTAssertEqual(reloaded.currentCheckInStreak, 1)
+        XCTAssertEqual(reloaded.matchHistory.count, 1)
+        XCTAssertEqual(reloaded.matchHistory.first?.roundNumber, 3)
+        XCTAssertEqual(reloaded.matchHistory.first?.balanceChange, 340)
+    }
+
+    func testRoundHistoryRecordsEachAISeatAndSurvivesReload() {
+        let defaults = makeDefaults()
+        let archive = MahjongArchiveStore(defaults: defaults)
+        let ai = Array(archive.aiProfiles.prefix(3))
+        let ids = [archive.player.id] + ai.map(\.id)
+        let names = [archive.player.nickname] + ai.map(\.nickname)
+        let results = zip(ids, names).enumerated().map { seat, pair in
+            MahjongPlayerRoundSettlement(
+                profileID: pair.0, nickname: pair.1,
+                balanceChange: seat == 1 ? 300 : -100,
+                balanceAfter: seat == 1 ? 10300 : 9900
+            )
+        }
+        let settlement = MahjongArchiveSettlement(
+            transfers: [], playerResults: results, notice: nil,
+            campaignComplete: false, playerBankrupt: false, playerNeedsExit: false
+        )
+
+        archive.recordRound(MahjongRoundArchiveInput(
+            mode: .solo, ruleset: .national, roundNumber: 2,
+            winnerSeat: 1, localSeat: 0, humanSeats: [0],
+            seatProfileIDs: ids, seatNames: names, settlement: settlement
+        ))
+
+        let reloaded = MahjongArchiveStore(defaults: defaults)
+        XCTAssertEqual(reloaded.history(for: reloaded.player.id).first?.outcome, .loss)
+        XCTAssertEqual(reloaded.history(for: ai[0].id).first?.outcome, .win)
+        XCTAssertEqual(reloaded.history(for: ai[0].id).first?.balanceChange, 300)
+        XCTAssertEqual(reloaded.history(for: ai[1].id).first?.balanceChange, -100)
+        XCTAssertEqual(reloaded.history(for: ai[2].id).count, 1)
+        XCTAssertEqual(reloaded.aiMatchHistory.values.map(\.count).reduce(0, +), 3)
+    }
+
+    func testLANRoundHistoryExcludesOtherHumanSeats() {
+        let archive = MahjongArchiveStore(defaults: makeDefaults())
+        let ai = Array(archive.aiProfiles.prefix(2))
+        archive.recordRound(MahjongRoundArchiveInput(
+            mode: .lan, ruleset: .national, roundNumber: 1,
+            winnerSeat: nil, localSeat: 2, humanSeats: [0, 2],
+            seatProfileIDs: ["host", ai[0].id, archive.player.id, ai[1].id],
+            seatNames: ["房主", ai[0].nickname, archive.player.nickname, ai[1].nickname],
+            settlement: nil
+        ))
+
+        XCTAssertEqual(archive.matchHistory.first?.outcome, .draw)
+        XCTAssertEqual(archive.aiMatchHistory.values.map(\.count).reduce(0, +), 2)
+        XCTAssertEqual(archive.history(for: ai[0].id).first?.outcome, .draw)
+    }
+
+    func testLegacyArchiveMigratesLastCheckInAndMarvelAvatar() throws {
+        let defaults = makeDefaults()
+        let archive = MahjongArchiveStore(defaults: defaults)
+        XCTAssertTrue(archive.claimDailyReward())
+        let key = "jarvis.mahjong.archive.v1"
+        let data = try XCTUnwrap(defaults.data(forKey: key))
+        var snapshot = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        snapshot.removeValue(forKey: "checkInDays")
+        snapshot.removeValue(forKey: "matchHistory")
+        snapshot.removeValue(forKey: "aiMatchHistory")
+        var player = try XCTUnwrap(snapshot["player"] as? [String: Any])
+        player["avatarStyle"] = "iron"
+        snapshot["player"] = player
+        try defaults.set(JSONSerialization.data(withJSONObject: snapshot), forKey: key)
+
+        let reloaded = MahjongArchiveStore(defaults: defaults)
+        XCTAssertEqual(reloaded.player.avatarStyle, .player)
+        XCTAssertEqual(reloaded.checkInDays.count, 1)
+        XCTAssertTrue(reloaded.hasCheckedIn(on: Date()))
+        XCTAssertTrue(reloaded.matchHistory.isEmpty)
+        XCTAssertTrue(reloaded.aiMatchHistory.isEmpty)
     }
 
     func testSoloDiscardCapsPaymentAndBankruptcyAidStartsFromZero() throws {
@@ -146,14 +281,14 @@ final class MahjongEconomyTests: XCTestCase {
         XCTAssertEqual(payment(.standard, false, true, false), 400)
         XCTAssertEqual(payment(.sevenPairs, true, true, true), 640)
         XCTAssertEqual(payment(.sevenPairs, false, true, false), 720)
-        XCTAssertEqual(payment(.thirteenOrphans, true, true, true), 1_920)
-        XCTAssertEqual(payment(.thirteenOrphans, false, true, false), 2_000)
+        XCTAssertEqual(payment(.thirteenOrphans, true, true, true), 1920)
+        XCTAssertEqual(payment(.thirteenOrphans, false, true, false), 2000)
     }
 
     func testLANDiscardCollectsBaseFromEveryOpponent() {
         let archive = MahjongArchiveStore(defaults: makeDefaults())
         let seats = (0 ..< 4).map { seat in
-            MahjongPlayerArchive(id: "seat-\(seat)", nickname: "玩家\(seat)", avatarStyle: .player, balance: 10_000)
+            MahjongPlayerArchive(id: "seat-\(seat)", nickname: "玩家\(seat)", avatarStyle: .player, balance: 10000)
         }
 
         let result = archive.settleLAN(
@@ -162,7 +297,7 @@ final class MahjongEconomyTests: XCTestCase {
         )
 
         XCTAssertEqual(result.settlement.playerResults.map(\.balanceChange), [-640, 960, -160, -160])
-        XCTAssertEqual(result.profiles.map(\.balance).reduce(0, +), 40_000)
+        XCTAssertEqual(result.profiles.map(\.balance).reduce(0, +), 40000)
         XCTAssertEqual(result.settlement.transfers.count, 3)
     }
 
@@ -212,6 +347,6 @@ final class MahjongEconomyTests: XCTestCase {
             roster[index]["balance"] = balance
             snapshot["aiProfiles"] = roster
         }
-        defaults.set(try JSONSerialization.data(withJSONObject: snapshot), forKey: key)
+        try defaults.set(JSONSerialization.data(withJSONObject: snapshot), forKey: key)
     }
 }

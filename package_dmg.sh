@@ -25,11 +25,11 @@ codesign --force --options runtime \
 ln -s /Applications "$STAGING_DIR/Applications"
 
 codesign --verify --deep --strict "$STAGING_DIR/Jarvis.app"
-hdiutil create \
-  -volname "Jarvis $VERSION" \
-  -srcfolder "$STAGING_DIR" \
-  -ov \
-  -format UDZO \
+rm -f "$DMG_PATH"
+diskutil image create from \
+  --volumeName "Jarvis $VERSION" \
+  --format UDZO \
+  "$STAGING_DIR" \
   "$DMG_PATH"
 hdiutil verify "$DMG_PATH"
 

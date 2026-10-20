@@ -7,6 +7,10 @@ import Network
 /// tested against an actual socket rather than a stub type: connections, delays, an answer
 /// that never comes, and a body that has to be read in pieces.
 final class StubHTTPServer: @unchecked Sendable {
+    private final class RequestBuffer: @unchecked Sendable {
+        var data = Data()
+    }
+
     struct Reply: Sendable {
         var status: Int = 200
         var contentType: String = "text/event-stream"
@@ -118,22 +122,26 @@ final class StubHTTPServer: @unchecked Sendable {
     }
 
     /// Reads until the headers and, when the request announces one, the whole body arrived.
-    private func readRequest(_ connection: NWConnection, then: @escaping (String) -> Void) {
-        var buffer = Data()
-        func receiveMore() {
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, isComplete, error in
-                if let data {
-                    buffer.append(data)
-                }
-                let text = String(decoding: buffer, as: UTF8.self)
-                if Self.isCompleteRequest(text) || isComplete || error != nil {
-                    then(text)
-                    return
-                }
-                receiveMore()
+    private func readRequest(_ connection: NWConnection, then: @escaping @Sendable (String) -> Void) {
+        receiveMore(connection, buffer: RequestBuffer(), then: then)
+    }
+
+    private func receiveMore(
+        _ connection: NWConnection,
+        buffer: RequestBuffer,
+        then: @escaping @Sendable (String) -> Void
+    ) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [self] data, _, isComplete, error in
+            if let data {
+                buffer.data.append(data)
             }
+            let text = String(decoding: buffer.data, as: UTF8.self)
+            if Self.isCompleteRequest(text) || isComplete || error != nil {
+                then(text)
+                return
+            }
+            receiveMore(connection, buffer: buffer, then: then)
         }
-        receiveMore()
     }
 
     private static func isCompleteRequest(_ text: String) -> Bool {
@@ -175,9 +183,10 @@ final class StubHTTPServer: @unchecked Sendable {
             return
         }
         let delay = index == 0 ? reply.initialDelay : reply.chunkDelay
-        let write = { [weak self] in
+        let write: @Sendable () -> Void = { [weak self] in
+            guard let self else { return }
             connection.send(content: Data(chunks[index].utf8), completion: .contentProcessed { _ in
-                self?.send(chunks: chunks, index: index + 1, reply: reply, on: connection)
+                self.send(chunks: chunks, index: index + 1, reply: reply, on: connection)
             })
         }
         if delay > 0 {

@@ -31,8 +31,8 @@ JARVIS_BUNDLE_IDENTIFIER="${JARVIS_BUNDLE_IDENTIFIER:-$DEFAULT_BUNDLE_IDENTIFIER
 JARVIS_DISPLAY_NAME="${JARVIS_DISPLAY_NAME:-$DEFAULT_DISPLAY_NAME}"
 JARVIS_BUNDLE_NAME="${JARVIS_BUNDLE_NAME:-$DEFAULT_BUNDLE_NAME}"
 JARVIS_INSTALL_SOURCE="${JARVIS_INSTALL_SOURCE:-$DEFAULT_INSTALL_SOURCE}"
-JARVIS_VERSION="${JARVIS_VERSION:-1.8.7}"
-JARVIS_BUILD="${JARVIS_BUILD:-370}"
+JARVIS_VERSION="${JARVIS_VERSION:-1.8.8}"
+JARVIS_BUILD="${JARVIS_BUILD:-371}"
 ICON_ASSET_NAME="jarvis-${JARVIS_VERSION//./-}"
 
 cd "$ROOT_DIR"
@@ -72,6 +72,10 @@ fi
 if [[ -d "$ROOT_DIR/Resources/GameArtwork" ]]; then
   mkdir -p "$APP_DIR/Contents/Resources/GameArtwork"
   cp "$ROOT_DIR/Resources/GameArtwork"/*.svg \
+     "$APP_DIR/Contents/Resources/GameArtwork/"
+  cp "$ROOT_DIR/Resources/GameArtwork/mahjong-launch-background.png" \
+     "$APP_DIR/Contents/Resources/GameArtwork/"
+  cp "$ROOT_DIR/Resources/GameArtwork/mahjong-poster.png" \
      "$APP_DIR/Contents/Resources/GameArtwork/"
   if [[ -d "$ROOT_DIR/Resources/GameArtwork/Avatars" ]]; then
     mkdir -p "$APP_DIR/Contents/Resources/GameArtwork/Avatars"

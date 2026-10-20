@@ -2,6 +2,7 @@
 """Create bundled Mandarin Mahjong clips with the installed macOS Tingting voice."""
 
 from pathlib import Path
+import argparse
 import subprocess
 import tempfile
 import shutil
@@ -32,11 +33,14 @@ CLIPS.update(
         "action-exposed-kong": "明杠",
         "action-concealed-kong": "暗杠",
         "action-added-kong": "补杠",
-        "action-win": "和了",
+        "action-win": "胡了",
         "action-self-draw": "自摸",
         "action-draw": "流局",
         "action-pass": "过",
         "action-missing-suit": "定缺",
+        "action-no-double": "不加倍",
+        "action-double": "加倍",
+        "action-super-double": "超级加倍",
     }
 )
 
@@ -46,6 +50,16 @@ def run(*command: str) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--only", nargs="+", metavar="CUE", help="generate only the listed cue names")
+    args = parser.parse_args()
+    if args.only:
+        unknown = set(args.only) - CLIPS.keys()
+        if unknown:
+            parser.error(f"unknown cues: {', '.join(sorted(unknown))}")
+        clips = {name: CLIPS[name] for name in args.only}
+    else:
+        clips = CLIPS
     voices = {
         "female": ("Tingting", False),
         # macOS on this release host only has Tingting's mainland Mandarin voice
@@ -55,7 +69,7 @@ def main() -> None:
     for gender, (voice, lower_pitch) in voices.items():
         output_directory = DESTINATION / gender
         output_directory.mkdir(parents=True, exist_ok=True)
-        for name, phrase in CLIPS.items():
+        for name, phrase in clips.items():
             with tempfile.TemporaryDirectory(prefix="jarvis-mahjong-audio-") as temporary:
                 temporary_path = Path(temporary)
                 source = temporary_path / "source.aiff"
@@ -91,7 +105,7 @@ def main() -> None:
                     "-b",
                     "64000",
                 )
-        print(f"Generated {len(CLIPS)} Mandarin clips: {gender}")
+        print(f"Generated {len(clips)} Mandarin clips: {gender}")
 
 
 if __name__ == "__main__":

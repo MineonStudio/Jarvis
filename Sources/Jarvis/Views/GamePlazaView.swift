@@ -1,30 +1,13 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
-
-private enum GameLibrarySelection: String, CaseIterable, Identifiable, Hashable {
-    case all = "全部游戏"
-    case mahjong = "麻将"
-    var id: String {
-        rawValue
-    }
-}
 
 struct GamePlazaView: View {
     @State private var game = MahjongGame()
     @State private var archive = MahjongArchiveStore()
-    @State private var showsLANRoom = false
     @State private var lanRoomService: MahjongLANRoomService?
     @State private var idleLANRoomService = MahjongLANRoomService()
-    @State private var showsArchive = false
-    @State private var librarySelection: GameLibrarySelection = .all
     @State private var latestSettlement: MahjongArchiveSettlement?
     @State private var lastSettledRoundNumber = 0
-    @State private var playerNicknameDraft = ""
-    @State private var isCheckingIn = false
-    @State private var checkInFailed = false
-    @State private var showsAvatarImporter = false
-    @State private var avatarImportError: String?
     @State private var gameWindowModel: MahjongGameWindowModel?
 
     private var gameWindow: MahjongGameWindowController {
@@ -34,48 +17,38 @@ struct GamePlazaView: View {
     var body: some View {
         JarvisContentArea(
             leadingToolbar: {
-                JarvisToolbarSurface(id: "games.library", placement: .navigation) {
-                    JarvisToolbarGroupedPicker(
-                        items: GameLibrarySelection.allCases,
-                        selection: $librarySelection,
-                        title: { $0.rawValue }
-                    )
-                }
+                ToolbarItem(placement: .automatic) { EmptyView() }
             },
             trailingToolbar: {
                 ToolbarItem(placement: .automatic) { EmptyView() }
             },
             content: {
                 ScrollView {
-                    Group {
-                        if librarySelection == .mahjong {
-                            mahjongDetail
-                        } else {
-                            gameGallery
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(24)
+                    gameGallery
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(24)
                 }
                 .scrollIndicators(.hidden)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .jarvisModulePanel()
             }
         )
-        .sheet(isPresented: $showsLANRoom) {
-            MahjongLANRoomView(localProfile: archive.player) { service in
-                startLANMatch(service)
-            }
-            .frame(width: 560, height: 620)
-        }
-        .sheet(isPresented: $showsArchive) {
-            MahjongArchiveDashboardView(archive: archive)
-                .frame(minWidth: 720, minHeight: 620)
-        }
         .onChange(of: game.phase) { _, phase in
+            if phase == .waitingForReady, game.roundNumber > lastSettledRoundNumber {
+                latestSettlement = nil
+            }
             guard phase == .roundEnded, lastSettledRoundNumber != game.roundNumber else { return }
             if game.mode == .lan {
-                guard let service = lanRoomService, service.isHosting else { return }
+                guard let service = lanRoomService else { return }
+                if !service.isHosting {
+                    if game.winner == nil {
+                        recordCurrentMatch(settlement: nil)
+                        lastSettledRoundNumber = game.roundNumber
+                    } else if let settlement = service.settlement {
+                        applyGuestSettlement(settlement, service: service)
+                    }
+                    return
+                }
                 settleLANRound(using: service)
             } else {
                 settleRound()
@@ -88,11 +61,7 @@ struct GamePlazaView: View {
         .onReceive((lanRoomService ?? idleLANRoomService).$settlement) { settlement in
             guard game.mode == .lan, let service = lanRoomService, !service.isHosting,
                   let settlement, game.phase == .roundEnded else { return }
-            latestSettlement = settlement
-            if let profile = service.syncedProfiles[game.localSeat] {
-                archive.applyLANPlayerProfile(profile)
-            }
-            lastSettledRoundNumber = game.roundNumber
+            applyGuestSettlement(settlement, service: service)
         }
         .onReceive((lanRoomService ?? idleLANRoomService).$syncedProfiles) { profiles in
             guard game.mode == .lan, let profile = profiles[game.localSeat] else { return }
@@ -104,12 +73,6 @@ struct GamePlazaView: View {
             lanRoomService?.stop()
             lanRoomService = nil
             latestSettlement = nil
-            librarySelection = .mahjong
-        }
-        .onChange(of: game.isStarted) { _, started in
-            if !started {
-                gameWindow.hide()
-            }
         }
         .onChange(of: latestSettlement) { _, settlement in
             gameWindowModel?.roundNotice = settlement?.notice
@@ -128,217 +91,11 @@ struct GamePlazaView: View {
                     .foregroundStyle(.secondary)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 350), spacing: 18)], alignment: .leading, spacing: 18) {
-                Button { librarySelection = .mahjong } label: { GamePosterCard() }
+                Button { presentGameWindow() } label: { GamePosterCard() }
                     .buttonStyle(.plain)
             }
             Spacer(minLength: 0)
         }
-    }
-
-    private var mahjongDetail: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 18) {
-                GamePosterArtwork()
-                    .frame(width: 300, height: 190)
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 10) {
-                        Spacer(minLength: 0)
-                        Text("麻将玩法")
-                            .font(JarvisTypography.control)
-                            .foregroundStyle(.secondary)
-                        JarvisDropdownMenu(
-                            title: game.ruleset.rawValue,
-                            options: MahjongRuleset.allCases.map { JarvisDropdownOption(id: $0.rawValue, title: $0.rawValue) },
-                            selectionID: game.ruleset.rawValue,
-                            accessibilityLabel: "麻将玩法",
-                            help: "选择麻将玩法",
-                            maximumControlWidth: 250
-                        ) { selectedID in
-                            guard let ruleset = MahjongRuleset(rawValue: selectedID) else { return }
-                            game.ruleset = ruleset
-                        }
-                        Text("游玩模式")
-                            .font(JarvisTypography.control)
-                            .foregroundStyle(.secondary)
-                        JarvisDropdownMenu(
-                            title: gameModeTitle,
-                            options: [
-                                JarvisDropdownOption(id: MahjongPlayMode.solo.rawValue, title: "单人对战 AI"),
-                                JarvisDropdownOption(id: MahjongPlayMode.lan.rawValue, title: "局域网房间")
-                            ],
-                            selectionID: game.mode.rawValue,
-                            accessibilityLabel: "对局模式",
-                            help: "选择对局模式"
-                        ) { selectedID in
-                            guard let mode = MahjongPlayMode(rawValue: selectedID) else { return }
-                            game.mode = mode
-                        }
-                        Button {
-                            if game.isStarted {
-                                presentGameWindow()
-                            } else if game.mode == .lan {
-                                showsLANRoom = true
-                            } else {
-                                startSoloMatch()
-                            }
-                        } label: {
-                            Text(game.isStarted ? "回到牌桌" : "进入游戏")
-                        }
-                        .buttonStyle(JarvisSecondaryButtonStyle())
-                        .fixedSize()
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("中国麻将")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                        Text("选择玩法与对局模式，和 AI 对弈，或创建局域网房间与朋友同桌。")
-                            .font(JarvisTypography.body)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            archiveSummary
-            Divider()
-            VStack(alignment: .leading, spacing: 8) {
-                Label("玩法说明", systemImage: "text.alignleft")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(.init(game.ruleset.detail))
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private var gameModeTitle: String {
-        game.mode == .solo ? "单人对战 AI" : "局域网房间"
-    }
-
-    private var archiveSummary: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 14) {
-                Button { showsAvatarImporter = true } label: {
-                    MahjongArchiveAvatar(profile: archive.player, size: 54)
-                        .overlay(alignment: .bottomTrailing) {
-                            Image(systemName: "pencil.circle.fill")
-                                .font(.system(size: 15, weight: .semibold))
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, Color.black.opacity(0.58))
-                                .offset(x: 3, y: 3)
-                        }
-                }
-                .buttonStyle(.plain)
-                .help("从本地选择头像")
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        TextField("玩家昵称", text: $playerNicknameDraft)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(maxWidth: 150)
-                            .onSubmit(savePlayerNickname)
-                        Button("保存") { savePlayerNickname() }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.accentColor)
-                    }
-                    Picker("麻将配音", selection: Binding(
-                        get: { archive.player.voiceGender },
-                        set: { archive.updatePlayerProfile(voiceGender: $0) }
-                    )) {
-                        ForEach(MahjongVoiceGender.allCases) { gender in
-                            Text(gender.displayName).tag(gender)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(width: 112)
-                    .help("选择你的麻将语音")
-                    Text("余额  \(archive.player.balance.formatted()) 毛格子")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                Divider().frame(height: 38)
-                archiveMetric("胜率", "\(archive.player.winRate)%")
-                archiveMetric("胜场", "\(archive.player.wins)")
-                archiveMetric("败场", "\(archive.player.losses)")
-                archiveMetric("逃跑", "\(archive.player.escapes)")
-                Spacer(minLength: 8)
-                Button(checkInButtonTitle, action: startDailyCheckIn)
-                    .buttonStyle(JarvisSecondaryButtonStyle())
-                    .disabled(!archive.canClaimDailyReward || isCheckingIn)
-                Button("查看档案") { showsArchive = true }
-                    .buttonStyle(JarvisSecondaryButtonStyle())
-            }
-            if let notice = latestSettlement?.notice {
-                Text(notice)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-            if let avatarImportError {
-                Text("头像导入失败：\(avatarImportError)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.red)
-            }
-        }
-        .padding(14)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        }
-        .onAppear {
-            if playerNicknameDraft.isEmpty {
-                playerNicknameDraft = archive.player.nickname
-            }
-        }
-        .onChange(of: archive.player.nickname) { _, nickname in
-            playerNicknameDraft = nickname
-        }
-        .fileImporter(isPresented: $showsAvatarImporter, allowedContentTypes: [.image], allowsMultipleSelection: false) { result in
-            switch result {
-            case let .success(urls):
-                guard let url = urls.first else { return }
-                do {
-                    try archive.updatePlayerAvatar(from: url)
-                    avatarImportError = nil
-                } catch {
-                    avatarImportError = error.localizedDescription
-                }
-            case let .failure(error):
-                avatarImportError = error.localizedDescription
-            }
-        }
-    }
-
-    private var checkInButtonTitle: String {
-        if isCheckingIn {
-            return "开始签到"
-        }
-        if checkInFailed {
-            return "签到失败"
-        }
-        if !archive.canClaimDailyReward {
-            return "签到成功"
-        }
-        return "开始签到"
-    }
-
-    private func savePlayerNickname() {
-        archive.updatePlayerProfile(nickname: playerNicknameDraft)
-        playerNicknameDraft = archive.player.nickname
     }
 
     private func voiceGender(for seat: Int) -> MahjongVoiceGender {
@@ -359,31 +116,6 @@ struct GamePlazaView: View {
             return profile.voiceGender
         }
         return .female
-    }
-
-    private func startDailyCheckIn() {
-        guard archive.canClaimDailyReward, !isCheckingIn else { return }
-        isCheckingIn = true
-        checkInFailed = false
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(250))
-            let succeeded = archive.claimDailyReward()
-            isCheckingIn = false
-            checkInFailed = !succeeded
-            if succeeded {
-                latestSettlement = MahjongArchiveSettlement(
-                    transfers: [], notice: "每日签到已领取 +\(MahjongArchiveStore.dailyReward.formatted()) 毛格子", campaignComplete: false,
-                    playerBankrupt: false, playerNeedsExit: false
-                )
-            }
-        }
-    }
-
-    private func archiveMetric(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(size: 10)).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 13, weight: .semibold, design: .rounded))
-        }
     }
 
     private func startSoloMatch() {
@@ -427,7 +159,6 @@ struct GamePlazaView: View {
         game.start()
         lastSettledRoundNumber = 0
         latestSettlement = nil
-        librarySelection = .mahjong
         presentGameWindow()
     }
 
@@ -439,7 +170,8 @@ struct GamePlazaView: View {
         lanRoomService?.stop()
         lanRoomService = nil
         latestSettlement = nil
-        librarySelection = .mahjong
+        gameWindowModel?.roundNotice = nil
+        gameWindowModel?.roundSettlement = nil
     }
 
     private func presentGameWindow() {
@@ -460,13 +192,28 @@ struct GamePlazaView: View {
         model.roundSettlement = latestSettlement
         model.onNextRound = { startNextRound() }
         model.onExit = { exitMatch() }
-        gameWindow.onUserClose = { exitMatch() }
+        model.onStartSolo = { ruleset in
+            game.ruleset = ruleset
+            startSoloMatch()
+            model.roundNotice = latestSettlement?.notice
+        }
+        model.onStartLAN = { service in startLANMatch(service) }
+        model.onCloseMenu = {
+            exitMatch()
+            model.menuLANRoomService.stop()
+            gameWindow.hide()
+        }
+        gameWindow.onUserClose = {
+            exitMatch()
+            model.menuLANRoomService.stop()
+        }
         gameWindow.show(model: model)
     }
 
     private func startLANMatch(_ service: MahjongLANRoomService) {
         lanRoomService = service
         game.mode = .lan
+        game.ruleset = service.roomRuleset
         if service.isHosting {
             let archive = archive
             game.onMahjongVoiceCue = { [weak service] cue in
@@ -479,7 +226,6 @@ struct GamePlazaView: View {
         }
         lastSettledRoundNumber = 0
         latestSettlement = nil
-        librarySelection = .mahjong
         if service.isHosting {
             let aiIDs = archive.prepareAIOpponents()
             game.assignAIProfiles(aiIDs)
@@ -489,19 +235,15 @@ struct GamePlazaView: View {
         } else {
             service.startJoinedGame(game, profile: archive.player)
         }
-        showsLANRoom = false
         presentGameWindow()
     }
 
     private func startNextRound() {
+        guard latestSettlement?.campaignComplete != true,
+              latestSettlement?.playerNeedsExit != true else { return }
         if game.mode == .lan {
             lanRoomService?.clearSettlement()
             game.nextRound()
-            return
-        }
-        if latestSettlement?.campaignComplete == true || latestSettlement?.playerNeedsExit == true {
-            game.leaveTable()
-            latestSettlement = nil
             return
         }
         game.assignAIProfiles(archive.replacingBankruptOpponents(game.aiProfileIDs))
@@ -512,6 +254,7 @@ struct GamePlazaView: View {
         lastSettledRoundNumber = game.roundNumber
         guard let winner = game.winner else {
             latestSettlement = nil
+            recordCurrentMatch(settlement: nil)
             return
         }
         let settlement = archive.settle(
@@ -524,6 +267,7 @@ struct GamePlazaView: View {
             multipliers: game.multipliers.map { $0 ?? 1 }
         )
         latestSettlement = settlement
+        recordCurrentMatch(settlement: settlement)
         if settlement.playerNeedsExit {
             game.leaveTable()
             return
@@ -537,6 +281,7 @@ struct GamePlazaView: View {
         lastSettledRoundNumber = game.roundNumber
         guard let winner = game.winner else {
             latestSettlement = nil
+            recordCurrentMatch(settlement: nil)
             return
         }
         var seats = (0 ..< 4).map { seat in
@@ -555,7 +300,52 @@ struct GamePlazaView: View {
             multipliers: game.multipliers.map { $0 ?? 1 }
         )
         latestSettlement = result.settlement
+        recordCurrentMatch(settlement: result.settlement)
         service.publishSettlement(result.settlement, profiles: result.profiles)
+    }
+
+    private func recordCurrentMatch(settlement: MahjongArchiveSettlement?) {
+        let localSeat = game.mode == .lan ? game.localSeat : 0
+        let seatProfileIDs = (0 ..< 4).map { seat in
+            if let settlement, settlement.playerResults.indices.contains(seat) {
+                return settlement.playerResults[seat].profileID
+            }
+            if game.mode == .lan {
+                return lanRoomService?.syncedProfiles[seat]?.id ?? ""
+            }
+            return seat == 0 ? archive.player.id
+                : (game.aiProfileIDs.indices.contains(seat - 1) ? game.aiProfileIDs[seat - 1] : "")
+        }
+        let seatNames = (0 ..< 4).map { seat in
+            if let settlement, settlement.playerResults.indices.contains(seat) {
+                return settlement.playerResults[seat].nickname
+            }
+            return (game.mode == .lan ? lanRoomService?.syncedProfiles[seat]?.nickname
+                : archive.profile(id: seatProfileIDs[seat])?.nickname) ?? game.seatName(seat)
+        }
+        archive.recordRound(MahjongRoundArchiveInput(
+            mode: game.mode,
+            ruleset: game.ruleset,
+            roundNumber: game.roundNumber,
+            winnerSeat: game.winner,
+            localSeat: localSeat,
+            humanSeats: game.humanSeats,
+            seatProfileIDs: seatProfileIDs,
+            seatNames: seatNames,
+            settlement: settlement
+        ))
+    }
+
+    private func applyGuestSettlement(_ settlement: MahjongArchiveSettlement, service: MahjongLANRoomService) {
+        guard lastSettledRoundNumber != game.roundNumber else { return }
+        latestSettlement = settlement
+        if let profile = service.syncedProfiles[game.localSeat] {
+            archive.applyLANPlayerProfile(profile)
+        }
+        archive.applyLANAIProfiles((0 ..< 4).filter { !game.humanSeats.contains($0) }
+            .compactMap { service.syncedProfiles[$0] })
+        recordCurrentMatch(settlement: settlement)
+        lastSettledRoundNumber = game.roundNumber
     }
 }
 
@@ -568,7 +358,7 @@ private struct MahjongArchiveDashboardView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("麻将档案").font(.system(size: 24, weight: .bold, design: .rounded))
+                    Text("欢乐麻将档案").font(.system(size: 24, weight: .bold, design: .rounded))
                     Text("玩家战绩、毛格子余额与 AI 对手档案")
                         .font(.system(size: 13)).foregroundStyle(.secondary)
                 }
@@ -769,11 +559,11 @@ private struct GamePosterCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             GamePosterArtwork()
-                .frame(height: 184)
+                .aspectRatio(1.6, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("中国麻将")
+                    Text("欢乐麻将")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.primary)
                     Text("棋牌 · 单人对战 AI / 局域网")
@@ -800,7 +590,7 @@ private struct GamePosterCard: View {
 
 private struct GamePosterArtwork: View {
     private static let poster: NSImage? = {
-        guard let url = Bundle.main.resourceURL?.appendingPathComponent("GameArtwork/mahjong-poster.svg"),
+        guard let url = Bundle.main.resourceURL?.appendingPathComponent("GameArtwork/mahjong-poster.png"),
               let image = NSImage(contentsOf: url) else { return nil }
         image.isTemplate = false
         return image
@@ -818,7 +608,7 @@ private struct GamePosterArtwork: View {
                 fallback
             }
         }
-        .accessibilityLabel("中国麻将游戏海报：青玉牌桌与麻将牌")
+        .accessibilityLabel("欢乐麻将游戏海报：暖灯茶室与麻将牌")
     }
 
     private var fallback: some View {
@@ -928,15 +718,19 @@ struct MahjongTableView: View {
     }
 
     var body: some View {
-        MahjongOverheadTable(
-            game: game,
-            archive: archive,
-            lanRoomService: lanRoomService,
-            roundNotice: roundNotice,
-            roundSettlement: roundSettlement,
-            onNextRound: onNextRound,
-            onExit: onExit
-        )
+        if game.isStarted {
+            MahjongOverheadTable(
+                game: game,
+                archive: archive,
+                lanRoomService: lanRoomService,
+                roundNotice: roundNotice,
+                roundSettlement: roundSettlement,
+                onNextRound: onNextRound,
+                onExit: onExit
+            )
+        } else {
+            MahjongLaunchView(model: model)
+        }
     }
 
     /// Rules, duration, wall count, and exit. Its own rounded panel, above the felt.
@@ -2512,6 +2306,7 @@ struct MahjongTileFace: View {
 
 private struct MahjongLANRoomView: View {
     let localProfile: MahjongPlayerArchive
+    let ruleset: MahjongRuleset
     let onStart: (MahjongLANRoomService) -> Void
     @Environment(\.dismiss) private var dismiss
     @StateObject private var service = MahjongLANRoomService()
@@ -2521,7 +2316,7 @@ private struct MahjongLANRoomView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("局域网麻将")
+                    Text("欢乐麻将联机")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                     Text("与同一 Wi‑Fi 下的朋友一起玩")
                         .foregroundStyle(.secondary)
@@ -2550,7 +2345,7 @@ private struct MahjongLANRoomView: View {
                 .disabled(roomCode.count != 6 || service.isConnecting)
                 Spacer()
                 if !service.isHosting {
-                    Button("创建房间") { service.createRoom(profile: localProfile) }
+                    Button("创建房间") { service.createRoom(profile: localProfile, ruleset: ruleset) }
                         .buttonStyle(JarvisSecondaryButtonStyle())
                 }
             }
@@ -2596,7 +2391,7 @@ private struct MahjongLANRoomView: View {
                             } label: {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text("麻将房间")
+                                        Text(room.displayName)
                                             .font(.system(size: 14, weight: .semibold))
                                         Text("匹配码：\(room.code)")
                                             .font(.system(size: 12, design: .rounded).monospacedDigit())

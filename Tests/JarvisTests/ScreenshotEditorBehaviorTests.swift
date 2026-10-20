@@ -400,6 +400,7 @@ extension ScreenshotEditorBehaviorTests {
 ///
 /// 这条规则已经被漏过一次：正在编辑时点别处，本该是「确认」，结果既提交了又顺手
 /// 在同一处开了新的一段，把刚打的草稿也清了。把判定抽出来钉住。
+@MainActor
 final class ScreenshotTextToolTapTests: XCTestCase {
     private let existingID = UUID()
 
