@@ -27,14 +27,11 @@ struct JarvisReleaseInfo: Equatable {
     let version: String
     let build: String?
     let releaseURL: URL
-    let downloadURL: URL?
-    let assetDigest: String?
-    let archiveSize: Int64
-    let isLegacyBootstrap: Bool
-    let manifestAsset: GitHubReleaseAsset?
-    let signatureAsset: GitHubReleaseAsset?
+    let downloadURL: URL
+    let manifestURL: URL
+    let signatureURL: URL
     /// 应用内更新只安装这个名字对应的资产。必须等于验签后清单里的 `archiveName`。
-    let archiveName: String?
+    let archiveName: String
 }
 
 enum JarvisUpdateState: Equatable {
@@ -46,36 +43,6 @@ enum JarvisUpdateState: Equatable {
     case readyToInstall(version: String)
     case installing(version: String)
     case failed(message: String)
-}
-
-private struct GitHubRelease: Decodable {
-    let tagName: String
-    let htmlURL: URL
-    let draft: Bool
-    let prerelease: Bool
-    let assets: [GitHubReleaseAsset]
-
-    enum CodingKeys: String, CodingKey {
-        case tagName = "tag_name"
-        case htmlURL = "html_url"
-        case draft
-        case prerelease
-        case assets
-    }
-}
-
-struct GitHubReleaseAsset: Decodable, Equatable {
-    let name: String
-    let browserDownloadURL: URL
-    let digest: String?
-    let size: Int64
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case browserDownloadURL = "browser_download_url"
-        case digest
-        case size
-    }
 }
 
 enum JarvisUpdateError: LocalizedError {
@@ -141,6 +108,7 @@ struct JarvisUpdateService {
     private static let legacyBootstrapMaximumVersion = "1.4.5"
     private static let manifestAssetName = "Jarvis-update-manifest.json"
     private static let signatureAssetName = "Jarvis-update-manifest.sig"
+    private static let releasesURL = URL(string: "https://github.com/MineonStudio/jarvis-macos/releases")!
     static let updateLogURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Logs/Jarvis/update.log")
 
@@ -155,37 +123,23 @@ struct JarvisUpdateService {
             event: "release.check.begin",
             operationID: operationID
         )
-        let endpoint = URL(string: "https://api.github.com/repos/MineonStudio/jarvis-macos/releases/latest")!
-        var request = URLRequest(url: endpoint)
-        request.setValue("Jarvis macOS; +https://github.com/MineonStudio/jarvis-macos", forHTTPHeaderField: "User-Agent")
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-
-        let (data, response) = try await updateSession.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200 ..< 300).contains(httpResponse.statusCode)
+        // GitHub 的 latest 下载链接不调用 REST API；签名清单负责提供可信版本与归档哈希。
+        let manifest = try await latestSignedManifest(operationID: operationID)
+        guard let version = JarvisUpdateSecurity.normalizedVersion(manifest.version),
+              let downloadURL = Self.releaseAssetURL(version: version, name: manifest.archiveName),
+              let manifestURL = Self.releaseAssetURL(version: version, name: Self.manifestAssetName),
+              let signatureURL = Self.releaseAssetURL(version: version, name: Self.signatureAssetName)
         else {
-            throw URLError(.badServerResponse)
+            throw JarvisUpdateError.invalidManifest
         }
-
-        let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
-        guard !release.draft, !release.prerelease else {
-            throw URLError(.resourceUnavailable)
-        }
-
-        // 应用内更新只认清单点名的 Jarvis-update.zip。
-        // Jarvis-v* 和 Jarvis-<version>-macos.zip 是另一份直接下载包，哈希不同，不能拿来装。
-        let asset = Self.signedUpdateArchive(in: release.assets)
         let releaseInfo = JarvisReleaseInfo(
-            version: release.tagName,
-            build: nil,
-            releaseURL: release.htmlURL,
-            downloadURL: asset?.browserDownloadURL,
-            assetDigest: asset?.digest,
-            archiveSize: asset?.size ?? 0,
-            isLegacyBootstrap: false,
-            manifestAsset: release.assets.first { $0.name == Self.manifestAssetName },
-            signatureAsset: release.assets.first { $0.name == Self.signatureAssetName },
-            archiveName: asset?.name
+            version: version,
+            build: manifest.build,
+            releaseURL: Self.releasesURL.appending(path: "tag/v\(version)"),
+            downloadURL: downloadURL,
+            manifestURL: manifestURL,
+            signatureURL: signatureURL,
+            archiveName: manifest.archiveName
         )
         JarvisLog.info(
             category: .update,
@@ -194,8 +148,8 @@ struct JarvisUpdateService {
             result: "success",
             fields: [
                 "version": releaseInfo.version,
-                "hasDownload": String(releaseInfo.downloadURL != nil),
-                "hasDigest": String(releaseInfo.assetDigest != nil)
+                "hasDownload": "true",
+                "signedManifest": "true"
             ]
         )
         return releaseInfo
@@ -230,10 +184,7 @@ struct JarvisUpdateService {
             category: .update,
             event: "install.begin",
             operationID: operationID,
-            fields: [
-                "version": release.version,
-                "hasDigest": String(release.assetDigest != nil)
-            ]
+            fields: ["version": release.version]
         )
         defer {
             JarvisLog.notice(
@@ -256,19 +207,11 @@ struct JarvisUpdateService {
         ) else {
             throw JarvisUpdateError.notNewerRelease
         }
-        guard let downloadURL = release.downloadURL,
-              release.archiveName == manifest.archiveName
+        guard release.archiveName == manifest.archiveName,
+              release.build == manifest.build,
+              release.downloadURL == Self.releaseAssetURL(version: release.version, name: manifest.archiveName)
         else {
             throw JarvisUpdateError.downloadUnavailable
-        }
-        if !JarvisUpdateSecurity.digestBinds(
-            manifestSHA256: manifest.sha256,
-            githubDigest: release.assetDigest
-        ) {
-            if release.assetDigest == nil {
-                throw JarvisUpdateError.checksumUnavailable
-            }
-            throw JarvisUpdateError.checksumMismatch
         }
 
         let launchedAppURL = Bundle.main.bundleURL.standardizedFileURL
@@ -292,7 +235,7 @@ struct JarvisUpdateService {
             }
         }
 
-        var request = URLRequest(url: downloadURL)
+        var request = URLRequest(url: release.downloadURL)
         request.setValue("Jarvis macOS; +https://github.com/MineonStudio/jarvis-macos", forHTTPHeaderField: "User-Agent")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
         let (downloadedURL, response) = try await updateSession.download(for: request)
@@ -304,11 +247,7 @@ struct JarvisUpdateService {
 
         let archiveURL = temporaryDirectory.appendingPathComponent(manifest.archiveName)
         try fileManager.moveItem(at: downloadedURL, to: archiveURL)
-        try validateSignedArchive(
-            at: archiveURL,
-            manifest: manifest,
-            githubDigest: release.assetDigest
-        )
+        try validateSignedArchive(at: archiveURL, manifest: manifest)
 
         let keepsCodeIdentity = JarvisLocalSigning.isAvailable
         if !keepsCodeIdentity {
@@ -361,14 +300,12 @@ struct JarvisUpdateService {
         try Self.resetPrivacyPermissions(bundleIdentifier: bundleIdentifier)
     }
 
-    private func downloadSmallAsset(_ asset: GitHubReleaseAsset, maximumBytes: Int) async throws -> Data {
-        guard asset.size > 0,
-              asset.size <= maximumBytes,
-              isAllowedGitHubAssetURL(asset.browserDownloadURL)
-        else {
+    private func downloadSmallAsset(at url: URL, maximumBytes: Int) async throws -> Data {
+        guard isAllowedGitHubAssetURL(url) else {
             throw JarvisUpdateError.invalidManifest
         }
-        var request = URLRequest(url: asset.browserDownloadURL)
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Jarvis macOS; +https://github.com/MineonStudio/jarvis-macos", forHTTPHeaderField: "User-Agent")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
         let (fileURL, response) = try await updateSession.download(for: request)
@@ -379,30 +316,69 @@ struct JarvisUpdateService {
         }
         let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let size = (attributes[.size] as? NSNumber)?.intValue ?? maximumBytes + 1
-        guard size <= maximumBytes, size == asset.size else {
+        guard size > 0, size <= maximumBytes else {
             throw JarvisUpdateError.invalidManifest
         }
         return try Data(contentsOf: fileURL, options: .mappedIfSafe)
     }
 
-    /// S-1：下载并验签更新清单。清单或签名资产缺失、签名无效、内嵌公钥缺失、
-    /// 清单版本与发布版本不一致时一律抛错，中止更新（fail-closed）。
+    private func latestSignedManifest(operationID: String) async throws -> JarvisUpdateManifest {
+        let manifestURL = Self.releasesURL.appending(path: "latest/download/\(Self.manifestAssetName)")
+        let signatureURL = Self.releasesURL.appending(path: "latest/download/\(Self.signatureAssetName)")
+        do {
+            return try await verifySignedManifest(
+                manifestURL: manifestURL,
+                signatureURL: signatureURL,
+                operationID: operationID
+            )
+        } catch JarvisUpdateError.invalidManifestSignature {
+            // A new release can become latest between the two asset requests.
+            return try await verifySignedManifest(
+                manifestURL: manifestURL,
+                signatureURL: signatureURL,
+                operationID: operationID
+            )
+        }
+    }
+
+    static func releaseAssetURL(version: String, name: String) -> URL? {
+        guard let normalizedVersion = JarvisUpdateSecurity.normalizedVersion(version),
+              JarvisUpdateSecurity.isValidVersion(normalizedVersion),
+              [JarvisUpdateSecurity.updateArchiveName, manifestAssetName, signatureAssetName].contains(name)
+        else {
+            return nil
+        }
+        return releasesURL.appending(path: "download/v\(normalizedVersion)/\(name)")
+    }
+
+    /// Download and verify the signed manifest before trusting its version or archive hash.
     private func verifyUpdateManifest(
         for release: JarvisReleaseInfo,
         operationID: String
     ) async throws -> JarvisUpdateManifest {
+        try await verifySignedManifest(
+            manifestURL: release.manifestURL,
+            signatureURL: release.signatureURL,
+            expectedVersion: release.version,
+            expectedBuild: release.build,
+            operationID: operationID
+        )
+    }
+
+    private func verifySignedManifest(
+        manifestURL: URL,
+        signatureURL: URL,
+        expectedVersion: String? = nil,
+        expectedBuild: String? = nil,
+        operationID: String
+    ) async throws -> JarvisUpdateManifest {
         do {
-            guard let manifestAsset = release.manifestAsset,
-                  let signatureAsset = release.signatureAsset
-            else {
-                throw JarvisUpdateError.missingSignedManifest
-            }
             let manifestData = try await downloadSmallAsset(
-                manifestAsset,
+                at: manifestURL,
                 maximumBytes: JarvisUpdateSecurity.maximumManifestBytes
             )
             let signatureData = try await downloadSmallAsset(
-                signatureAsset,
+                at: signatureURL,
                 maximumBytes: JarvisUpdateSecurity.maximumSignatureBytes
             )
             let publicKey = try embeddedUpdatePublicKey()
@@ -411,7 +387,12 @@ struct JarvisUpdateService {
                 signatureData: signatureData,
                 publicKeyBase64: publicKey
             )
-            guard JarvisUpdateSecurity.releaseVersionsMatch(manifest.version, release.version) else {
+            if let expectedVersion,
+               !JarvisUpdateSecurity.releaseVersionsMatch(manifest.version, expectedVersion)
+            {
+                throw JarvisUpdateError.mismatchedVersion
+            }
+            if let expectedBuild, manifest.build != expectedBuild {
                 throw JarvisUpdateError.mismatchedVersion
             }
             JarvisLog.info(
@@ -507,25 +488,16 @@ struct JarvisUpdateService {
         return candidates[0]
     }
 
-    static func signedUpdateArchive(in assets: [GitHubReleaseAsset]) -> GitHubReleaseAsset? {
-        assets.first { $0.name == JarvisUpdateSecurity.updateArchiveName }
-    }
-
-    /// 清单里的 sha256 才是信任根。GitHub digest 必须和它对上，下载到的字节也必须和它对上。
+    /// The signed manifest is the trust root; the downloaded archive must match its SHA-256.
     func validateSignedArchive(
         at fileURL: URL,
-        manifest: JarvisUpdateManifest,
-        githubDigest: String?
+        manifest: JarvisUpdateManifest
     ) throws {
-        if !JarvisUpdateSecurity.digestBinds(
-            manifestSHA256: manifest.sha256,
-            githubDigest: githubDigest
-        ) {
-            if githubDigest == nil {
-                throw JarvisUpdateError.checksumUnavailable
-            }
-            throw JarvisUpdateError.checksumMismatch
-        }
+        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        guard let archiveSize = (attributes[.size] as? NSNumber)?.int64Value,
+              archiveSize > 0,
+              archiveSize <= JarvisUpdateSecurity.maximumArchiveBytes
+        else { throw JarvisUpdateError.invalidArchive }
         let actual = try sha256(of: fileURL)
         guard actual.caseInsensitiveCompare(manifest.sha256) == .orderedSame else {
             throw JarvisUpdateError.checksumMismatch
