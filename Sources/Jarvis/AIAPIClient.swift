@@ -170,19 +170,25 @@ struct AICompletionOptions: Equatable, Sendable {
     let responseFormat: ResponseFormat
     let timeoutSeconds: TimeInterval
     let maxOutputTokens: Int?
+    /// DeepSeek thinking is on by default and spends `max_tokens` before `content`.
+    /// Compact decisions set this so the answer is written into `content`. Only the
+    /// DeepSeek request body receives `thinking: disabled`; other providers ignore it.
+    let suppressesReasoning: Bool
 
     init(
         task: String,
         temperature: Double = 0.7,
         responseFormat: ResponseFormat = .jsonObject,
         timeoutSeconds: TimeInterval = 90,
-        maxOutputTokens: Int? = nil
+        maxOutputTokens: Int? = nil,
+        suppressesReasoning: Bool = false
     ) {
         self.task = task
         self.temperature = temperature
         self.responseFormat = responseFormat
         self.timeoutSeconds = timeoutSeconds
         self.maxOutputTokens = maxOutputTokens
+        self.suppressesReasoning = suppressesReasoning
     }
 
     static let standardJSON = Self(task: "generic-structured-json")
@@ -197,6 +203,17 @@ struct AICompletionOptions: Equatable, Sendable {
         task: "resume-structured-json",
         temperature: 0.7,
         responseFormat: .jsonObject
+    )
+
+    /// A tile name or a 1-based action index. Thinking stays off so those few
+    /// characters are the completion, not a chain of thought cut off at the cap.
+    static let mahjongDecision = Self(
+        task: "mahjong-decision",
+        temperature: 0,
+        responseFormat: .plainText,
+        timeoutSeconds: 10,
+        maxOutputTokens: 32,
+        suppressesReasoning: true
     )
 }
 
@@ -538,6 +555,9 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
         }
         if let maxOutputTokens = options.maxOutputTokens {
             body["max_tokens"] = maxOutputTokens
+        }
+        if options.suppressesReasoning, configuration.provider == .deepSeek {
+            body["thinking"] = ["type": "disabled"]
         }
         return body
     }

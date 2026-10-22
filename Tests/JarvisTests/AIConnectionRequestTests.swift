@@ -57,6 +57,60 @@ final class AIConnectionRequestTests: XCTestCase {
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertNil(object["max_tokens"])
         XCTAssertNil(object["max_completion_tokens"])
+        XCTAssertNil(object["thinking"])
+    }
+
+    func testMahjongDecisionDisablesDeepSeekThinking() {
+        let body = OpenAICompatibleAPIClient.completionBody(
+            systemPrompt: "只输出牌名",
+            userPrompt: "从合法牌里选一张",
+            configuration: AIAPIConfiguration(
+                endpoint: "https://api.deepseek.com/chat/completions",
+                model: "deepseek-flash",
+                apiKey: "test-key",
+                providerID: AIAPIProvider.deepSeek.rawValue
+            ),
+            options: .mahjongDecision
+        )
+
+        let thinking = body["thinking"] as? [String: String]
+        XCTAssertEqual(thinking?["type"], "disabled")
+        XCTAssertEqual(body["max_tokens"] as? Int, 32)
+        XCTAssertEqual(body["temperature"] as? Double, 0)
+    }
+
+    func testMahjongDecisionDoesNotSendThinkingToOtherProviders() {
+        let body = OpenAICompatibleAPIClient.completionBody(
+            systemPrompt: "只输出牌名",
+            userPrompt: "从合法牌里选一张",
+            configuration: AIAPIConfiguration(
+                endpoint: "https://api.openai.com/v1/chat/completions",
+                model: "gpt-4o-mini",
+                apiKey: "test-key",
+                providerID: AIAPIProvider.openAI.rawValue
+            ),
+            options: .mahjongDecision
+        )
+
+        XCTAssertNil(body["thinking"])
+        XCTAssertEqual(body["max_tokens"] as? Int, 32)
+    }
+
+    func testOtherDeepSeekTasksLeaveThinkingAtTheProviderDefault() {
+        let body = OpenAICompatibleAPIClient.completionBody(
+            systemPrompt: "Return JSON.",
+            userPrompt: "Summarize the meeting.",
+            configuration: AIAPIConfiguration(
+                endpoint: "https://api.deepseek.com/chat/completions",
+                model: "deepseek-flash",
+                apiKey: "test-key",
+                providerID: AIAPIProvider.deepSeek.rawValue
+            ),
+            options: .meetingSummary
+        )
+
+        XCTAssertNil(body["thinking"])
+        XCTAssertNil(body["max_tokens"])
     }
 }
 

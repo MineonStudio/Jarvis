@@ -1329,13 +1329,7 @@ final class MahjongGame {
                         systemPrompt: systemPrompt,
                         userPrompt: userPrompt,
                         configuration: configuration,
-                        options: AICompletionOptions(
-                            task: "mahjong-decision",
-                            temperature: 0,
-                            responseFormat: .plainText,
-                            timeoutSeconds: 10,
-                            maxOutputTokens: 12
-                        )
+                        options: .mahjongDecision
                     )
                     gate.resolve(answer)
                 } catch {
