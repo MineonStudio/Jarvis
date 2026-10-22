@@ -138,7 +138,7 @@ struct JarvisPermissionGateView: View {
                     .font(JarvisTypography.secondary)
                     .foregroundStyle(Color.jarvisTextSecondary)
                     .multilineTextAlignment(.center)
-                Text("贾维斯需要这四项权限才能开始工作；屏幕录制和辅助功能授权后需要重启一次。")
+                Text("工作搭子 Jarvis需要这四项权限才能开始工作；屏幕录制和辅助功能授权后需要重启一次。")
                     .font(JarvisTypography.caption)
                     .foregroundStyle(Color.jarvisTextSecondary)
                     .multilineTextAlignment(.center)
@@ -149,7 +149,7 @@ struct JarvisPermissionGateView: View {
             } else if JarvisLocalSigning.canAdoptLocalIdentity {
                 signingAdoptionCard
             } else {
-                Text("请先把贾维斯移到“应用程序”文件夹，再完成本机签名。固定应用身份后才能开始授权。")
+                Text("请先把工作搭子 Jarvis移到“应用程序”文件夹，再完成本机签名。固定应用身份后才能开始授权。")
                     .font(JarvisTypography.caption)
                     .foregroundStyle(Color.jarvisTextSecondary)
                     .multilineTextAlignment(.center)
@@ -187,7 +187,7 @@ struct JarvisPermissionGateView: View {
                 .foregroundStyle(Color.jarvisTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("点下去贾维斯会自己关掉再重新打开，中途不用管它；万一失败也会自动开回来并在这里说明原因。")
+            Text("点下去工作搭子 Jarvis会自己关掉再重新打开，中途不用管它；万一失败也会自动开回来并在这里说明原因。")
                 .font(JarvisTypography.caption)
                 .foregroundStyle(Color.jarvisTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)

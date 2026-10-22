@@ -237,7 +237,8 @@ enum JarvisMetrics {
     static let pageInset: CGFloat = 30
     static let shellHorizontalPadding: CGFloat = 10
     static let shellVerticalPadding: CGFloat = 10
-    static let shellContentSpacing: CGFloat = 10
+    // The native toolbar already provides the same 10-point gap as the sidebar.
+    static let shellContentSpacing: CGFloat = 0
     static let cardRadius: CGFloat = 14
     /// 模块外壳的圆角，比内部卡片略大一圈。
     static let panelRadius: CGFloat = 16

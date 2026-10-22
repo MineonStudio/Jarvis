@@ -48,7 +48,7 @@ actor FluidAudioMeetingTranscriptionService: MeetingTranscribing {
             }.value
         case .chineseTranscription:
             throw MeetingTranscriptionError.speechAssetUnavailable(
-                "中文转写使用的是系统语音资源，不能从贾维斯里移除。"
+                "中文转写使用的是系统语音资源，不能从工作搭子 Jarvis里移除。"
             )
         }
     }

@@ -50,24 +50,24 @@ struct JarvisPressButtonStyle: ButtonStyle {
 }
 
 /// The icon-button treatment used by the chat toolbar and shared by all
-/// module toolbars. The button itself owns the 32-point hit target; callers
-/// only provide the icon, tint, action, and hover feedback shape.
+/// module toolbars. The button itself owns the full 32-point square hit target;
+/// the circular hover tint must not leave dead corners inside the toolbar.
 struct JarvisToolbarIconButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .frame(
-                width: JarvisToolbarMetrics.controlSize,
-                height: JarvisToolbarMetrics.controlSize
-            )
-            .contentShape(Circle())
             .opacity(configuration.isPressed ? 0.76 : 1)
             .scaleEffect(
                 reduceMotion
                     ? 1
                     : (configuration.isPressed ? 0.94 : 1)
             )
+            .frame(
+                width: JarvisToolbarMetrics.controlSize,
+                height: JarvisToolbarMetrics.controlSize
+            )
+            .contentShape(Rectangle())
             .animation(
                 JarvisMotion.animation(JarvisMotion.buttonPress, reduceMotion: reduceMotion),
                 value: configuration.isPressed
@@ -84,6 +84,7 @@ struct JarvisToolbarIconButton: View {
     let help: String
     var tint: Color = .secondary
     var isEnabled: Bool = true
+    var hoverScale: CGFloat = 1.06
     let action: () -> Void
 
     var body: some View {
@@ -96,7 +97,8 @@ struct JarvisToolbarIconButton: View {
         .opacity(isEnabled ? 1 : 0.38)
         .disabled(!isEnabled)
         .accessibilityLabel(help)
-        .jarvisHoverFeedback(in: Circle(), scale: 1.06)
+        .help(help)
+        .jarvisHoverFeedback(in: Circle(), scale: hoverScale)
     }
 }
 

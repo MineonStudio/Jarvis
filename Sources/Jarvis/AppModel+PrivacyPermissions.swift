@@ -36,7 +36,7 @@ extension AppModel {
 
     func installLocalSigningCertificate() {
         guard JarvisLocalSigning.canAdoptLocalIdentity else {
-            showToast("请先把贾维斯移到“应用程序”文件夹，再下载证书")
+            showToast("请先把工作搭子 Jarvis移到“应用程序”文件夹，再下载证书")
             return
         }
         do {
@@ -137,7 +137,7 @@ extension AppModel {
         refreshPermissionStatus()
         if !granted {
             screenshotController.openScreenCaptureSettings()
-            showToast("请在系统设置的屏幕录制中开启贾维斯")
+            showToast("请在系统设置的屏幕录制中开启工作搭子 Jarvis")
         } else {
             showToast("屏幕录制权限已开启")
         }
@@ -149,7 +149,7 @@ extension AppModel {
         refreshPermissionStatus()
         statusMessage = granted
             ? "辅助功能权限已开启"
-            : "请在系统设置的辅助功能中开启贾维斯"
+            : "请在系统设置的辅助功能中开启工作搭子 Jarvis"
         showToast(statusMessage)
     }
 

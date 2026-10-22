@@ -158,7 +158,7 @@ extension AppModel {
 
         refreshPermissionStatus()
         guard screenCapturePermissionGranted else {
-            meetingProcessingState = .failed("缺少屏幕录制权限。请到系统设置 > 隐私与安全性 > 屏幕录制，允许贾维斯。")
+            meetingProcessingState = .failed("缺少屏幕录制权限。请到系统设置 > 隐私与安全性 > 屏幕录制，允许工作搭子 Jarvis。")
             promptForTaskPermission(.screenCapture)
             showToast("请允许屏幕录制权限")
             return

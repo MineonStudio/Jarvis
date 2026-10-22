@@ -285,7 +285,7 @@ private struct MeetingModelDownloadPrompt: View {
                     Text("开始前需要准备识别资源")
                         .font(JarvisTypography.bodyEmphasis)
                 }
-                Text("说话人识别模型由贾维斯下载一次。中文转写使用系统语音资源，由系统下载，之后可离线使用。应用不内置转写模型。资源没准备好时不能开始正式录音。")
+                Text("说话人识别模型由工作搭子 Jarvis下载一次。中文转写使用系统语音资源，由系统下载，之后可离线使用。应用不内置转写模型。资源没准备好时不能开始正式录音。")
                     .font(JarvisTypography.caption)
                     .foregroundStyle(Color.jarvisTextSecondary)
 

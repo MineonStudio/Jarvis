@@ -32,7 +32,8 @@ jobs:
           swiftformat --lint --config .swiftformat Sources Tests
 
       - name: SwiftLint check
-        run: swiftlint lint --config .swiftlint.yml
+        # Preserve existing debt while rejecting every new warning or error.
+        run: swiftlint lint --config .swiftlint.yml --baseline .swiftlint-baseline.json --strict
 
       - name: Build
         run: swift build -c release

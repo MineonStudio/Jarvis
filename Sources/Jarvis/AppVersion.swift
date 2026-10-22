@@ -104,7 +104,7 @@ enum JarvisUpdateError: LocalizedError {
         case .invalidArchive:
             "更新包格式无效"
         case .invalidApplication:
-            "更新包中的贾维斯应用无效"
+            "更新包中的工作搭子 Jarvis 应用无效"
         case .invalidManifest:
             "更新清单无效或与发布版本不匹配"
         case .invalidManifestSignature:
@@ -114,11 +114,11 @@ enum JarvisUpdateError: LocalizedError {
         case .mismatchedVersion:
             "更新包内的版本与发布信息不一致，已阻止安装"
         case .unsupportedInstallLocation:
-            "当前应用位于只读磁盘映像或临时转移路径，无法自动更新。请先将贾维斯复制到“应用程序”文件夹后重试"
+            "当前应用位于只读磁盘映像或临时转移路径，无法自动更新。请先将工作搭子 Jarvis 复制到“应用程序”文件夹后重试"
         case .ambiguousInstallLocation:
-            "检测到多个贾维斯安装副本，无法确定要更新哪一个。请保留一个安装副本后重试"
+            "检测到多个工作搭子 Jarvis 安装副本，无法确定要更新哪一个。请保留一个安装副本后重试"
         case .unsupportedUpdateChannel:
-            "开发版不能安装正式更新。请打开已安装的贾维斯后再更新"
+            "开发版不能安装正式更新。请打开已安装的工作搭子 Jarvis 后再更新"
         case let .localSigningFailed(reason):
             "无法使用本机原有签名身份完成更新：\(reason)"
         case let .signingToolFailed(message):
