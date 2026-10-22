@@ -711,8 +711,9 @@ extension AppModel {
             do {
                 let release = try await updateService.checkForLatestRelease()
                 let hasNewVersion = updateService.isNewer(
-                    release.version,
-                    than: JarvisAppVersion.shortVersion
+                    release,
+                    than: JarvisAppVersion.shortVersion,
+                    build: JarvisAppVersion.build
                 )
                 if hasNewVersion {
                     updateState = .available(release)

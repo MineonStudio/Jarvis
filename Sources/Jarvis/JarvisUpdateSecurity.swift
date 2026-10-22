@@ -68,22 +68,6 @@ enum JarvisUpdateSecurity {
         return manifest == release
     }
 
-    /// 发布 API 上的 digest 必须就是清单里签过名的那个哈希。
-    /// 只改 zip、或只改 digest，都会在这里失败。
-    static func digestBinds(manifestSHA256: String, githubDigest: String?) -> Bool {
-        guard isValidSHA256(manifestSHA256),
-              let githubDigest
-        else {
-            return false
-        }
-        let prefix = "sha256:"
-        guard githubDigest.lowercased().hasPrefix(prefix) else {
-            return false
-        }
-        let digest = githubDigest.dropFirst(prefix.count)
-        return digest.compare(manifestSHA256, options: .caseInsensitive) == .orderedSame
-    }
-
     static func isValidVersion(_ value: String) -> Bool {
         guard let normalized = normalizedVersion(value) else { return false }
         let components = normalized.split(separator: ".")

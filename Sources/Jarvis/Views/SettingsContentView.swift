@@ -428,26 +428,8 @@ struct SettingsView: View {
         case .diagnostics:
             DiagnosticsSettingsCard()
         case .about:
-            productPositioningCard
             versionAndUpdateCard
             sourceRepositoryCard
-        }
-    }
-
-    private var productPositioningCard: some View {
-        JarvisCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("工作搭子 Jarvis")
-                    .font(.system(size: 19, weight: .semibold))
-                Text("协助办公，也陪你摸鱼放松。")
-                    .font(SettingsTypography.itemSubtitle)
-                    .foregroundStyle(.secondary)
-                Text("办公：截图、剪贴板、会议记录、窗口布局、简历制作与 AI 对话。")
-                    .font(SettingsTypography.itemSubtitle)
-                Text("放松：壁纸、娱乐广场，以及支持单人和局域网对战的欢乐麻将。")
-                    .font(SettingsTypography.itemSubtitle)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
