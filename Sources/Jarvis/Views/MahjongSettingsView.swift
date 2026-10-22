@@ -7,7 +7,8 @@ enum MahjongSettingsSection: String, CaseIterable, Identifiable {
     case profile = "我的资料"
     case record = "玩家数据"
     case daily = "每日签到"
-    case voice = "语音播报"
+    case table = "牌桌主题"
+    case voice = "声音设置"
 
     var id: String {
         rawValue
@@ -77,6 +78,7 @@ struct MahjongSettingsView: View {
                     case .profile: profileContent
                     case .record: recordContent
                     case .daily: dailyContent
+                    case .table: MahjongTableStylePicker()
                     case .voice: voiceContent
                     }
                 }
@@ -98,10 +100,10 @@ struct MahjongSettingsView: View {
                 VStack(spacing: 12) {
                     MahjongArchiveAvatar(profile: archive.player, size: 86)
                         .padding(6)
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(MahjongSettingsPalette.gold.opacity(0.8), lineWidth: 2))
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(MahjongSettingsPalette.accent.opacity(0.8), lineWidth: 2))
                     Button("上传头像") { showsAvatarImporter = true }
                         .buttonStyle(.plain)
-                        .foregroundStyle(MahjongSettingsPalette.gold)
+                        .foregroundStyle(MahjongSettingsPalette.accent)
                 }
 
                 VStack(alignment: .leading, spacing: 14) {
@@ -114,9 +116,9 @@ struct MahjongSettingsView: View {
                             .padding(.horizontal, 15)
                             .frame(height: 45)
                             .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(MahjongSettingsPalette.gold.opacity(0.35), lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(MahjongSettingsPalette.accent.opacity(0.35), lineWidth: 1))
                             .onSubmit(saveNickname)
-                        goldButton("保存", action: saveNickname)
+                        primaryButton("保存", action: saveNickname)
                     }
                     Text("最多 16 个字符")
                         .font(.system(size: 12))
@@ -152,11 +154,11 @@ struct MahjongSettingsView: View {
                     .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
                     .lineLimit(1)
             }
-            .foregroundStyle(isSelected ? MahjongSettingsPalette.gold : MahjongSettingsPalette.ivory)
+            .foregroundStyle(isSelected ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
             .frame(maxWidth: .infinity)
             .frame(height: 86)
-            .background(isSelected ? MahjongSettingsPalette.gold.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? MahjongSettingsPalette.gold : .clear, lineWidth: 1))
+            .background(isSelected ? MahjongSettingsPalette.accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? MahjongSettingsPalette.accent : .clear, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(style.displayName)
@@ -171,15 +173,15 @@ struct MahjongSettingsView: View {
                     } label: {
                         Text(tab.rawValue)
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(recordTab == tab ? MahjongSettingsPalette.gold : MahjongSettingsPalette.ivory)
+                            .foregroundStyle(recordTab == tab ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
                             .padding(.horizontal, 20)
                             .frame(height: 42)
                             .background(
-                                recordTab == tab ? MahjongSettingsPalette.gold.opacity(0.13) : .black.opacity(0.15),
+                                recordTab == tab ? MahjongSettingsPalette.accent.opacity(0.13) : .black.opacity(0.15),
                                 in: RoundedRectangle(cornerRadius: 8)
                             )
                             .overlay(RoundedRectangle(cornerRadius: 8)
-                                .stroke(recordTab == tab ? MahjongSettingsPalette.gold.opacity(0.75) : .clear, lineWidth: 1))
+                                .stroke(recordTab == tab ? MahjongSettingsPalette.accent.opacity(0.75) : .clear, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -208,14 +210,14 @@ struct MahjongSettingsView: View {
                                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                                     .lineLimit(1)
                             }
-                            .foregroundStyle(selected ? MahjongSettingsPalette.gold : MahjongSettingsPalette.ivory)
+                            .foregroundStyle(selected ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
                             .frame(width: 104, height: 94)
                             .background(
-                                selected ? MahjongSettingsPalette.gold.opacity(0.13) : .black.opacity(0.15),
+                                selected ? MahjongSettingsPalette.accent.opacity(0.13) : .black.opacity(0.15),
                                 in: RoundedRectangle(cornerRadius: 10)
                             )
                             .overlay(RoundedRectangle(cornerRadius: 10)
-                                .stroke(selected ? MahjongSettingsPalette.gold.opacity(0.75) : .clear, lineWidth: 1))
+                                .stroke(selected ? MahjongSettingsPalette.accent.opacity(0.75) : .clear, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                     }
@@ -233,15 +235,15 @@ struct MahjongSettingsView: View {
         VStack(alignment: .leading, spacing: 30) {
             HStack(spacing: 36) {
                 ZStack {
-                    Circle().stroke(MahjongSettingsPalette.gold.opacity(0.18), lineWidth: 10)
+                    Circle().stroke(MahjongSettingsPalette.accent.opacity(0.18), lineWidth: 10)
                     Circle()
                         .trim(from: 0, to: CGFloat(profile.winRate) / 100)
-                        .stroke(MahjongSettingsPalette.gold, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                        .stroke(MahjongSettingsPalette.accent, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     VStack(spacing: 2) {
                         Text("\(profile.winRate)%")
                             .font(.system(size: 39, weight: .bold, design: .rounded))
-                            .foregroundStyle(MahjongSettingsPalette.gold)
+                            .foregroundStyle(MahjongSettingsPalette.accent)
                         Text("胜率").font(.system(size: 13)).foregroundStyle(MahjongSettingsPalette.muted)
                     }
                 }
@@ -251,13 +253,13 @@ struct MahjongSettingsView: View {
                     if isAI {
                         Text(profile.nickname)
                             .font(.system(size: 21, weight: .semibold, design: .serif))
-                            .foregroundStyle(MahjongSettingsPalette.gold)
+                            .foregroundStyle(MahjongSettingsPalette.accent)
                     }
                     Text("累计对局 \(max(profile.wins + profile.losses, archive.history(for: profile.id).count)) 场")
                         .font(.system(size: 19, weight: .medium))
                         .foregroundStyle(MahjongSettingsPalette.ivory)
                     HStack(spacing: 40) {
-                        recordNumber("胜局", profile.wins, color: MahjongSettingsPalette.gold)
+                        recordNumber("胜局", profile.wins, color: MahjongSettingsPalette.accent)
                         recordNumber("负局", profile.losses, color: MahjongSettingsPalette.ivory)
                     }
                 }
@@ -291,7 +293,7 @@ struct MahjongSettingsView: View {
         HStack(spacing: 16) {
             Text(match.outcome.title)
                 .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(match.outcome == .win ? MahjongSettingsPalette.gold : MahjongSettingsPalette.ivory)
+                .foregroundStyle(match.outcome == .win ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
                 .frame(width: 52, alignment: .leading)
             VStack(alignment: .leading, spacing: 5) {
                 Text("\(match.ruleset.rawValue) · 第 \(match.roundNumber) 局")
@@ -304,7 +306,7 @@ struct MahjongSettingsView: View {
             Spacer(minLength: 8)
             Text(match.balanceChange == 0 ? "±0" : match.balanceChange > 0 ? "+\(match.balanceChange.formatted())" : match.balanceChange.formatted())
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
-                .foregroundStyle(match.balanceChange > 0 ? MahjongSettingsPalette.gold : MahjongSettingsPalette.ivory)
+                .foregroundStyle(match.balanceChange > 0 ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
         }
         .padding(16)
         .background(.black.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
@@ -319,19 +321,19 @@ struct MahjongSettingsView: View {
                 Spacer()
                 Text("每日 +\(MahjongArchiveStore.dailyReward.formatted()) 毛格子")
                     .font(.system(size: 16))
-                    .foregroundStyle(MahjongSettingsPalette.gold)
+                    .foregroundStyle(MahjongSettingsPalette.accent)
             }
             if archive.canClaimDailyReward {
-                goldButton("领取今日奖励") {
+                primaryButton("领取今日奖励") {
                     _ = archive.claimDailyReward()
                 }
             } else {
                 Label("今日奖励已领取", systemImage: "checkmark.circle.fill")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(MahjongSettingsPalette.gold)
+                    .foregroundStyle(MahjongSettingsPalette.accent)
                     .padding(.horizontal, 20)
                     .frame(height: 45)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(MahjongSettingsPalette.gold.opacity(0.7), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(MahjongSettingsPalette.accent.opacity(0.7), lineWidth: 1))
             }
             HStack(spacing: 28) {
                 signInStatistic("累计签到", archive.checkInDays.count)
@@ -348,7 +350,7 @@ struct MahjongSettingsView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text("\(count) 天")
                 .font(.system(size: 25, weight: .bold, design: .rounded))
-                .foregroundStyle(MahjongSettingsPalette.gold)
+                .foregroundStyle(MahjongSettingsPalette.accent)
             Text(title).font(.system(size: 13)).foregroundStyle(MahjongSettingsPalette.muted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -407,17 +409,18 @@ struct MahjongSettingsView: View {
                             Text(checked ? "✓" : " ")
                                 .font(.system(size: 9, weight: .bold))
                         }
-                        .foregroundStyle(checked ? MahjongSettingsPalette.rail : MahjongSettingsPalette.ivory)
+                        .foregroundStyle(MahjongSettingsPalette.ivory)
                         .frame(maxWidth: .infinity)
                         .frame(height: 43)
-                        .background(checked ? MahjongSettingsPalette.gold : .black.opacity(0.11), in: RoundedRectangle(cornerRadius: 7))
-                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(today ? MahjongSettingsPalette.gold : .clear, lineWidth: 1))
+                        .glassEffect(checked ? .regular : .identity, in: RoundedRectangle(cornerRadius: 7))
+                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(today ? MahjongSettingsPalette.accent : .clear, lineWidth: 1))
                         .accessibilityLabel("\(day)日\(checked ? "已签到" : "未签到")")
                     } else {
                         Color.clear.frame(height: 43)
                     }
                 }
             }
+            .mahjongGlassGroup(spacing: 8)
         }
         .padding(22)
         .background(.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
@@ -431,7 +434,8 @@ struct MahjongSettingsView: View {
 
     private var voiceContent: some View {
         VStack(alignment: .leading, spacing: 26) {
-            Text("选择对局中的报牌与操作语音")
+            MahjongAudioControls(settings: MahjongAudioPlayer.shared.settings)
+            Text("报牌音色")
                 .font(.system(size: 16))
                 .foregroundStyle(MahjongSettingsPalette.muted)
             HStack(spacing: 20) {
@@ -461,13 +465,13 @@ struct MahjongSettingsView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 220)
-                .foregroundStyle(isSelected ? MahjongSettingsPalette.gold : MahjongSettingsPalette.ivory)
+                .foregroundStyle(isSelected ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             Button {
-                MahjongVoicePlayer.shared.play("action-win", gender: gender)
+                MahjongVoicePlayer.shared.preview(gender: gender)
             } label: {
                 Label("试听", systemImage: "play.fill")
                     .font(.system(size: 15, weight: .medium))
@@ -478,8 +482,8 @@ struct MahjongSettingsView: View {
             .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
-        .background(isSelected ? MahjongSettingsPalette.gold.opacity(0.11) : .black.opacity(0.13))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? MahjongSettingsPalette.gold : MahjongSettingsPalette.gold.opacity(0.2), lineWidth: isSelected ? 2 : 1))
+        .background(isSelected ? MahjongSettingsPalette.accent.opacity(0.11) : .black.opacity(0.13))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? MahjongSettingsPalette.accent : MahjongSettingsPalette.accent.opacity(0.2), lineWidth: isSelected ? 2 : 1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -510,16 +514,11 @@ struct MahjongSettingsView: View {
         }
     }
 
-    private func goldButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(MahjongSettingsPalette.rail)
-                .padding(.horizontal, 22)
-                .frame(height: 45)
-                .background(MahjongSettingsPalette.gold, in: RoundedRectangle(cornerRadius: 8))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MahjongGameButtonStyle(kind: .primary))
     }
 
     private func saveNickname() {

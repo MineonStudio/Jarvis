@@ -22,18 +22,16 @@ struct MahjongOverheadTable: View {
             onExit: onExit
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .environment(\.colorScheme, .dark)
         .overlay(alignment: .top) {
             MahjongWindowTitlebarView(game: game, onExit: onExit)
                 .environment(\.colorScheme, .dark)
                 .frame(height: MahjongOverheadMetrics.titlebarHeight)
                 .background {
-                    LinearGradient(
-                        colors: [MahjongVisualTheme.rail.opacity(0.85), MahjongVisualTheme.rail.opacity(0.15)],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                    .contentShape(Rectangle())
-                    .gesture(WindowDragGesture())
-                    .allowsWindowActivationEvents(true)
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(WindowDragGesture())
+                        .allowsWindowActivationEvents(true)
                 }
         }
         .ignoresSafeArea()
@@ -47,32 +45,20 @@ struct MahjongWindowTitlebarView: View {
     var body: some View {
         ZStack {
             HStack {
-                railFacts
                 Spacer(minLength: 12)
+                MahjongAudioMuteButton()
                 Button("退出游戏", action: onExit)
                     .buttonStyle(MahjongGameButtonStyle())
                     .help("退出游戏")
             }
-            .padding(.leading, 108)
-            .padding(.trailing, 12)
-            // Center against the entire window, independent of the traffic lights and side content.
+            .padding(.horizontal, 12)
+            // Center against the entire window, independent of the side content.
             clockAndWall
                 .fixedSize()
                 .allowsHitTesting(false)
         }
+        .mahjongGlassGroup()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var railFacts: some View {
-        HStack(spacing: 8) {
-            Text("欢乐麻将")
-                .foregroundStyle(MahjongVisualTheme.gold)
-            Text(game.ruleset.rawValue)
-            Text(game.mode.rawValue)
-        }
-        .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(MahjongVisualTheme.ivory)
-        .lineLimit(1)
     }
 
     private var clockAndWall: some View {
@@ -245,30 +231,44 @@ private struct MahjongOverheadFelt: View {
                     titlebarInset: titlebarInset
                 )
             }
-            MahjongTurnCompass(
-                winds: (0 ..< 4).map { game.seatName(seat(at: $0)).replacingOccurrences(of: "家", with: "") },
-                seatName: game.phase == .choosingMultiplier ? "加倍" : (game.phase == .responding ? "吃碰杠" : (indicatedSeat.map { game.seatName($0) } ?? "")),
-                viewPosition: indicatedSeat.map { MahjongOverheadMetrics.viewPosition(of: $0, localSeat: game.localSeat) },
-                deadline: game.phase == .choosingMultiplier
-                    ? game.multiplierDeadline
-                    : (game.phase == .responding
-                        ? game.responseDecisionDeadline
-                        : indicatedSeat.flatMap { game.countdownDeadline(for: $0) }),
-                counting: game.phase == .choosingMultiplier
-                    ? game.multiplierDeadline != nil && game.multipliers.contains(where: { $0 == nil })
-                    : (game.phase == .responding
-                        ? game.responseDecisionDeadline != nil
-                        : (indicatedSeat.map { game.isCountdownActive(for: $0) } ?? false)),
-                countdownDuration: game.phase == .choosingMultiplier
-                    ? MahjongDoubling.duration
-                    : (game.phase == .responding ? game.responseDecisionDuration : 20)
-            )
+            if showsCompass {
+                turnCompass
+            }
             ceremony
             MahjongActionTray(game: game)
                 .frame(width: 560, height: 52)
                 .position(x: 640, y: 600)
         }
         .frame(width: MahjongOverheadMetrics.canvas.width, height: MahjongOverheadMetrics.canvas.height)
+        .mahjongGlassGroup(spacing: 6)
+    }
+
+    private var showsCompass: Bool {
+        switch game.phase {
+        case .choosingMissingSuit, .choosingMultiplier, .playing, .responding: true
+        default: false
+        }
+    }
+
+    private var turnCompass: some View {
+        MahjongTurnCompass(
+            winds: (0 ..< 4).map { game.seatName(seat(at: $0)).replacingOccurrences(of: "家", with: "") },
+            seatName: game.phase == .choosingMultiplier ? "加倍" : (game.phase == .responding ? "吃碰杠" : (indicatedSeat.map { game.seatName($0) } ?? "")),
+            viewPosition: indicatedSeat.map { MahjongOverheadMetrics.viewPosition(of: $0, localSeat: game.localSeat) },
+            deadline: game.phase == .choosingMultiplier
+                ? game.multiplierDeadline
+                : (game.phase == .responding
+                    ? game.responseDecisionDeadline
+                    : indicatedSeat.flatMap { game.countdownDeadline(for: $0) }),
+            counting: game.phase == .choosingMultiplier
+                ? game.multiplierDeadline != nil && game.multipliers.contains(where: { $0 == nil })
+                : (game.phase == .responding
+                    ? game.responseDecisionDeadline != nil
+                    : (indicatedSeat.map { game.isCountdownActive(for: $0) } ?? false)),
+            countdownDuration: game.phase == .choosingMultiplier
+                ? MahjongDoubling.duration
+                : (game.phase == .responding ? game.responseDecisionDuration : 20)
+        )
     }
 
     @ViewBuilder
@@ -780,7 +780,7 @@ private struct MahjongSeatPlaque: View {
         HStack(spacing: 3) {
             Image(systemName: "centsign.circle.fill")
                 .font(.system(size: 13))
-                .foregroundStyle(MahjongVisualTheme.gold)
+                .foregroundStyle(MahjongVisualTheme.accent)
             Text(profile.balance.formatted())
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundStyle(MahjongVisualTheme.ivory)
@@ -791,16 +791,15 @@ private struct MahjongSeatPlaque: View {
     private var multiplierBadge: some View {
         HStack(spacing: 3) {
             Circle()
-                .fill(multiplier == nil ? MahjongVisualTheme.gold : MahjongVisualTheme.success)
+                .fill(multiplier == nil ? MahjongVisualTheme.accent : MahjongVisualTheme.success)
                 .frame(width: 5, height: 5)
             Text(multiplier.map { "本局 ×\($0)" } ?? "等待加倍")
         }
         .font(.system(size: 11, weight: .bold, design: .rounded))
-        .foregroundStyle(MahjongVisualTheme.gold)
+        .foregroundStyle(MahjongVisualTheme.accent)
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .background(MahjongVisualTheme.surface.opacity(0.94), in: Capsule())
-        .overlay(Capsule().strokeBorder(MahjongVisualTheme.gold.opacity(0.5)))
+        .glassEffect(.regular, in: Capsule())
     }
 
     private var avatar: some View {
@@ -832,10 +831,10 @@ private struct MahjongSeatPlaque: View {
     private func statusBadge(_ title: String) -> some View {
         Text(title)
             .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(MahjongVisualTheme.ink)
+            .foregroundStyle(MahjongVisualTheme.ivory)
             .padding(.horizontal, 3)
             .padding(.vertical, 1)
-            .background(MahjongVisualTheme.gold, in: Capsule())
+            .glassEffect(.regular, in: Capsule())
     }
 
     private var popoverEdge: Edge {
@@ -873,7 +872,7 @@ private struct MahjongTurnRing: View {
             return MahjongVisualTheme.danger
         }
         if progress < 0.5 {
-            return MahjongVisualTheme.gold
+            return MahjongVisualTheme.accent
         }
         return MahjongVisualTheme.success
     }
@@ -889,23 +888,18 @@ private struct MahjongTurnCompass: View {
     let countdownDuration: TimeInterval
 
     private let plate: CGFloat = 108
-    private let gold = MahjongVisualTheme.gold
-    private let activeFill = MahjongVisualTheme.gold
-    private let idleFill = MahjongVisualTheme.rail.opacity(0.95)
+    private let activeFill = Color.white.opacity(0.18)
 
     var body: some View {
         ZStack {
             plateBody
             Circle()
-                .fill(MahjongVisualTheme.rail)
+                .fill(.white.opacity(0.06))
                 .overlay {
                     if counting, let deadline {
                         MahjongTurnRing(deadline: deadline, duration: countdownDuration)
                             .padding(4)
                     }
-                }
-                .overlay {
-                    Circle().strokeBorder(gold, lineWidth: 1.5)
                 }
                 .overlay {
                     if counting {
@@ -918,9 +912,10 @@ private struct MahjongTurnCompass: View {
                         }
                     }
                 }
-                .frame(width: 48, height: 48)
+                .frame(width: 52, height: 52)
         }
         .frame(width: plate, height: plate)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .position(MahjongOverheadMetrics.compass)
         .animation(.easeInOut(duration: 0.25), value: viewPosition)
         .allowsHitTesting(false)
@@ -935,27 +930,26 @@ private struct MahjongTurnCompass: View {
             (1, .bottomLeading, .topLeading)
         ]
         return ZStack {
-            ForEach(wedges, id: \.view) { wedge in
-                CompassWedge(a: wedge.a, b: wedge.b)
-                    .fill(wedge.view == viewPosition ? activeFill : idleFill)
+            ZStack {
+                ForEach(wedges, id: \.view) { wedge in
+                    CompassWedge(a: wedge.a, b: wedge.b)
+                        .fill(wedge.view == viewPosition ? activeFill : .clear)
+                }
             }
+            .mask(CompassOuterRegion().fill(style: FillStyle(eoFill: true)))
             DiagonalSeam()
-                .stroke(MahjongVisualTheme.felt, lineWidth: 3)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
             windMarks
         }
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(gold.opacity(0.9), lineWidth: 1.5)
-        }
     }
 
     private var windMarks: some View {
         ZStack {
-            wind(2).offset(y: -36)
-            wind(3).offset(x: 36)
-            wind(0).offset(y: 36)
-            wind(1).offset(x: -36)
+            wind(2).offset(y: -39)
+            wind(3).offset(x: 39)
+            wind(0).offset(y: 39)
+            wind(1).offset(x: -39)
         }
     }
 
@@ -964,7 +958,7 @@ private struct MahjongTurnCompass: View {
             .font(.custom("Kaiti SC", size: 15))
             .foregroundStyle(
                 view == viewPosition
-                    ? MahjongVisualTheme.ink
+                    ? MahjongVisualTheme.accent
                     : MahjongVisualTheme.ivory.opacity(0.85)
             )
     }
@@ -988,10 +982,29 @@ private struct CompassWedge: Shape {
 private struct DiagonalSeam: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let corners = [
+            CGPoint(x: rect.minX, y: rect.minY),
+            CGPoint(x: rect.maxX, y: rect.minY),
+            CGPoint(x: rect.maxX, y: rect.maxY),
+            CGPoint(x: rect.minX, y: rect.maxY)
+        ]
+        for corner in corners {
+            let dx = corner.x - center.x
+            let dy = corner.y - center.y
+            let distance = hypot(dx, dy)
+            guard distance > 32 else { continue }
+            path.move(to: corner)
+            path.addLine(to: CGPoint(x: center.x + dx / distance * 32, y: center.y + dy / distance * 32))
+        }
+        return path
+    }
+}
+
+private struct CompassOuterRegion: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path(rect)
+        path.addEllipse(in: CGRect(x: rect.midX - 32, y: rect.midY - 32, width: 64, height: 64))
         return path
     }
 }
@@ -1104,13 +1117,11 @@ private struct MahjongMultiplierCeremony: View {
                 .foregroundStyle(MahjongVisualTheme.muted)
             Text(choice == 1 ? "不加倍" : "加倍 ×\(choice)")
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(MahjongVisualTheme.gold)
+                .foregroundStyle(MahjongVisualTheme.accent)
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 8)
-        .background(MahjongVisualTheme.surface.opacity(0.94), in: Capsule())
-        .overlay(Capsule().strokeBorder(MahjongVisualTheme.gold.opacity(0.55)))
-        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+        .glassEffect(.regular, in: Capsule())
         .accessibilityLabel("\(game.seatName(seat))\(choice == 1 ? "不加倍" : "加倍 \(choice) 倍")")
     }
 

@@ -34,6 +34,14 @@ struct MahjongLaunchView: View {
 
     var body: some View {
         photoMenu
+            .overlay(alignment: .top) {
+                Color.clear
+                    .frame(height: 32)
+                    .contentShape(Rectangle())
+                    .gesture(WindowDragGesture())
+                    .allowsWindowActivationEvents(true)
+                    .help("拖动以移动窗口")
+            }
             .onChange(of: page) { oldPage, newPage in
                 hoveredMenuTitle = nil
                 lanDialog = nil
@@ -66,7 +74,7 @@ struct MahjongLaunchView: View {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
                         .clipped()
                         .accessibilityLabel("欢乐麻将")
                 } else {
@@ -182,7 +190,7 @@ struct MahjongLaunchView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 31, weight: .semibold, design: .rounded))
-                .foregroundStyle(hoveredMenuTitle == title ? MahjongVisualTheme.goldHover : MahjongVisualTheme.ivory)
+                .foregroundStyle(hoveredMenuTitle == title ? MahjongVisualTheme.menuHover : MahjongVisualTheme.ivory)
                 .shadow(color: .black.opacity(0.9), radius: 5, y: 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 4)
@@ -220,6 +228,7 @@ struct MahjongLaunchView: View {
                         joinRoomContent
                     }
                 }
+                .mahjongGlassGroup(spacing: 12)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.top, 4)
                 .padding(.bottom, 20)
@@ -242,7 +251,7 @@ struct MahjongLaunchView: View {
                 Text(code)
                     .font(.system(size: 40, weight: .bold, design: .rounded).monospacedDigit())
                     .tracking(6)
-                    .foregroundStyle(MahjongVisualTheme.gold)
+                    .foregroundStyle(MahjongVisualTheme.accent)
                     .textSelection(.enabled)
                 Text("将房间码发给同一局域网的朋友")
                     .foregroundStyle(MahjongVisualTheme.muted)
@@ -256,23 +265,7 @@ struct MahjongLaunchView: View {
                 Text("选择玩法")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(MahjongVisualTheme.muted)
-                ForEach(MahjongRuleset.allCases) { ruleset in
-                    Button {
-                        selectedLANRuleset = ruleset
-                    } label: {
-                        HStack {
-                            Text(ruleset.rawValue)
-                            Spacer()
-                            if selectedLANRuleset == ruleset {
-                                Image(systemName: "checkmark.circle.fill")
-                            }
-                        }
-                        .padding(12)
-                        .foregroundStyle(selectedLANRuleset == ruleset ? MahjongVisualTheme.gold : MahjongVisualTheme.ivory)
-                        .background(MahjongVisualTheme.raisedSurface.opacity(selectedLANRuleset == ruleset ? 1 : 0.65), in: RoundedRectangle(cornerRadius: 10))
-                    }
-                    .buttonStyle(.plain)
-                }
+                MahjongLANRulesetPicker(selection: $selectedLANRuleset)
                 Button("创建房间") {
                     guard let selectedLANRuleset else { return }
                     service.createRoom(profile: archive.player, ruleset: selectedLANRuleset)
@@ -286,19 +279,11 @@ struct MahjongLaunchView: View {
     private var joinRoomContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
-                TextField("输入六位房间码", text: $joinCode)
-                    .textFieldStyle(.plain)
-                    .foregroundStyle(MahjongVisualTheme.ivory)
-                    .tint(MahjongVisualTheme.gold)
-                    .padding(12)
-                    .background(MahjongVisualTheme.raisedSurface, in: RoundedRectangle(cornerRadius: 9))
-                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(MahjongVisualTheme.gold.opacity(0.4)))
-                    .onChange(of: joinCode) { _, value in
-                        joinCode = String(value.filter(\.isNumber).prefix(6))
-                    }
+                MahjongRoomCodeInput(code: $joinCode)
                 Button("加入") { service.joinRoom(code: joinCode, profile: archive.player) }
                     .buttonStyle(MahjongGameButtonStyle(kind: .primary))
                     .disabled(joinCode.count != 6 || service.isConnecting)
+                Spacer(minLength: 0)
             }
 
             HStack {
@@ -325,9 +310,8 @@ struct MahjongLaunchView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(12)
-                            .background(MahjongVisualTheme.raisedSurface.opacity(0.72), in: RoundedRectangle(cornerRadius: 10))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(MahjongGameButtonStyle(borderShape: .roundedRectangle(radius: 12)))
                         .disabled(room.humanCount >= 4 || service.isConnecting)
                     }
                 }
