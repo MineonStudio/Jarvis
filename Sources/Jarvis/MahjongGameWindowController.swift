@@ -30,8 +30,7 @@ final class MahjongGameWindowModel {
     }
 }
 
-/// Separate mahjong window. Same open/close life as the clipboard panel, but a normal window
-/// whose content stays at 1280:1000 so the table cannot be stretched.
+/// A borderless 16:9 game window, opened independently from the plaza.
 /// One controller for the process, so a recreated plaza cannot open a second table.
 @MainActor
 final class MahjongGameWindowController: NSObject, NSWindowDelegate {
@@ -42,9 +41,18 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
     private var suppressCloseCallback = false
     var onUserClose: (() -> Void)?
 
-    private static let contentRatio = NSSize(width: 1280, height: 1000)
-    private static let defaultContentSize = NSSize(width: 1152, height: 900)
-    private static let minimumContentSize = NSSize(width: 960, height: 750)
+    private static let defaultContentSize = NSSize(width: 1920, height: 1080)
+    private static let minimumContentSize = NSSize(width: 960, height: 540)
+
+    override private init() {
+        super.init()
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshAudioActivity), name: NSApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshAudioActivity), name: NSApplication.didResignActiveNotification, object: nil)
+    }
+
+    @objc private func refreshAudioActivity() {
+        MahjongAudioPlayer.shared.setFocused(NSApp.isActive && window?.isKeyWindow == true && window?.isVisible == true)
+    }
 
     func show(model: MahjongGameWindowModel) {
         if window == nil {
@@ -56,6 +64,7 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
             hostedModel = model
         }
         guard let window else { return }
+        MahjongAudioPlayer.shared.startSession()
         if !window.isVisible {
             window.center()
         }
@@ -65,33 +74,68 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
 
     /// Hides the window without running the exit hook. Used when the match already ended.
     func hide() {
+        MahjongAudioPlayer.shared.stopSession()
         suppressCloseCallback = true
         window?.orderOut(nil)
         suppressCloseCallback = false
     }
 
     private func makeWindow(model: MahjongGameWindowModel) {
-        let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: Self.defaultContentSize),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+        let screen = NSApp.keyWindow?.screen ?? NSScreen.main
+        let availableSize = screen?.visibleFrame.size ?? Self.defaultContentSize
+        let scale = min(
+            1,
+            availableSize.width / Self.defaultContentSize.width,
+            availableSize.height / Self.defaultContentSize.height
+        )
+        let contentSize = NSSize(
+            width: Self.defaultContentSize.width * scale,
+            height: Self.defaultContentSize.height * scale
+        )
+        let window = MahjongBorderlessWindow(
+            contentRect: NSRect(origin: .zero, size: contentSize),
+            styleMask: [.borderless, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "欢乐麻将"
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.titlebarSeparatorStyle = .none
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentAspectRatio = Self.contentRatio
-        window.contentMinSize = Self.minimumContentSize
-        window.setContentSize(Self.defaultContentSize)
-        window.backgroundColor = NSColor(red: 0.055, green: 0.22, blue: 0.11, alpha: 1)
+        window.contentAspectRatio = Self.defaultContentSize
+        window.contentMinSize = NSSize(
+            width: min(Self.minimumContentSize.width, contentSize.width),
+            height: min(Self.minimumContentSize.height, contentSize.height)
+        )
+        window.collectionBehavior.insert(.fullScreenPrimary)
+        window.setContentSize(contentSize)
+        window.backgroundColor = MahjongTableSettings.shared.style.color
         let hosting = NSHostingView(rootView: MahjongTableView(model: model))
         hosting.sizingOptions = []
         window.contentView = hosting
+        if let visibleFrame = screen?.visibleFrame {
+            window.setFrameOrigin(NSPoint(
+                x: visibleFrame.midX - window.frame.width / 2,
+                y: visibleFrame.midY - window.frame.height / 2
+            ))
+        }
         self.window = window
         hostedModel = model
+    }
+
+    func windowDidBecomeKey(_: Notification) {
+        refreshAudioActivity()
+    }
+
+    func windowDidResignKey(_: Notification) {
+        MahjongAudioPlayer.shared.setFocused(false)
+    }
+
+    func windowDidMiniaturize(_: Notification) {
+        MahjongAudioPlayer.shared.setFocused(false)
+    }
+
+    func windowWillClose(_: Notification) {
+        MahjongAudioPlayer.shared.stopSession()
     }
 
     func windowShouldClose(_: NSWindow) -> Bool {
@@ -103,5 +147,16 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
         exit?()
         suppressCloseCallback = false
         return true
+    }
+}
+
+/// Borderless NSWindows need to opt into keyboard focus for game controls and text fields.
+private final class MahjongBorderlessWindow: NSWindow {
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        true
     }
 }

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct GamePlazaView: View {
+    @State private var selectedCategory: GamePlazaCategory = .all
     @State private var game = MahjongGame()
     @State private var archive = MahjongArchiveStore()
     @State private var lanRoomService: MahjongLANRoomService?
@@ -17,14 +18,20 @@ struct GamePlazaView: View {
     var body: some View {
         JarvisContentArea(
             leadingToolbar: {
-                ToolbarItem(placement: .automatic) { EmptyView() }
+                JarvisToolbarSurface(id: "games.category", placement: .navigation) {
+                    JarvisToolbarGroupedPicker(
+                        items: GamePlazaCategory.allCases,
+                        selection: $selectedCategory,
+                        title: \.rawValue
+                    )
+                }
             },
             trailingToolbar: {
                 ToolbarItem(placement: .automatic) { EmptyView() }
             },
             content: {
                 ScrollView {
-                    gameGallery
+                    GamePlazaGallery(category: selectedCategory, onStartMahjong: presentGameWindow)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         .padding(24)
                 }
@@ -54,10 +61,6 @@ struct GamePlazaView: View {
                 settleRound()
             }
         }
-        .onReceive((lanRoomService ?? idleLANRoomService).$lastVoiceCue) { cue in
-            guard let cue, let service = lanRoomService, !service.isHosting else { return }
-            MahjongVoicePlayer.shared.play(cue.key, gender: voiceGender(for: cue.seat))
-        }
         .onReceive((lanRoomService ?? idleLANRoomService).$settlement) { settlement in
             guard game.mode == .lan, let service = lanRoomService, !service.isHosting,
                   let settlement, game.phase == .roundEnded else { return }
@@ -78,44 +81,6 @@ struct GamePlazaView: View {
             gameWindowModel?.roundNotice = settlement?.notice
             gameWindowModel?.roundSettlement = settlement
         }
-    }
-
-    private var gameGallery: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("全部游戏")
-                    .font(.system(size: 25, weight: .bold, design: .rounded))
-                Spacer()
-                Text("1 款游戏")
-                    .font(JarvisTypography.control)
-                    .foregroundStyle(.secondary)
-            }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 350), spacing: 18)], alignment: .leading, spacing: 18) {
-                Button { presentGameWindow() } label: { GamePosterCard() }
-                    .buttonStyle(.plain)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func voiceGender(for seat: Int) -> MahjongVoiceGender {
-        if game.mode == .lan {
-            if let profile = lanRoomService?.syncedProfiles[seat] {
-                return profile.voiceGender
-            }
-            if seat == game.localSeat {
-                return archive.player.voiceGender
-            }
-        }
-        if seat == 0 {
-            return archive.player.voiceGender
-        }
-        if game.aiProfileIDs.indices.contains(seat - 1),
-           let profile = archive.profile(id: game.aiProfileIDs[seat - 1])
-        {
-            return profile.voiceGender
-        }
-        return .female
     }
 
     private func startSoloMatch() {
@@ -154,7 +119,7 @@ struct GamePlazaView: View {
             } else {
                 .female
             }
-            MahjongVoicePlayer.shared.play(cue.key, gender: gender)
+            MahjongVoicePlayer.shared.play(cue.key, gender: gender, seat: cue.seat)
         }
         game.start()
         lastSettledRoundNumber = 0
@@ -218,7 +183,7 @@ struct GamePlazaView: View {
             let archive = archive
             game.onMahjongVoiceCue = { [weak service] cue in
                 let gender = service?.syncedProfiles[cue.seat]?.voiceGender ?? archive.player.voiceGender
-                MahjongVoicePlayer.shared.play(cue.key, gender: gender)
+                MahjongVoicePlayer.shared.play(cue.key, gender: gender, seat: cue.seat)
                 service?.broadcastVoiceCue(cue)
             }
         } else {
@@ -555,74 +520,6 @@ struct MahjongArchiveAvatar: View {
     }
 }
 
-private struct GamePosterCard: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            GamePosterArtwork()
-                .aspectRatio(1.6, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("欢乐麻将")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Text("棋牌 · 单人对战 AI / 局域网")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.jarvisAccent)
-                    .padding(8)
-                    .background(Color.jarvisAccent.opacity(0.1), in: Circle())
-            }
-        }
-        .padding(12)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-}
-
-private struct GamePosterArtwork: View {
-    private static let poster: NSImage? = {
-        guard let url = Bundle.main.resourceURL?.appendingPathComponent("GameArtwork/mahjong-poster.png"),
-              let image = NSImage(contentsOf: url) else { return nil }
-        image.isTemplate = false
-        return image
-    }()
-
-    var body: some View {
-        GeometryReader { geometry in
-            if let poster = Self.poster {
-                Image(nsImage: poster)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .clipped()
-            } else {
-                fallback
-            }
-        }
-        .accessibilityLabel("欢乐麻将游戏海报：暖灯茶室与麻将牌")
-    }
-
-    private var fallback: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.04, green: 0.17, blue: 0.16), Color(red: 0.12, green: 0.38, blue: 0.29)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            HStack(spacing: -8) {
-                MahjongTileView(tile: .suited(.bamboo, 3)).rotationEffect(.degrees(-9))
-                MahjongTileView(tile: .honor(4)).rotationEffect(.degrees(4))
-                MahjongTileView(tile: .suited(.dots, 5)).rotationEffect(.degrees(12))
-            }
-        }
-    }
-}
-
 /// Match-table felt and tile shell. Tags and buttons use the same semantic
 /// colors as the rest of the app, so they are not listed here.
 private struct MahjongTablePalette {
@@ -718,19 +615,22 @@ struct MahjongTableView: View {
     }
 
     var body: some View {
-        if game.isStarted {
-            MahjongOverheadTable(
-                game: game,
-                archive: archive,
-                lanRoomService: lanRoomService,
-                roundNotice: roundNotice,
-                roundSettlement: roundSettlement,
-                onNextRound: onNextRound,
-                onExit: onExit
-            )
-        } else {
-            MahjongLaunchView(model: model)
+        Group {
+            if game.isStarted {
+                MahjongOverheadTable(
+                    game: game,
+                    archive: archive,
+                    lanRoomService: lanRoomService,
+                    roundNotice: roundNotice,
+                    roundSettlement: roundSettlement,
+                    onNextRound: onNextRound,
+                    onExit: onExit
+                )
+            } else {
+                MahjongLaunchView(model: model)
+            }
         }
+        .modifier(MahjongGameAudioFeedback(model: model))
     }
 
     /// Rules, duration, wall count, and exit. Its own rounded panel, above the felt.

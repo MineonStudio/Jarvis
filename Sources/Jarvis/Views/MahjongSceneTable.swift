@@ -7,9 +7,10 @@ import SwiftUI
 /// The local hand, melds, and discards lie face-up.
 struct MahjongSceneTable: View {
     let game: MahjongGame
+    @State private var tableSettings = MahjongTableSettings.shared
 
     var body: some View {
-        MahjongSceneHost(model: MahjongSceneModel(game: game)) { tile, drawn in
+        MahjongSceneHost(model: MahjongSceneModel(game: game), tableStyle: tableSettings.style) { tile, drawn in
             if drawn {
                 game.discardDrawnTile()
             } else {
@@ -102,6 +103,7 @@ struct MahjongSceneModel: Equatable {
 @MainActor
 struct MahjongSceneHost: NSViewRepresentable {
     var model: MahjongSceneModel
+    var tableStyle: MahjongTableStyle
     var onDiscard: (MahjongTile, Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -115,7 +117,7 @@ struct MahjongSceneHost: NSViewRepresentable {
         view.allowsCameraControl = false
         view.autoenablesDefaultLighting = false
         view.antialiasingMode = .multisampling4X
-        view.backgroundColor = NSColor(red: 0.055, green: 0.22, blue: 0.11, alpha: 1)
+        view.backgroundColor = MahjongTableSettings.shared.style.color
         view.rendersContinuously = false
         let coordinator = context.coordinator
         coordinator.view = view
@@ -125,12 +127,14 @@ struct MahjongSceneHost: NSViewRepresentable {
         view.containsTile = { [weak coordinator] point in coordinator?.handInteraction.tile(at: point) != nil }
         view.onTileClick = { [weak coordinator] point in coordinator?.discard(at: point) }
         coordinator.sync(model)
+        coordinator.applyTableStyle(tableStyle)
         return view
     }
 
     func updateNSView(_: MahjongSceneInteractionView, context: Context) {
         context.coordinator.onDiscard = onDiscard
         context.coordinator.sync(model)
+        context.coordinator.applyTableStyle(tableStyle)
     }
 
     static func dismantleNSView(_ view: MahjongSceneInteractionView, coordinator _: Coordinator) {
@@ -142,6 +146,8 @@ struct MahjongSceneHost: NSViewRepresentable {
         let scene = SCNScene()
         let camera = SCNNode()
         let tileRoot = SCNNode()
+        private let feltNode = SCNNode()
+        private var tableStyle: MahjongTableStyle = .brocade
         private let handRoots = (0 ..< 4).map { _ in SCNNode() }
         private let meldRoots = (0 ..< 4).map { _ in SCNNode() }
         private let discardRoots = (0 ..< 4).map { _ in SCNNode() }
@@ -161,6 +167,15 @@ struct MahjongSceneHost: NSViewRepresentable {
         func discard(at point: CGPoint) {
             guard applied?.canDiscard == true, let tile = handInteraction.tile(at: point) else { return }
             onDiscard(tile.value, tile.drawn)
+        }
+
+        func applyTableStyle(_ style: MahjongTableStyle) {
+            guard tableStyle != style else { return }
+            tableStyle = style
+            feltNode.geometry?.materials = [MahjongFeltCloth.material(style: style)]
+            view?.backgroundColor = style.color
+            SCNTransaction.flush()
+            view?.needsDisplay = true
         }
 
         func sync(_ model: MahjongSceneModel) {
@@ -234,7 +249,8 @@ struct MahjongSceneHost: NSViewRepresentable {
             let extent: Float = 48
             let felt = SCNBox(width: CGFloat(extent), height: 0.05, length: CGFloat(extent), chamferRadius: 0)
             felt.materials = [MahjongFeltCloth.material()]
-            let feltNode = SCNNode(geometry: felt)
+            feltNode.geometry = felt
+            feltNode.name = "mahjong-table-surface"
             feltNode.simdPosition = SIMD3(0, -0.015, 0)
             feltNode.castsShadow = false
             scene.rootNode.addChildNode(feltNode)
