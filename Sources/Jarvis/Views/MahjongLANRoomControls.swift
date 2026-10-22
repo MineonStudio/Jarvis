@@ -11,7 +11,7 @@ struct MahjongLANRulesetPicker: View {
                     selection = ruleset
                 } label: {
                     HStack(spacing: 8) {
-                        Text(ruleset.rawValue.components(separatedBy: " · ").first ?? ruleset.rawValue)
+                        Text(ruleset.title)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                         Image(systemName: selected ? "checkmark.circle.fill" : "circle")
@@ -20,9 +20,9 @@ struct MahjongLANRulesetPicker: View {
                     .frame(maxWidth: .infinity, minHeight: 60)
                 }
                 .buttonStyle(MahjongGameButtonStyle(kind: selected ? .primary : .secondary, borderShape: .roundedRectangle(radius: 14)))
-                .accessibilityLabel(ruleset.rawValue)
+                .accessibilityLabel(ruleset.title)
                 .accessibilityValue(selected ? "已选择" : "未选择")
-                .help(ruleset.rawValue)
+                .help(ruleset.title)
             }
         }
     }

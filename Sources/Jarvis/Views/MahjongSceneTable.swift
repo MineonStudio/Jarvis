@@ -311,8 +311,10 @@ struct MahjongSceneHost: NSViewRepresentable {
             let tileStep = size.footprint + tileGap
             let groupGap: Float = 0.16
             let rowStep = size.depthStep + groupGap
-            // The anchor is the outer corner on the player's left. A group runs toward
-            // the hand along +right, and the next row steps toward the center along forward.
+            // The anchor is the outer corner on that player's left, nearest their hand.
+            // Every row shares that left edge. A group runs along +right, and the next
+            // row steps toward the center along forward. From the seat, that is
+            // bottom-to-top, then left-to-right.
             // Check, south: left is screen-left, so the group runs rightward and the glyph
             // top (yaw 0) points up, the same way a south discard does.
             let alongDir = seat.right
@@ -321,12 +323,10 @@ struct MahjongSceneHost: NSViewRepresentable {
                 let line = groups[row ..< min(row + 2, groups.count)]
                 var cursor = size.footprint / 2
                 let depth = size.depthStep / 2 + rowStep * Float(row / 2)
-                // The inner horizontal row folds around the neighboring player's draw slot.
-                let rowInset: Float = row > 0 && (view == 0 || view == 2) ? 3.45 : 0
                 for group in line {
                     for (index, piece) in group.enumerated() {
                         guard let tile = piece.tile else { continue }
-                        let across = rowInset + cursor + tileStep * Float(index)
+                        let across = cursor + tileStep * Float(index)
                         let position = corner + alongDir * across + inward * depth
                         let node = makeTile(
                             tile: tile,

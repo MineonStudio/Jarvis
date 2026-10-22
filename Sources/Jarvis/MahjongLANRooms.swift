@@ -15,7 +15,7 @@ struct MahjongLANRoom: Identifiable {
     }
 
     var displayName: String {
-        "\(ruleset.rawValue) · \(humanCount)/4 · \(hostNickname)的房间"
+        "\(ruleset.title) · \(humanCount)/4 · \(hostNickname)的房间"
     }
 }
 

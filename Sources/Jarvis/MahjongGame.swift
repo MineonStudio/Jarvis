@@ -74,6 +74,15 @@ enum MahjongRuleset: String, CaseIterable, Identifiable, Codable {
         rawValue
     }
 
+    /// Play-style label for menus, tags, and room lists. The raw value stays unchanged so saved matches still decode.
+    var title: String {
+        switch self {
+        case .national: "标准和牌"
+        case .sichuan: "缺一门"
+        case .cantonese: "推倒胡"
+        }
+    }
+
     var detail: String {
         let rules = switch self {
         case .national:
@@ -83,7 +92,7 @@ enum MahjongRuleset: String, CaseIterable, Identifiable, Codable {
         case .cantonese:
             "## 🎯 核心规则：推倒胡，成牌即可胡\n\n广东推倒胡通常使用万、筒、条和东南西北、中发白，共一百三十六张牌。这里采用易上手的基础推倒胡规则：牌型满足和牌结构即可胡，不要求先凑够复杂番种或最低番数。\n\n### 🀄 起手与回合\n\n* 庄家起手十四张，其余三家各十三张；庄家先打出一张，之后按逆时针轮流行动。\n* 每回合摸一张、打一张。上家打出的牌可以被吃，任意一家打出的牌可以被碰或明杠；达到和牌条件时可以胡牌。\n* 没有人响应弃牌时，由下一家摸牌。有人响应时，优先处理胡牌，再处理杠、碰、吃。\n\n### 🔁 吃、碰、杠\n\n* **吃**：用上家的一张弃牌和手中的两张同花色序数牌组成连续顺子。\n* **碰**：手里有两张相同牌时，用别人的弃牌组成三张相同的刻子。\n* **明杠**：手中已有三张相同牌时接入弃牌，或将已碰的刻子补成四张。\n* **暗杠**：自己摸到四张相同牌时可以暗杠。杠后从牌墙补摸一张；公开副露会展示吃、碰和明杠，暗杠保留暗牌。\n\n### ✅ 和牌牌型与示例\n\n常规牌型为四组顺子或刻子加一对将牌；也支持七对与十三幺。比如“一二三万、四五六万、七八九条、三个东风、一对五筒”即可组成常规牌型。自摸和点和都可胡；达到牌型即可和牌，不设置最低番数门槛。\n\n### ⚠️ 玩法范围说明\n\n“广东麻将”各地规则差异较大。本版本采用简化推倒胡：暂不含花牌、买马、鸡平胡 / 新章等地区计番差异，输赢统一采用简化竞赛计分，不计算完整的地方番种与台数。\n\n### 🏁 本局结束\n\n有人和牌后本局结束并展示四家手牌；牌墙耗尽仍无人和牌时流局。"
         }
-        return rules + "\n\n### ✨ 本局加倍\n\n发牌后、首张出牌前，每人有 10 秒选择不加倍（×1）、加倍（×2）或超级加倍（×4）；四川麻将在定缺后选择。开局余额满 3,000 毛格子可选 ×2，满 8,000 可选 ×4；超时按 ×1。AI 只根据开局余额按随机权重选择。结算时，每位支付方的基础金额分别乘以赢家倍数和自己的倍数，最多支付其实际余额；流局不结算。"
+        return rules + "\n\n### ✨ 本局加倍\n\n发牌后、首张出牌前，每人有 10 秒选择不加倍（×1）、加倍（×2）或超级加倍（×4）；缺一门在定缺后选择。开局余额满 3,000 毛格子可选 ×2，满 8,000 可选 ×4；超时按 ×1。AI 只根据开局余额按随机权重选择。结算时，每位支付方的基础金额分别乘以赢家倍数和自己的倍数，最多支付其实际余额；流局不结算。"
     }
 
     var includesHonors: Bool {
@@ -732,7 +741,7 @@ final class MahjongGame {
     private func discard(_ tile: MahjongTile, drawnTile: Bool) {
         guard canActForCurrentSeat, currentHand.count == concealedCountRequired(for: turn, onTurn: true), currentHand.contains(tile) else { return }
         if let missingSuit = missingSuits[turn], currentHand.contains(where: { $0.matches(missingSuit) }), !tile.matches(missingSuit) {
-            message = "四川麻将定缺中，请先打出缺门花色"
+            message = "缺一门，请先打出缺门花色"
             return
         }
         stopTurnTimer()
@@ -821,7 +830,7 @@ final class MahjongGame {
             missingSuits[seat] = Self.leastFrequentSuit(in: hands[seat])
         }
         if let first = currentResponderSeat {
-            message = "四川麻将 · \(seatName(first)) 请选择定缺花色"
+            message = "缺一门 · \(seatName(first)) 请选择定缺花色"
         }
     }
 
@@ -1049,7 +1058,7 @@ final class MahjongGame {
         let handText = hands[seat].map(\.accessibilityName).joined(separator: "、")
         let meldText = melds[seat].map(\.label).joined(separator: "；")
         let userPrompt = """
-        玩法：\(ruleset.rawValue)
+        玩法：\(ruleset.title)
         你的手牌：\(handText)
         你的副露：\(meldText.isEmpty ? "无" : meldText)
         定缺：\(missingSuits[seat]?.shortName ?? "无")
@@ -1270,7 +1279,7 @@ final class MahjongGame {
         if kongs.isEmpty {
             let tileNames = Array(Set(discards.map(\.aiName))).sorted()
             let userPrompt = """
-            \(ruleset.rawValue)。手牌：\(hand.map(\.accessibilityName).joined(separator: "、"))。副露：\(meldText.isEmpty ? "无" : meldText)。定缺：\(missingSuits[seat]?.shortName ?? "无")。牌墙：\(wall.count)张。
+            \(ruleset.title)。手牌：\(hand.map(\.accessibilityName).joined(separator: "、"))。副露：\(meldText.isEmpty ? "无" : meldText)。定缺：\(missingSuits[seat]?.shortName ?? "无")。牌墙：\(wall.count)张。
             从以下合法可打出的牌中选最有利的一张，只返回牌名：\(tileNames.joined(separator: "、"))
             """
             if let answer = await requestMahjongAI(userPrompt: userPrompt, outputFormat: .tileName) {
@@ -1291,7 +1300,7 @@ final class MahjongGame {
         }
         let choiceText = choices.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
         let userPrompt = """
-        \(ruleset.rawValue)。手牌：\(hand.map(\.accessibilityName).joined(separator: "、"))。副露：\(meldText.isEmpty ? "无" : meldText)。定缺：\(missingSuits[seat]?.shortName ?? "无")。牌墙：\(wall.count)张。
+        \(ruleset.title)。手牌：\(hand.map(\.accessibilityName).joined(separator: "、"))。副露：\(meldText.isEmpty ? "无" : meldText)。定缺：\(missingSuits[seat]?.shortName ?? "无")。牌墙：\(wall.count)张。
         可选操作（只返回对应序号）：
         \(choiceText)
         """

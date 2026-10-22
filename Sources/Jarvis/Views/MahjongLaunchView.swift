@@ -134,7 +134,7 @@ struct MahjongLaunchView: View {
     private var soloMenu: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(MahjongRuleset.allCases) { ruleset in
-                menuButton(ruleset.rawValue) { model.onStartSolo(ruleset) }
+                menuButton(ruleset.title) { model.onStartSolo(ruleset) }
             }
             menuButton("返回主菜单") { page = .main }
         }
@@ -168,7 +168,7 @@ struct MahjongLaunchView: View {
     private var lanMenu: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(MahjongRuleset.allCases) { ruleset in
-                menuButton(ruleset.rawValue) {
+                menuButton(ruleset.title) {
                     selectedLANRuleset = ruleset
                     lanDialog = .create
                 }
@@ -246,7 +246,7 @@ struct MahjongLaunchView: View {
     private var createRoomContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let code = service.roomCode {
-                Text("\(service.roomRuleset.rawValue) · \(service.humanCount)/4 · \(archive.player.nickname)的房间")
+                Text("\(service.roomRuleset.title) · \(service.humanCount)/4 · \(archive.player.nickname)的房间")
                     .font(.system(size: 16, weight: .medium))
                 Text(code)
                     .font(.system(size: 40, weight: .bold, design: .rounded).monospacedDigit())

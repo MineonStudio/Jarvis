@@ -296,7 +296,7 @@ struct MahjongSettingsView: View {
                 .foregroundStyle(match.outcome == .win ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
                 .frame(width: 52, alignment: .leading)
             VStack(alignment: .leading, spacing: 5) {
-                Text("\(match.ruleset.rawValue) · 第 \(match.roundNumber) 局")
+                Text("\(match.ruleset.title) · 第 \(match.roundNumber) 局")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(MahjongSettingsPalette.ivory)
                 Text("\(match.mode.rawValue) · \(match.playedAt.formatted(date: .abbreviated, time: .shortened))\(match.winnerNickname.map { " · \($0)胡牌" } ?? "")")

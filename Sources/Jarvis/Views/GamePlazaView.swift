@@ -637,7 +637,7 @@ struct MahjongTableView: View {
     private var matchInfoBar: some View {
         ZStack {
             HStack(spacing: 8) {
-                titleTag(game.ruleset.rawValue)
+                titleTag(game.ruleset.title)
                 titleTag(game.mode.rawValue)
                 if game.mode == .lan, let code = lanRoomService.roomCode {
                     titleTag("房间码 \(code)")
