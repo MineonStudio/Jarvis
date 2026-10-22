@@ -238,6 +238,12 @@ private struct JarvisHomePrompt: Identifiable {
 
     static let featurePrompts: [JarvisHomePrompt] = [
         .init(
+            id: "work-companion",
+            message: "我是你的工作搭子 Jarvis。办公时帮你处理琐事，休息时一起放松。",
+            destination: .gamePlaza,
+            permission: nil
+        ),
+        .init(
             id: "wallpaper",
             message: "想给桌面换个新氛围吗？去壁纸库逛逛，说不定有你的下一张心头好。",
             destination: .skill(.wallpaper),
@@ -289,6 +295,12 @@ private struct JarvisHomePrompt: Identifiable {
             id: "entertainment",
             message: "忙完了就放松一下吧。娱乐广场里可以看看你喜欢的平台内容。",
             destination: .entertainment,
+            permission: nil
+        ),
+        .init(
+            id: "mahjong",
+            message: "想打两圈欢乐麻将？可以单人练习，也能和朋友开房对战。",
+            destination: .gamePlaza,
             permission: nil
         )
     ]

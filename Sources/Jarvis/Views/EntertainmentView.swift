@@ -20,7 +20,7 @@ struct EntertainmentView: View {
                 }
             },
             trailingToolbar: {
-                ToolbarItem(placement: .automatic) {
+                ToolbarItem(id: "entertainment.actions", placement: .automatic) {
                     JarvisWebPlatformActionCluster(
                         controller: currentController,
                         showsDownloadManager: $showsDownloadManager,

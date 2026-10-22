@@ -361,7 +361,7 @@ enum ScreenshotError: LocalizedError {
         switch self {
         case .cancelled: "截图已取消"
         case .invalidSelection: "截图区域太小，请重新框选"
-        case .permissionDenied: "macOS 屏幕录制权限未开启，请在系统设置中允许贾维斯读取屏幕"
+        case .permissionDenied: "macOS 屏幕录制权限未开启，请在系统设置中允许工作搭子 Jarvis读取屏幕"
         case .noDisplays: "没有可用的显示器"
         case let .captureFailed(reason): "截图失败：\(reason)"
         }

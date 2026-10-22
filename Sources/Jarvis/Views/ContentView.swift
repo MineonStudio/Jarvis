@@ -117,11 +117,11 @@ struct ContentView: View {
     }
 
     private var topNavigationItems: [TopLevelSection] {
-        [.home] + SkillID.allCases.map(TopLevelSection.skill)
+        [.home, .aiConversation] + SkillID.allCases.map(TopLevelSection.skill)
     }
 
     private var bottomNavigationItems: [TopLevelSection] {
-        [.aiConversation, .gamePlaza, .entertainment]
+        [.gamePlaza, .entertainment]
     }
 
     private var navigationTargetID: String {

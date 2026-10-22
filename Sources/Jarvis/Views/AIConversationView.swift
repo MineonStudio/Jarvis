@@ -99,7 +99,7 @@ struct AIConversationView: View {
                 }
             },
             trailingToolbar: {
-                ToolbarItem(placement: .automatic) {
+                ToolbarItem(id: "ai.actions", placement: .automatic) {
                     JarvisWebPlatformActionCluster(
                         controller: currentController,
                         showsDownloadManager: $showsDownloadManager,

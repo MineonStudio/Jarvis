@@ -141,7 +141,7 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         menu.autoenablesItems = false
 
         addMenuItem(
-            title: "打开贾维斯",
+            title: "打开工作搭子 Jarvis",
             action: #selector(openMainWindow)
         )
         addMenuItem(screenshotMenuItem)
@@ -164,7 +164,7 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
         addMenuItem(
-            title: "退出贾维斯",
+            title: "退出工作搭子 Jarvis",
             action: #selector(terminate),
             keyEquivalent: "q"
         )

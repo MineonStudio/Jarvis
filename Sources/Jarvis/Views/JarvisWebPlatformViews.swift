@@ -78,30 +78,33 @@ struct JarvisWebPlatformActionCluster<DownloadPopover: View>: View {
     var activeDownloadCount: Int
     var downloadHelp: String = "下载管理"
     @ViewBuilder var downloadPopover: () -> DownloadPopover
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 2) {
             JarvisToolbarIconButton(
                 systemName: "house",
                 help: "主页",
+                hoverScale: 1,
                 action: controller.goHome
             )
             JarvisToolbarIconButton(
                 systemName: "chevron.left",
                 help: "后退",
                 isEnabled: controller.canGoBack,
+                hoverScale: 1,
                 action: controller.goBack
             )
             JarvisToolbarIconButton(
                 systemName: "chevron.right",
                 help: "前进",
                 isEnabled: controller.canGoForward,
+                hoverScale: 1,
                 action: controller.goForward
             )
             JarvisToolbarIconButton(
                 systemName: controller.isLoading ? "xmark" : "arrow.clockwise",
                 help: controller.isLoading ? "停止加载" : "刷新",
+                hoverScale: 1,
                 action: controller.reloadOrStop
             )
             JarvisWebPlatformDownloadButton(
@@ -115,10 +118,6 @@ struct JarvisWebPlatformActionCluster<DownloadPopover: View>: View {
         .frame(height: JarvisToolbarMetrics.controlSize)
         // The enclosing ToolbarItem supplies the native toolbar group surface.
         // Do not add a second custom glass capsule inside it.
-        .animation(
-            JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion),
-            value: controller.isLoading
-        )
     }
 }
 
@@ -150,7 +149,9 @@ struct JarvisWebPlatformDownloadButton<Popover: View>: View {
         }
         .buttonStyle(JarvisToolbarIconButtonStyle())
         .foregroundStyle(Color.secondary)
-        .jarvisHoverFeedback(in: Circle(), scale: 1.06)
+        .accessibilityLabel(help)
+        .help(help)
+        .jarvisHoverFeedback(in: Circle(), scale: 1)
         .animation(
             JarvisMotion.animation(JarvisMotion.feedback, reduceMotion: reduceMotion),
             value: activeDownloadCount

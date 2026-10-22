@@ -1,8 +1,8 @@
-# 贾维斯
+# 工作搭子 Jarvis
 
-<img src="docs/icon.png" width="96" alt="贾维斯">
+<img src="docs/icon.png" width="96" alt="工作搭子 Jarvis">
 
-macOS 菜单栏工具。截图、剪贴板、会议记录、局域网传输、壁纸，另外有窗口布局和简历。
+协助办公，也陪你摸鱼放松的 macOS 工作搭子。工作时处理截图、剪贴板、会议记录、窗口布局和简历；休息时换壁纸、逛娱乐广场，或打一局欢乐麻将。
 
 macOS 26 及以上。
 
@@ -44,6 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/MineonStudio/jarvis-macos/dev/insta
 - 局域网传输。在同一 Wi-Fi 或手机热点下启动共享，手机扫描二维码即可通过浏览器上传或下载文件。Mac 端可选择文件或拖拽到共享区。共享目录是 `~/Library/Application Support/Jarvis/局域网传输/共享`，接收目录是同级的 `接收`，单文件上限固定为 2 GB。传输使用局域网 HTTP，请在可信网络中使用。
 - 桌面壁纸、窗口布局、简历制作。
 - AI 聚合、娱乐广场。在应用里打开的网页。
+- 欢乐麻将。支持单人对战和局域网对战；局域网内由一位玩家开房，好友可搜索并加入。
 
 截图、剪贴板、录音和逐字稿都在本机。会议总结和截图翻译会把内容发给设置里的服务。
 

@@ -322,7 +322,7 @@ private final class MeetingSystemAudioRecorder: NSObject, SCStreamOutput, SCStre
         var errorDescription: String? {
             switch self {
             case .permissionDenied:
-                "未开启屏幕录制权限，无法采集系统音频。请到系统设置 > 隐私与安全性 > 屏幕录制，允许贾维斯。"
+                "未开启屏幕录制权限，无法采集系统音频。请到系统设置 > 隐私与安全性 > 屏幕录制，允许工作搭子 Jarvis。"
             case .noDisplay:
                 "未找到可用于系统音频采集的显示器"
             case let .captureFailed(message):
