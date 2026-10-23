@@ -17,6 +17,26 @@ struct MahjongLANRoom: Identifiable {
     var displayName: String {
         "\(ruleset.title) · \(humanCount)/4 · \(hostNickname)的房间"
     }
+
+    static func discovered(
+        code: String,
+        endpoint: NWEndpoint,
+        serviceName: String,
+        txtRecord: NWTXTRecord?
+    ) -> MahjongLANRoom {
+        let ruleset = MahjongRuleset(rawValue: txtRecord?["ruleset"] ?? "") ?? .national
+        let humanCount = min(4, max(1, Int(txtRecord?["humans"] ?? "1") ?? 1))
+        let advertisedHost = txtRecord?["host"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hostNickname = String((advertisedHost.isEmpty ? "房主" : advertisedHost).prefix(16))
+        return MahjongLANRoom(
+            code: code,
+            endpoint: endpoint,
+            serviceName: serviceName,
+            ruleset: ruleset,
+            humanCount: humanCount,
+            hostNickname: hostNickname
+        )
+    }
 }
 
 enum MahjongLANAction: Codable {
@@ -85,7 +105,11 @@ final class MahjongLANRoomService: ObservableObject {
         if !isHosting, !isConnecting {
             status = "正在搜索局域网房间…"
         }
-        let browser = NWBrowser(for: .bonjour(type: Self.bonjourServiceType, domain: nil), using: .tcp)
+        // The plain Bonjour descriptor omits TXT records, so the join list never sees the host nickname.
+        let browser = NWBrowser(
+            for: .bonjourWithTXTRecord(type: Self.bonjourServiceType, domain: nil),
+            using: .tcp
+        )
         self.browser = browser
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             let foundRooms = results.compactMap { result -> MahjongLANRoom? in
@@ -97,11 +121,11 @@ final class MahjongLANRoomService: ObservableObject {
                 } else {
                     nil
                 }
-                return MahjongLANRoom(
-                    code: code, endpoint: result.endpoint, serviceName: name,
-                    ruleset: MahjongRuleset(rawValue: record?["ruleset"] ?? "") ?? .national,
-                    humanCount: min(4, max(1, Int(record?["humans"] ?? "1") ?? 1)),
-                    hostNickname: String((record?["host"] ?? "房主").prefix(16))
+                return MahjongLANRoom.discovered(
+                    code: code,
+                    endpoint: result.endpoint,
+                    serviceName: name,
+                    txtRecord: record
                 )
             }
             Task { @MainActor [weak self] in

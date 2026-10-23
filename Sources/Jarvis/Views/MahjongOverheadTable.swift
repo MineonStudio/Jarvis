@@ -185,6 +185,13 @@ private enum MahjongOverheadMetrics {
     }
 }
 
+/// Tag direction follows the on-screen seat. The local player stays at the bottom, including a LAN guest who is not 东.
+enum MahjongPlaqueTags {
+    static func stacksVertically(viewPosition: Int) -> Bool {
+        viewPosition % 2 == 1
+    }
+}
+
 private struct MahjongOverheadFelt: View {
     let game: MahjongGame
     let archive: MahjongArchiveStore
@@ -230,7 +237,7 @@ private struct MahjongOverheadFelt: View {
                         || game.phase == .responding
                         || game.phase == .roundEnded,
                     isDealer: game.dealer == seat(at: view),
-                    stacksTagsVertically: seat(at: view) % 2 == 1,
+                    stacksTagsVertically: MahjongPlaqueTags.stacksVertically(viewPosition: view),
                     viewPosition: view,
                     titlebarInset: titlebarInset
                 )
@@ -723,7 +730,7 @@ private struct MahjongSeatPlaque: View {
     let multiplier: Int?
     let showsMultiplier: Bool
     let isDealer: Bool
-    /// 东家、西家一行排开；南家、北家一个标签一行。
+    /// 画面上下一行排开；左右两侧一个标签一行。
     let stacksTagsVertically: Bool
     let viewPosition: Int
     let titlebarInset: CGFloat
