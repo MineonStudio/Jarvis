@@ -92,7 +92,7 @@ private enum MahjongOverheadMetrics {
     static let titlebarHeight: CGFloat = 40
     static let playerEdgeInset: CGFloat = 16
     static let horizontalPlayerSize = CGSize(width: 320, height: 76)
-    static let verticalPlayerSize = CGSize(width: 132, height: 124)
+    static let verticalPlayerSize = CGSize(width: 132, height: 208)
     static let riverBreadth: CGFloat = 30
     static let riverLength: CGFloat = 42
     static let meldBreadth: CGFloat = 36
@@ -225,8 +225,12 @@ private struct MahjongOverheadFelt: View {
                     profile: profile(for: seat(at: view)),
                     missingSuit: missingSuit(for: seat(at: view)),
                     multiplier: game.multipliers[seat(at: view)],
-                    showsMultiplier: game.phase == .playing || game.phase == .responding || game.phase == .roundEnded,
+                    showsMultiplier: game.phase == .choosingMultiplier
+                        || game.phase == .playing
+                        || game.phase == .responding
+                        || game.phase == .roundEnded,
                     isDealer: game.dealer == seat(at: view),
+                    stacksTagsVertically: seat(at: view) % 2 == 1,
                     viewPosition: view,
                     titlebarInset: titlebarInset
                 )
@@ -253,19 +257,25 @@ private struct MahjongOverheadFelt: View {
     private var turnCompass: some View {
         MahjongTurnCompass(
             winds: (0 ..< 4).map { game.seatName(seat(at: $0)).replacingOccurrences(of: "家", with: "") },
-            seatName: game.phase == .choosingMultiplier ? "加倍" : (game.phase == .responding ? "吃碰杠" : (indicatedSeat.map { game.seatName($0) } ?? "")),
+            seatName: game.phase == .choosingMultiplier
+                ? "加倍"
+                : (game.phase == .choosingMissingSuit
+                    ? "定缺"
+                    : (game.phase == .responding ? "吃碰杠" : (indicatedSeat.map { game.seatName($0) } ?? ""))),
             viewPosition: indicatedSeat.map { MahjongOverheadMetrics.viewPosition(of: $0, localSeat: game.localSeat) },
-            deadline: game.phase == .choosingMultiplier
+            deadline: game.phase == .choosingMultiplier || game.phase == .choosingMissingSuit
                 ? game.multiplierDeadline
                 : (game.phase == .responding
                     ? game.responseDecisionDeadline
                     : indicatedSeat.flatMap { game.countdownDeadline(for: $0) }),
             counting: game.phase == .choosingMultiplier
                 ? game.multiplierDeadline != nil && game.multipliers.contains(where: { $0 == nil })
-                : (game.phase == .responding
-                    ? game.responseDecisionDeadline != nil
-                    : (indicatedSeat.map { game.isCountdownActive(for: $0) } ?? false)),
-            countdownDuration: game.phase == .choosingMultiplier
+                : (game.phase == .choosingMissingSuit
+                    ? game.multiplierDeadline != nil
+                    : (game.phase == .responding
+                        ? game.responseDecisionDeadline != nil
+                        : (indicatedSeat.map { game.isCountdownActive(for: $0) } ?? false))),
+            countdownDuration: game.phase == .choosingMultiplier || game.phase == .choosingMissingSuit
                 ? MahjongDoubling.duration
                 : (game.phase == .responding ? game.responseDecisionDuration : 20)
         )
@@ -292,7 +302,7 @@ private struct MahjongOverheadFelt: View {
 
     private var indicatedSeat: Int? {
         switch game.phase {
-        case .playing, .choosingMissingSuit, .dealing:
+        case .playing, .dealing:
             game.activeSeat
         default:
             nil
@@ -713,6 +723,8 @@ private struct MahjongSeatPlaque: View {
     let multiplier: Int?
     let showsMultiplier: Bool
     let isDealer: Bool
+    /// 东家、西家一行排开；南家、北家一个标签一行。
+    let stacksTagsVertically: Bool
     let viewPosition: Int
     let titlebarInset: CGFloat
 
@@ -747,22 +759,15 @@ private struct MahjongSeatPlaque: View {
             VStack(spacing: 6) {
                 avatar
                 nickname
-                balance
-                if showsMultiplier {
-                    multiplierBadge
-                }
+                tags
             }
         } else {
-            HStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
                 avatar
                 VStack(alignment: .leading, spacing: 3) {
                     nickname
-                    if showsMultiplier {
-                        multiplierBadge
-                    }
+                    tags
                 }
-                .frame(maxWidth: 152, alignment: .leading)
-                balance
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -776,30 +781,52 @@ private struct MahjongSeatPlaque: View {
             .minimumScaleFactor(0.6)
     }
 
-    private var balance: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "centsign.circle.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(MahjongVisualTheme.accent)
-            Text(profile.balance.formatted())
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(MahjongVisualTheme.ivory)
-        }
-        .fixedSize(horizontal: true, vertical: false)
-    }
-
-    private var multiplierBadge: some View {
-        HStack(spacing: 3) {
-            Circle()
-                .fill(multiplier == nil ? MahjongVisualTheme.accent : MahjongVisualTheme.success)
-                .frame(width: 5, height: 5)
-            Text(multiplier.map { "本局 ×\($0)" } ?? "等待加倍")
+    private var tags: some View {
+        Group {
+            if stacksTagsVertically {
+                VStack(alignment: sideSeat ? .center : .leading, spacing: 4) {
+                    tagLabels
+                }
+            } else {
+                HStack(spacing: 4) {
+                    tagLabels
+                }
+            }
         }
         .font(.system(size: 11, weight: .bold, design: .rounded))
-        .foregroundStyle(MahjongVisualTheme.accent)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .glassEffect(.regular, in: Capsule())
+        .foregroundStyle(MahjongVisualTheme.ivory)
+    }
+
+    @ViewBuilder
+    private var tagLabels: some View {
+        tag {
+            HStack(spacing: 3) {
+                Image(systemName: "centsign.circle.fill")
+                    .foregroundStyle(Color(red: 0.96, green: 0.76, blue: 0.22))
+                    .accessibilityHidden(true)
+                Text(profile.balance.formatted())
+            }
+        }
+        .accessibilityLabel("余额\(profile.balance.formatted())毛格子")
+        if isDealer {
+            tag { Text("庄") }
+                .accessibilityLabel("庄家")
+        }
+        if showsMultiplier {
+            tag { Text(multiplier.map { "×\($0)" } ?? "待加倍") }
+                .accessibilityLabel(multiplier.map { "加倍 ×\($0)" } ?? "等待加倍")
+        }
+        if let missingSuit {
+            tag { Text("缺\(missingSuit.shortName)") }
+                .accessibilityLabel("缺\(missingSuit.shortName)")
+        }
+    }
+
+    private func tag(@ViewBuilder content: () -> some View) -> some View {
+        content()
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .glassEffect(.regular, in: Capsule())
     }
 
     private var avatar: some View {
@@ -807,16 +834,6 @@ private struct MahjongSeatPlaque: View {
             showsDetail = true
         } label: {
             MahjongArchiveAvatar(profile: profile, size: 60)
-                .overlay(alignment: .topTrailing) {
-                    if isDealer {
-                        statusBadge("庄")
-                    }
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    if let missingSuit {
-                        statusBadge("缺\(missingSuit.shortName)")
-                    }
-                }
         }
         .buttonStyle(.plain)
         .popover(isPresented: $showsDetail, arrowEdge: popoverEdge) {
@@ -826,15 +843,6 @@ private struct MahjongSeatPlaque: View {
             )
         }
         .accessibilityLabel("查看\(profile.nickname)的资料")
-    }
-
-    private func statusBadge(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(MahjongVisualTheme.ivory)
-            .padding(.horizontal, 3)
-            .padding(.vertical, 1)
-            .glassEffect(.regular, in: Capsule())
     }
 
     private var popoverEdge: Edge {
@@ -847,6 +855,63 @@ private struct MahjongSeatPlaque: View {
     }
 }
 
+struct MahjongCountdownTint: Equatable {
+    var red: Double
+    var green: Double
+    var blue: Double
+
+    var color: Color {
+        Color(red: red, green: green, blue: blue)
+    }
+
+    static let green = Self(red: 0.22, green: 0.78, blue: 0.34)
+    static let yellow = Self(red: 0.98, green: 0.80, blue: 0.16)
+    static let red = Self(red: 0.91, green: 0.20, blue: 0.16)
+
+    /// Remaining time: 1 is green, 0.5 is yellow, 0 is red.
+    static func color(progress: Double) -> Self {
+        let t = min(max(progress, 0), 1)
+        if t >= 1 {
+            return .green
+        }
+        if t <= 0 {
+            return .red
+        }
+        if t == 0.5 {
+            return .yellow
+        }
+        if t > 0.5 {
+            return mix(.yellow, .green, (t - 0.5) / 0.5)
+        }
+        return mix(.red, .yellow, t / 0.5)
+    }
+
+    private static func mix(_ from: Self, _ to: Self, _ amount: Double) -> Self {
+        Self(
+            red: from.red + (to.red - from.red) * amount,
+            green: from.green + (to.green - from.green) * amount,
+            blue: from.blue + (to.blue - from.blue) * amount
+        )
+    }
+}
+
+struct MahjongCountdownArc: View {
+    var progress: Double
+
+    var body: some View {
+        let span = min(max(progress, 0), 1)
+        Circle()
+            // The gap opens at 12 o'clock and grows clockwise as time runs out.
+            .trim(from: 1 - span, to: 1)
+            .stroke(
+                MahjongCountdownTint.color(progress: span).color,
+                style: StrokeStyle(lineWidth: 3, lineCap: .round)
+            )
+            .rotationEffect(.degrees(-90))
+            .padding(1)
+    }
+}
+
 private struct MahjongTurnRing: View {
     let deadline: Date?
     let duration: TimeInterval
@@ -854,27 +919,10 @@ private struct MahjongTurnRing: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
             let remaining = deadline?.timeIntervalSince(context.date) ?? 0
-            let progress = min(max(remaining / duration, 0), 1)
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    ringColor(progress),
-                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-                .padding(1)
+            let progress = min(max(remaining / max(duration, 0.001), 0), 1)
+            MahjongCountdownArc(progress: progress)
         }
         .accessibilityHidden(true)
-    }
-
-    private func ringColor(_ progress: Double) -> Color {
-        if progress < 0.25 {
-            return MahjongVisualTheme.danger
-        }
-        if progress < 0.5 {
-            return MahjongVisualTheme.accent
-        }
-        return MahjongVisualTheme.success
     }
 }
 
@@ -1391,6 +1439,11 @@ private struct MahjongOverheadTile: View {
                 backMotif
                     .padding(5)
             }
+            if faceUp, missingSuit {
+                MahjongMissingSuitFold(leg: 14)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
         }
         .accessibilityHidden(true)
     }
@@ -1398,8 +1451,6 @@ private struct MahjongOverheadTile: View {
     private var faceFill: LinearGradient {
         let colors: [Color] = if !faceUp {
             [Color(red: 0.10, green: 0.40, blue: 0.26), Color(red: 0.04, green: 0.22, blue: 0.14)]
-        } else if missingSuit {
-            [Color(red: 1.0, green: 0.84, blue: 0.84), Color(red: 0.96, green: 0.70, blue: 0.72)]
         } else {
             [Color(red: 0.99, green: 0.98, blue: 0.94), Color(red: 0.93, green: 0.88, blue: 0.78)]
         }

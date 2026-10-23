@@ -426,6 +426,7 @@ final class MahjongGame {
     private var multiplierTimerTask: Task<Void, Never>?
     private var multiplierAIChoiceTasks: [Int: Task<Void, Never>] = [:]
     private var multiplierCompletionTask: Task<Void, Never>?
+    private var missingSuitTimerTask: Task<Void, Never>?
 
     var humanCount: Int {
         humanSeats.count
@@ -527,11 +528,14 @@ final class MahjongGame {
             setRoundStartingBalances(balances)
         }
         stopTurnTimer()
+        stopMissingSuitTimer()
         stopMultiplierTimer()
         clearPendingResponses()
         let tiles = Self.makeWall(for: ruleset).shuffled()
+        // A new match picks the dealer at random. nextRound has already chosen it.
         if !isStarted, phase == .idle {
-            dealer = 0; roundNumber = 1
+            dealer = Int.random(in: 0 ..< 4)
+            roundNumber = 1
         }
         roundStartedAt = nil
         roundEndedAt = nil
@@ -567,6 +571,7 @@ final class MahjongGame {
 
     func leaveTableLocally() {
         stopTurnTimer()
+        stopMissingSuitTimer()
         stopMultiplierTimer()
         clearPendingResponses()
         isStarted = false
@@ -720,6 +725,7 @@ final class MahjongGame {
             message = "等待\(seatName(waitingSeat))选择定缺花色"
             return
         }
+        stopMissingSuitTimer()
         prepareMultiplierChoices()
     }
 
@@ -829,12 +835,34 @@ final class MahjongGame {
         for seat in 0 ..< 4 where !humanSeats.contains(seat) {
             missingSuits[seat] = Self.leastFrequentSuit(in: hands[seat])
         }
-        if let first = currentResponderSeat {
-            message = "缺一门 · \(seatName(first)) 请选择定缺花色"
+        guard !pendingHumanSeats.isEmpty else {
+            prepareMultiplierChoices()
+            return
+        }
+        let seconds = Int(MahjongDoubling.duration)
+        message = "请选择定缺花色 · \(seconds) 秒后自动选择"
+        multiplierDeadline = Date().addingTimeInterval(MahjongDoubling.duration)
+        missingSuitTimerTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(MahjongDoubling.duration))
+            guard let self, !Task.isCancelled, self.phase == .choosingMissingSuit else { return }
+            for seat in self.pendingHumanSeats {
+                let suit = Self.leastFrequentSuit(in: self.hands[seat])
+                self.missingSuits[seat] = suit
+                self.announceVoice("action-missing-suit", for: seat)
+            }
+            self.pendingHumanSeats = []
+            self.missingSuitTimerTask = nil
+            self.prepareMultiplierChoices()
         }
     }
 
+    private func stopMissingSuitTimer() {
+        missingSuitTimerTask?.cancel()
+        missingSuitTimerTask = nil
+    }
+
     private func prepareMultiplierChoices() {
+        stopMissingSuitTimer()
         stopMultiplierTimer()
         phase = .choosingMultiplier
         turn = dealer
@@ -1230,7 +1258,7 @@ final class MahjongGame {
 
     private func runAutomatedTurns() async {
         while phase == .playing, !isHumanSeatTurn {
-            try? await Task.sleep(nanoseconds: 120_000_000)
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             guard phase == .playing, !isHumanSeatTurn else { return }
             if !needsDiscard {
                 drawTurnTile()

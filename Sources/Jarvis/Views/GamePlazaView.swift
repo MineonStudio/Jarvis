@@ -1883,6 +1883,30 @@ private struct MahjongTileBackView: View {
     }
 }
 
+/// Red corner on a 缺一门 tile. The face stays cream so the suit marks stay readable.
+struct MahjongMissingSuitFold: View {
+    var leg: CGFloat = 16
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 0))
+                path.addLine(to: CGPoint(x: leg, y: 0))
+                path.addLine(to: CGPoint(x: leg, y: leg))
+                path.closeSubpath()
+            }
+            .fill(Color(red: 0.78, green: 0.18, blue: 0.24))
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 0))
+                path.addLine(to: CGPoint(x: leg, y: leg))
+            }
+            .stroke(Color(red: 0.42, green: 0.07, blue: 0.09), lineWidth: max(1, leg * 0.06))
+        }
+        .frame(width: leg, height: leg)
+        .accessibilityHidden(true)
+    }
+}
+
 struct MahjongTileView: View {
     let tile: MahjongTile
     var isSelected = false
@@ -1895,28 +1919,32 @@ struct MahjongTileView: View {
 
     var body: some View {
         let palette = MahjongTablePalette(scheme: colorScheme)
+        let cornerRadius: CGFloat = compact ? 3 : 9
         ZStack {
-            RoundedRectangle(cornerRadius: compact ? 3 : 9, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(palette.tileSide)
                 .offset(x: compact ? 1 : 3 * scale, y: compact ? -1.2 : -4 * scale)
-            RoundedRectangle(cornerRadius: compact ? 3 : 9, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(LinearGradient(colors: [Color(red: 0.88, green: 0.74, blue: 0.48), Color(red: 0.67, green: 0.50, blue: 0.28)], startPoint: .top, endPoint: .bottom))
                 .offset(x: compact ? 0.5 : 1.5 * scale, y: compact ? -0.6 : -2 * scale)
-            RoundedRectangle(cornerRadius: compact ? 3 : 9, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: isMissingSuit
-                            ? [Color(red: 1.0, green: 0.82, blue: 0.82), Color(red: 0.97, green: 0.69, blue: 0.70)]
-                            : [Color(red: 1.0, green: 1.0, blue: 0.98), Color(red: 0.97, green: 0.96, blue: 0.91)],
+                        colors: [Color(red: 1.0, green: 1.0, blue: 0.98), Color(red: 0.97, green: 0.96, blue: 0.91)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .shadow(color: .black.opacity(palette.tileShadowOpacity(compact: compact)), radius: compact ? 0.8 : 2.5, x: compact ? 0.5 : 1.5, y: compact ? -0.8 : -1.5)
-            RoundedRectangle(cornerRadius: compact ? 3 : 9, style: .continuous)
-                .strokeBorder(Color(red: 0.24, green: 0.21, blue: 0.19), lineWidth: compact ? 0.65 : 1.35 * scale)
             MahjongTileFace(tile: tile, compact: compact, rotation: faceRotation, scale: scale)
                 .padding(compact ? 1 : 0)
+            if isMissingSuit {
+                MahjongMissingSuitFold(leg: compact ? 9 : 16 * scale)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            }
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color(red: 0.24, green: 0.21, blue: 0.19), lineWidth: compact ? 0.65 : 1.35 * scale)
         }
         .frame(
             width: compact ? 26 : 48 * scale,

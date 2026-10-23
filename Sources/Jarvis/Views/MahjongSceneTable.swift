@@ -582,10 +582,13 @@ private final class MahjongTileTextures {
     }
 
     private static func faceView(_ tile: MahjongTile, missing: Bool) -> some View {
-        ZStack {
-            Color(red: 0.98, green: missing ? 0.74 : 0.95, blue: missing ? 0.74 : 0.89)
+        ZStack(alignment: .topTrailing) {
+            Color(red: 0.98, green: 0.95, blue: 0.89)
             MahjongTileFace(tile: tile, compact: false, fullness: 1.55)
                 .frame(width: 48, height: 68)
+            if missing {
+                MahjongMissingSuitFold()
+            }
         }
         .frame(width: 48, height: 68)
         .clipped()

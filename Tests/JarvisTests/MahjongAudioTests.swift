@@ -109,6 +109,24 @@ final class MahjongAudioTests: XCTestCase {
         XCTAssertNil(MahjongAudioGameState(game: game).deadline)
     }
 
+    func testMissingSuitCountdownTicksOnlyForTheLocalChooser() {
+        let game = MahjongGame()
+        var snapshot = game.makeLANSnapshot()
+        let deadline = Date().addingTimeInterval(10)
+        snapshot.isStarted = true
+        snapshot.phase = .choosingMissingSuit
+        snapshot.missingSuits = [nil, .dots, .bamboo, .characters]
+        snapshot.multiplierDeadline = deadline
+        snapshot.pendingHumanSeats = [0]
+        game.configureLAN(humanSeats: [0], localSeat: 0, authority: false)
+        game.applyLANSnapshot(snapshot)
+        XCTAssertEqual(MahjongAudioGameState(game: game).deadline, deadline)
+
+        snapshot.missingSuits[0] = .characters
+        game.applyLANSnapshot(snapshot)
+        XCTAssertNil(MahjongAudioGameState(game: game).deadline)
+    }
+
     func testDealingAndDrawingAreDistinctAcrossLANStateUpdates() {
         let game = MahjongGame()
         var snapshot = game.makeLANSnapshot()

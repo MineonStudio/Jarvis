@@ -79,26 +79,77 @@ final class MahjongSceneHandInteractionTests: XCTestCase {
         }
         render(0)
         interaction.updatePointer(CGPoint(x: 0, y: CGFloat(tile.rest.z)))
-        render(0.01)
-        render(0.01 + 1.0 / 60)
-        XCTAssertLessThan(
-            tile.node.presentation.simdPosition.z,
-            tile.rest.z - 0.005,
-            "The first frame after entry should already show upward motion"
-        )
-        render(0.11)
-        let midpoint = tile.node.presentation.simdPosition.z
-        XCTAssertLessThan(midpoint, tile.rest.z - 0.01)
-        XCTAssertGreaterThan(midpoint, tile.rest.z - 0.265)
-        interaction.updatePointer(nil)
-        XCTAssertEqual(tile.node.simdPosition.z, midpoint, accuracy: 0.001)
-        render(0.12)
+        render(0.001)
+        render(1.0 / 60)
+        let firstFrame = tile.node.presentation.simdPosition.z
+        XCTAssertLessThan(firstFrame, tile.rest.z - 0.02, "The first frame after entry should already show upward motion")
+        XCTAssertGreaterThan(firstFrame, tile.rest.z - 0.2)
         render(0.22)
+        let raised = tile.node.presentation.simdPosition.z
+        XCTAssertEqual(raised, tile.rest.z - 0.275, accuracy: 0.02)
+        interaction.updatePointer(nil)
+        XCTAssertEqual(tile.node.simdPosition.z, raised, accuracy: 0.015)
+        render(0.221)
+        render(0.28)
         let returning = tile.node.presentation.simdPosition.z
-        XCTAssertGreaterThan(returning, midpoint)
+        XCTAssertGreaterThan(returning, raised)
         XCTAssertLessThan(returning, tile.rest.z)
-        render(0.40)
-        XCTAssertEqual(tile.node.presentation.simdPosition.z, tile.rest.z, accuracy: 0.001)
+        render(0.46)
+        XCTAssertEqual(tile.node.presentation.simdPosition.z, tile.rest.z, accuracy: 0.02)
+        XCTAssertFalse(interaction.isAnimating)
+    }
+
+    @MainActor
+    func testQuickExitStillCompletesTheLift() {
+        let interaction = makeHand()
+        let tile = interaction.tiles[0]
+        let scene = SCNScene()
+        scene.rootNode.addChildNode(tile.node)
+        let renderer = SCNRenderer(device: nil, options: nil)
+        renderer.scene = scene
+        renderer.isPlaying = true
+        func render(_ time: TimeInterval) {
+            _ = renderer.snapshot(atTime: time, with: CGSize(width: 32, height: 32), antialiasingMode: .none)
+        }
+        render(0)
+        interaction.updatePointer(CGPoint(x: 0, y: CGFloat(tile.rest.z)))
+        interaction.updatePointer(nil)
+        render(0.001)
+        render(0.05)
+        XCTAssertLessThan(tile.node.presentation.simdPosition.z, tile.rest.z - 0.08)
+        render(0.46)
+        XCTAssertEqual(tile.node.presentation.simdPosition.z, tile.rest.z, accuracy: 0.02)
+        XCTAssertFalse(interaction.isAnimating)
+    }
+
+    @MainActor
+    func testFastSweepLiftsEveryCrossedTile() {
+        let interaction = makeRow(count: 6)
+        let scene = SCNScene()
+        for tile in interaction.tiles {
+            scene.rootNode.addChildNode(tile.node)
+        }
+        let renderer = SCNRenderer(device: nil, options: nil)
+        renderer.scene = scene
+        renderer.isPlaying = true
+        func render(_ time: TimeInterval) {
+            _ = renderer.snapshot(atTime: time, with: CGSize(width: 32, height: 32), antialiasingMode: .none)
+        }
+        let depth = CGFloat(interaction.tiles[0].rest.z)
+        render(0)
+        interaction.updatePointer(CGPoint(x: CGFloat(interaction.tiles[0].rest.x) - 1, y: depth))
+        interaction.updatePointer(CGPoint(x: CGFloat(interaction.tiles[5].rest.x) + 1, y: depth))
+        XCTAssertNil(interaction.hoveredIndex)
+        XCTAssertTrue(interaction.tiles.allSatisfy { $0.node.action(forKey: "hand.hover") != nil })
+        render(0.001)
+        render(0.05)
+        for tile in interaction.tiles {
+            XCTAssertLessThan(tile.node.presentation.simdPosition.z, tile.rest.z - 0.08)
+        }
+        render(0.46)
+        for tile in interaction.tiles {
+            XCTAssertEqual(tile.node.presentation.simdPosition.z, tile.rest.z, accuracy: 0.02)
+        }
         XCTAssertFalse(interaction.isAnimating)
     }
 
@@ -143,6 +194,18 @@ final class MahjongSceneHandInteractionTests: XCTestCase {
         interaction.updatePointer(nil)
         XCTAssertEqual(tile.node.simdPosition, tile.rest)
         XCTAssertFalse(interaction.isAnimating)
+    }
+
+    @MainActor
+    private func makeRow(count: Int, reduceMotion: Bool = false) -> MahjongSceneHandInteraction {
+        let interaction = MahjongSceneHandInteraction(reduceMotion: reduceMotion)
+        let offsets = MahjongHandLayout.centeredOffsets(count: count, tileWidth: MahjongHandLayout.tileWidth, gap: MahjongHandLayout.tileGap)
+        interaction.replaceTiles(offsets.enumerated().map { index, across in
+            let node = SCNNode(geometry: SCNBox(width: 0.78, height: 1.10, length: 0.53, chamferRadius: 0.1))
+            node.simdPosition = SIMD3(across, 0.285, MahjongHandLayout.localRowDepth)
+            return MahjongSceneHandInteraction.Tile(node: node, value: .honor(index), drawn: false)
+        })
+        return interaction
     }
 
     @MainActor

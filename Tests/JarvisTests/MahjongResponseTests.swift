@@ -67,4 +67,77 @@ final class MahjongResponseTests: XCTestCase {
         XCTAssertEqual(game.melds[0].first?.kind, .sequence)
         XCTAssertTrue(game.discards[3].isEmpty)
     }
+
+    func testNewMatchDealerIsNotAlwaysTheLocalSeat() {
+        let game = MahjongGame()
+        var seen = Set<Int>()
+        for _ in 0 ..< 40 {
+            game.leaveTable()
+            game.start()
+            seen.insert(game.dealer)
+            XCTAssertEqual(game.roundNumber, 1)
+            XCTAssertEqual(game.turn, game.dealer)
+        }
+        XCTAssertGreaterThan(seen.count, 1)
+    }
+
+    func testNextRoundKeepsWinningDealerAndRotatesOtherwise() {
+        let game = MahjongGame()
+        game.start()
+        var snapshot = game.makeLANSnapshot()
+        snapshot.phase = .roundEnded
+        snapshot.isStarted = true
+        snapshot.dealer = 2
+        snapshot.winner = 2
+        snapshot.roundNumber = 1
+        game.configureLAN(humanSeats: [0], localSeat: 0, authority: false)
+        game.applyLANSnapshot(snapshot)
+        game.configureLAN(humanSeats: [0], localSeat: 0, authority: true)
+
+        game.nextRound()
+        XCTAssertEqual(game.dealer, 2)
+        XCTAssertEqual(game.roundNumber, 2)
+
+        snapshot = game.makeLANSnapshot()
+        snapshot.phase = .roundEnded
+        snapshot.isStarted = true
+        snapshot.dealer = 2
+        snapshot.winner = 0
+        snapshot.roundNumber = 2
+        game.configureLAN(humanSeats: [0], localSeat: 0, authority: false)
+        game.applyLANSnapshot(snapshot)
+        game.configureLAN(humanSeats: [0], localSeat: 0, authority: true)
+
+        game.nextRound()
+        XCTAssertEqual(game.dealer, 3)
+        XCTAssertEqual(game.roundNumber, 3)
+    }
+
+    func testMissingSuitCountdownMatchesDoubling() async throws {
+        let game = MahjongGame()
+        game.ruleset = .sichuan
+        game.start()
+        game.markReady()
+
+        let timeout = Date().addingTimeInterval(8)
+        while game.phase != .choosingMissingSuit, Date() < timeout {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+
+        XCTAssertEqual(game.phase, .choosingMissingSuit)
+        let remaining = try XCTUnwrap(game.multiplierDeadline).timeIntervalSinceNow
+        XCTAssertGreaterThan(remaining, 8)
+        XCTAssertLessThanOrEqual(remaining, MahjongDoubling.duration)
+        XCTAssertNil(game.missingSuits[0])
+        XCTAssertTrue(game.missingSuits.dropFirst().allSatisfy { $0 != nil })
+        XCTAssertTrue(game.message.contains("\(Int(MahjongDoubling.duration))"))
+
+        game.chooseMissingSuit(.dots)
+        XCTAssertEqual(game.missingSuits[0], .dots)
+        XCTAssertEqual(game.phase, .choosingMultiplier)
+        let multiplierRemaining = try XCTUnwrap(game.multiplierDeadline).timeIntervalSinceNow
+        XCTAssertGreaterThan(multiplierRemaining, 8)
+        XCTAssertLessThanOrEqual(multiplierRemaining, MahjongDoubling.duration)
+        game.leaveTable()
+    }
 }

@@ -24,6 +24,11 @@ struct MahjongAudioGameState: Equatable {
         let isResponding = phase == .responding && game.currentResponderSeat == localSeat
         if phase == .choosingMultiplier, game.pendingMultiplierSeats.contains(localSeat) {
             deadline = game.multiplierDeadline
+        } else if phase == .choosingMissingSuit,
+                  game.missingSuits.indices.contains(localSeat),
+                  game.missingSuits[localSeat] == nil
+        {
+            deadline = game.multiplierDeadline
         } else if isResponding {
             deadline = game.responseCountdownDeadlines[localSeat]
         } else if canDiscard {
