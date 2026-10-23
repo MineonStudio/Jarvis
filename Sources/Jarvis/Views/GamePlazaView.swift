@@ -463,6 +463,16 @@ struct MahjongArchiveAvatar: View {
         case .bear: [Color(red: 0.42, green: 0.25, blue: 0.11), Color(red: 0.76, green: 0.54, blue: 0.26)]
         case .tiger: [Color(red: 0.71, green: 0.20, blue: 0.10), Color(red: 0.96, green: 0.52, blue: 0.17)]
         case .owl: [Color(red: 0.08, green: 0.17, blue: 0.40), Color(red: 0.35, green: 0.43, blue: 0.80)]
+        case .dog: [Color(red: 0.95, green: 0.62, blue: 0.35), Color(red: 0.99, green: 0.80, blue: 0.55)]
+        case .penguin: [Color(red: 0.35, green: 0.62, blue: 0.86), Color(red: 0.62, green: 0.82, blue: 0.95)]
+        case .hamster: [Color(red: 0.93, green: 0.72, blue: 0.22), Color(red: 0.98, green: 0.86, blue: 0.42)]
+        case .deer: [Color(red: 0.36, green: 0.55, blue: 0.40), Color(red: 0.62, green: 0.76, blue: 0.52)]
+        case .koala: [Color(red: 0.42, green: 0.52, blue: 0.64), Color(red: 0.68, green: 0.76, blue: 0.84)]
+        case .frog: [Color(red: 0.22, green: 0.58, blue: 0.28), Color(red: 0.48, green: 0.78, blue: 0.36)]
+        case .lion: [Color(red: 0.86, green: 0.48, blue: 0.12), Color(red: 0.96, green: 0.72, blue: 0.28)]
+        case .lamb: [Color(red: 0.58, green: 0.46, blue: 0.76), Color(red: 0.80, green: 0.70, blue: 0.90)]
+        case .monkey: [Color(red: 0.90, green: 0.62, blue: 0.46), Color(red: 0.98, green: 0.78, blue: 0.62)]
+        case .pig: [Color(red: 0.90, green: 0.40, blue: 0.52), Color(red: 0.98, green: 0.68, blue: 0.74)]
         }
     }
 
@@ -488,7 +498,8 @@ struct MahjongArchiveAvatar: View {
         case .hulk: "hand.raised.fingers.spread.fill"
         case .widow: "eye.fill"
         case .hawkeye: "scope"
-        case .panda, .fox, .cat, .rabbit, .bear, .tiger, .owl: "person.fill"
+        case .panda, .fox, .cat, .rabbit, .bear, .tiger, .owl, .dog, .penguin, .hamster, .deer, .koala, .frog,
+             .lion, .lamb, .monkey, .pig: "person.fill"
         }
     }
 

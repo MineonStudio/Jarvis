@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 private typealias MahjongSettingsPalette = MahjongVisualTheme
 
@@ -29,8 +28,6 @@ struct MahjongSettingsView: View {
     @State private var recordTab: RecordTab = .mine
     @State private var selectedAIProfileID: String?
     @State private var nicknameDraft = ""
-    @State private var showsAvatarImporter = false
-    @State private var avatarImportError: String?
     @State private var displayedMonth = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
 
     var body: some View {
@@ -42,15 +39,6 @@ struct MahjongSettingsView: View {
         .environment(\.colorScheme, .dark)
         .onAppear { nicknameDraft = archive.player.nickname }
         .onExitCommand(perform: onBack)
-        .fileImporter(isPresented: $showsAvatarImporter, allowedContentTypes: [.image]) { result in
-            switch result {
-            case let .success(url):
-                do { try archive.updatePlayerAvatar(from: url); avatarImportError = nil }
-                catch { avatarImportError = "头像导入失败：\(error.localizedDescription)" }
-            case let .failure(error):
-                avatarImportError = "头像导入失败：\(error.localizedDescription)"
-            }
-        }
     }
 
     private var detailPane: some View {
@@ -97,14 +85,9 @@ struct MahjongSettingsView: View {
     private var profileContent: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(alignment: .center, spacing: 20) {
-                VStack(spacing: 12) {
-                    MahjongArchiveAvatar(profile: archive.player, size: 86)
-                        .padding(6)
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(MahjongSettingsPalette.accent.opacity(0.8), lineWidth: 2))
-                    Button("上传头像") { showsAvatarImporter = true }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(MahjongSettingsPalette.accent)
-                }
+                MahjongArchiveAvatar(profile: archive.player, size: 86)
+                    .padding(6)
+                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(MahjongSettingsPalette.accent.opacity(0.8), lineWidth: 2))
 
                 VStack(alignment: .leading, spacing: 14) {
                     caption("玩家昵称")
@@ -127,9 +110,6 @@ struct MahjongSettingsView: View {
                 .frame(maxWidth: 430)
             }
 
-            if let avatarImportError {
-                Text(avatarImportError).foregroundStyle(.red)
-            }
             caption("选择头像")
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100, maximum: 125), spacing: 12)], alignment: .leading, spacing: 12) {
                 ForEach(MahjongArchiveAvatarStyle.playerChoices, id: \.self) { style in

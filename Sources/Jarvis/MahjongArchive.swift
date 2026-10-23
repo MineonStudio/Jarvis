@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import Observation
 
@@ -25,8 +24,12 @@ enum MahjongVoiceGender: String, Codable, CaseIterable, Identifiable {
 enum MahjongArchiveAvatarStyle: String, Codable, CaseIterable {
     case player, iron, spider, captain, thor, hulk, widow, hawkeye
     case panda, fox, cat, rabbit, bear, tiger, owl
+    case dog, penguin, hamster, deer, koala, frog, lion, lamb, monkey, pig
 
-    static let playerChoices: [Self] = [.player, .panda, .fox, .cat, .rabbit, .bear, .tiger, .owl]
+    static let playerChoices: [Self] = [
+        .player, .panda, .fox, .cat, .rabbit, .bear, .tiger, .owl,
+        .dog, .penguin, .hamster, .deer, .koala, .frog, .lion, .lamb, .monkey, .pig
+    ]
 
     var displayName: String {
         switch self {
@@ -45,6 +48,16 @@ enum MahjongArchiveAvatarStyle: String, Codable, CaseIterable {
         case .bear: "小熊"
         case .tiger: "老虎"
         case .owl: "猫头鹰"
+        case .dog: "柴犬"
+        case .penguin: "企鹅"
+        case .hamster: "仓鼠"
+        case .deer: "小鹿"
+        case .koala: "考拉"
+        case .frog: "青蛙"
+        case .lion: "小狮"
+        case .lamb: "小羊"
+        case .monkey: "猴子"
+        case .pig: "小猪"
         }
     }
 
@@ -58,6 +71,16 @@ enum MahjongArchiveAvatarStyle: String, Codable, CaseIterable {
         case .bear: "bear"
         case .tiger: "tiger"
         case .owl: "owl"
+        case .dog: "dog"
+        case .penguin: "penguin"
+        case .hamster: "hamster"
+        case .deer: "deer"
+        case .koala: "koala"
+        case .frog: "frog"
+        case .lion: "lion"
+        case .lamb: "lamb"
+        case .monkey: "monkey"
+        case .pig: "pig"
         default: nil
         }
     }
@@ -228,6 +251,7 @@ final class MahjongArchiveStore {
         if !MahjongArchiveAvatarStyle.playerChoices.contains(player.avatarStyle) {
             player.avatarStyle = .player
         }
+        player.customAvatarFilename = nil
         // Older settlements could leave accounts in debt. Keep saved balances
         // consistent with the amount a player can actually pay in a round.
         player.balance = max(0, player.balance)
@@ -388,61 +412,6 @@ final class MahjongArchiveStore {
     func updateAIVoiceGender(profileID: String, voiceGender: MahjongVoiceGender) {
         guard let index = aiProfiles.firstIndex(where: { $0.id == profileID }) else { return }
         aiProfiles[index].voiceGender = voiceGender
-        save()
-    }
-
-    func updatePlayerAvatar(from sourceURL: URL) throws {
-        let hasScopedAccess = sourceURL.startAccessingSecurityScopedResource()
-        defer {
-            if hasScopedAccess {
-                sourceURL.stopAccessingSecurityScopedResource()
-            }
-        }
-        guard let image = NSImage(contentsOf: sourceURL) else {
-            throw CocoaError(.fileReadCorruptFile)
-        }
-
-        let side = min(image.size.width, image.size.height)
-        guard side > 0,
-              let bitmap = NSBitmapImageRep(
-                  bitmapDataPlanes: nil,
-                  pixelsWide: 512,
-                  pixelsHigh: 512,
-                  bitsPerSample: 8,
-                  samplesPerPixel: 4,
-                  hasAlpha: true,
-                  isPlanar: false,
-                  colorSpaceName: .deviceRGB,
-                  bitmapFormat: [],
-                  bytesPerRow: 0,
-                  bitsPerPixel: 0
-              ),
-              let context = NSGraphicsContext(bitmapImageRep: bitmap)
-        else {
-            throw CocoaError(.fileReadUnknown)
-        }
-        bitmap.size = NSSize(width: 512, height: 512)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-        context.imageInterpolation = .high
-        image.draw(
-            in: NSRect(x: 0, y: 0, width: 512, height: 512),
-            from: NSRect(x: (image.size.width - side) / 2, y: (image.size.height - side) / 2, width: side, height: side),
-            operation: .copy,
-            fraction: 1
-        )
-        context.flushGraphics()
-        NSGraphicsContext.restoreGraphicsState()
-        guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            throw CocoaError(.fileWriteUnknown)
-        }
-
-        let fileName = "player-avatar.png"
-        let directory = Self.avatarDirectoryURL
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let destination = directory.appendingPathComponent(fileName)
-        try pngData.write(to: destination, options: .atomic)
-        player.customAvatarFilename = fileName
         save()
     }
 
