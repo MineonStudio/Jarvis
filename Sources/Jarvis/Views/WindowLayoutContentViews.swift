@@ -55,7 +55,6 @@ struct WindowLayoutView: View {
             content: {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
-                        introductionCard
                         layoutGrid
                     }
                     .frame(maxWidth: 980, alignment: .leading)
@@ -64,28 +63,6 @@ struct WindowLayoutView: View {
                 }
             }
         )
-    }
-
-    private var introductionCard: some View {
-        JarvisCard {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "macwindow.on.rectangle")
-                    .font(.system(size: 21, weight: .medium))
-                    .foregroundStyle(Color.jarvisAccent)
-                    .frame(width: 36, height: 36)
-                    .jarvisIconGlass(in: Circle())
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("窗口布局快捷键参考")
-                        .font(JarvisTypography.bodyEmphasis)
-                    Text("这些卡片仅展示快捷键，不会直接调整窗口。请从菜单栏执行窗口布局。")
-                        .font(JarvisTypography.secondary)
-                        .foregroundStyle(Color.jarvisTextSecondary)
-                        .lineSpacing(2)
-                }
-                Spacer(minLength: 0)
-            }
-        }
     }
 
     private var layoutGrid: some View {
@@ -129,7 +106,6 @@ private struct WindowLayoutDisplayCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .jarvisContentSurface(cornerRadius: 13)
         .accessibilityElement(children: .combine)
-        .accessibilityHint("仅用于查看快捷键，请从菜单栏执行窗口布局")
     }
 }
 

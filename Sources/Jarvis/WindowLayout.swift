@@ -371,6 +371,16 @@ final class WindowLayoutController {
             for: layout,
             in: WindowLayoutScreenArea.visibleFrame(for: geometry.screen)
         )
+        if target.application.processIdentifier == ProcessInfo.processInfo.processIdentifier,
+           let mainWindow = NSApp.windows.first(where: {
+               $0.identifier?.rawValue == JarvisAppIdentity.mainWindowSceneID
+                   || $0.frameAutosaveName == JarvisMainWindowController.frameAutosaveName
+           }),
+           JarvisMainWindowController.applyWindowLayoutFrame(targetFrame, to: mainWindow)
+        {
+            statusHandler(JarvisFeedbackCopy.windowAdjusted(layout.shortTitle))
+            return
+        }
         guard setFrame(targetFrame, on: target.window, using: geometry.screen) else {
             statusHandler(JarvisFeedbackCopy.windowNotResizable)
             return

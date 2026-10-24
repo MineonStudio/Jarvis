@@ -1,111 +1,5 @@
 import AppKit
-import ObjectiveC
 import SwiftUI
-
-@MainActor
-enum JarvisWindowAppearance {
-    static func configure(for window: NSWindow) {
-        window.titlebarSeparatorStyle = .none
-        window.backgroundColor = .textBackgroundColor
-        window.sharingType = .readOnly
-    }
-
-    static func configureTransparentTitlebar(for window: NSWindow) {
-        configure(for: window)
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.styleMask.insert(.fullSizeContentView)
-    }
-}
-
-enum JarvisWindowLayoutMetrics {
-    /// A little extra room absorbs the split-view divider and fractional
-    /// layout rounding, so the last card and its hover controls never touch
-    /// the window edge.
-    static let contentSafetyMargin: CGFloat = 8
-    static let splitViewDividerAllowance: CGFloat = 1
-    static let clipboardPanelHorizontalPadding: CGFloat = 40
-    static let clipboardPanelTopPadding: CGFloat = 32
-    static let clipboardPanelBottomPadding: CGFloat = 20
-    static let clipboardPanelFooterHeight: CGFloat = 12
-    static let clipboardPanelDividerHeight: CGFloat = 5
-    static let clipboardMainCompactFilterBarHeight: CGFloat =
-        HistoryGridMetrics.topControlHeight * 3
-            + HistoryGridMetrics.clipboardFilterToGridSpacing * 2
-    static let clipboardPanelCompactFilterBarHeight: CGFloat =
-        HistoryGridMetrics.topControlHeight * 2
-            + HistoryGridMetrics.clipboardFilterToGridSpacing
-    static let contentBodyTopSpacing: CGFloat = JarvisMetrics.shellContentSpacing
-    static let emptyStateMinimumHeight: CGFloat = 190
-
-    private static var clipboardMinimumRowHeight: CGFloat {
-        HistoryGridMetrics.clipboardCardHeight
-            + HistoryGridMetrics.clipboardContentSpacing
-            + HistoryGridMetrics.clipboardMetadataHeight
-    }
-
-    private static var clipboardMinimumContentHeight: CGFloat {
-        max(clipboardMinimumRowHeight, emptyStateMinimumHeight)
-    }
-
-    static var mainWindowMinimumWidth: CGFloat {
-        let clipboardDetailWidth = max(
-            HistoryGridMetrics.clipboardCardWidth,
-            HistoryGridMetrics.clipboardSearchFieldWidth
-        ) + (JarvisMetrics.pageInset * 2)
-        let windowLayoutDetailWidth =
-            WindowLayoutDisplayMetrics.minimumGridWidth + (JarvisMetrics.pageInset * 2)
-        let detailWidth = max(
-            clipboardDetailWidth,
-            windowLayoutDetailWidth,
-            JarvisWebPlatformLayoutMetrics.minimumTopBarWidth
-        )
-        return ceil(
-            JarvisMetrics.sidebarMinimumWidth
-                + splitViewDividerAllowance
-                + (JarvisMetrics.shellHorizontalPadding * 2)
-                + detailWidth
-                + contentSafetyMargin
-        )
-    }
-
-    static var mainWindowMinimumHeight: CGFloat {
-        let clipboardPageHeight = clipboardMainCompactFilterBarHeight
-            + HistoryGridMetrics.imageSpacing
-            + clipboardMinimumContentHeight
-            + (JarvisMetrics.pageInset * 2)
-        return ceil(
-            contentBodyTopSpacing
-                + (JarvisMetrics.shellVerticalPadding * 2)
-                + clipboardPageHeight
-                + contentSafetyMargin
-        )
-    }
-
-    static var clipboardPanelMinimumWidth: CGFloat {
-        let contentWidth = max(
-            HistoryGridMetrics.clipboardCardWidth,
-            HistoryGridMetrics.clipboardSearchFieldWidth
-        )
-        return ceil(contentWidth + clipboardPanelHorizontalPadding + contentSafetyMargin)
-    }
-
-    static var clipboardPanelMinimumHeight: CGFloat {
-        let bodyHeight = clipboardPanelCompactFilterBarHeight
-            + HistoryGridMetrics.imageSpacing
-            + clipboardPanelDividerHeight
-            + HistoryGridMetrics.imageSpacing
-            + clipboardMinimumContentHeight
-            + HistoryGridMetrics.imageSpacing
-            + clipboardPanelFooterHeight
-        return ceil(
-            clipboardPanelTopPadding
-                + bodyHeight
-                + clipboardPanelBottomPadding
-                + contentSafetyMargin
-        )
-    }
-}
 
 /// Owns the main window's AppKit lifecycle independently from SwiftUI's view
 /// redraws. The window frame is restored once when the NSWindow is attached and
@@ -204,6 +98,7 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
     private static let launchFrameSaveDelay: Duration = .seconds(2)
 
     private let frameStore = JarvisWindowFrameStore()
+    private weak static var activeController: JarvisMainWindowController?
     private weak var window: NSWindow?
     private var frameObservers: [NSObjectProtocol] = []
     private var pendingFrameSave: Task<Void, Never>?
@@ -216,12 +111,14 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
     private var isCorrectingLaunchFrame = false
     private var isTrackingWindowMove = false
     private var didRestoreAnimation = false
+    private var presentationMismatchStartedAt: TimeInterval?
 
     func attach(to window: NSWindow?) {
         guard let window, self.window !== window else { return }
 
         detach()
         self.window = window
+        Self.activeController = self
         window.minSize = NSSize(
             width: Self.minimumWindowSize.width,
             height: Self.minimumWindowSize.height
@@ -232,6 +129,27 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
         if NSApp.isActive {
             window.makeKeyAndOrderFront(nil)
         }
+    }
+
+    static func applyWindowLayoutFrame(_ frame: NSRect, to window: NSWindow) -> Bool {
+        guard let controller = activeController, controller.window === window else { return false }
+        controller.applyWindowLayoutFrame(frame)
+        return true
+    }
+
+    private func applyWindowLayoutFrame(_ frame: NSRect) {
+        guard let window else { return }
+        pinnedLaunchFrame = frame
+        JarvisLaunchFrameBlock.frame = frame
+        // A layout is an explicit user resize. Relax the launch-time minimum so
+        // half-screen and quadrant layouts can fit, while retaining the chosen
+        // layout as the minimum until the next layout is applied.
+        window.minSize = frame.size
+        window.contentMinSize = .zero
+        Self.applyLaunchFrame(frame, to: window)
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow) + 1))
+        window.orderFrontRegardless()
+        saveFrameImmediately()
     }
 
     private func detach() {
@@ -305,7 +223,9 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
         JarvisLaunchFrameBlock.window = nil
         JarvisLaunchFrameBlock.frame = nil
     }
+}
 
+extension JarvisMainWindowController {
     /// The model frame stays correct while the window server still slides the
     /// window across the screen. Hide that presentation for the life of the
     /// window: the slide is replayed when settings opens, long after launch.
@@ -409,6 +329,12 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
         if isTrackingWindowMove || window.inLiveResize || (NSEvent.pressedMouseButtons & 1) != 0 {
             return
         }
+        guard window.isOnActiveSpace else {
+            presentationMismatchStartedAt = nil
+            window.alphaValue = 1
+            window.ignoresMouseEvents = false
+            return
+        }
         guard window.windowNumber > 0 else { return }
         let info = CGWindowListCopyWindowInfo(
             [.optionIncludingWindow],
@@ -420,11 +346,32 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
               let height = bounds["Height"],
               width > 200,
               height > 200
-        else { return }
+        else {
+            presentationMismatchStartedAt = nil
+            return
+        }
         let model = window.frame
         let slid = abs(presentedX - model.origin.x) > 40
             || abs(width - model.width) > 40
             || abs(height - model.height) > 40
+        guard slid else {
+            presentationMismatchStartedAt = nil
+            if window.alphaValue <= 0.5 {
+                window.alphaValue = 1
+                window.ignoresMouseEvents = false
+            }
+            return
+        }
+
+        // Space transitions temporarily move the composited window even though
+        // its AppKit frame is unchanged. Only treat a persistent offset as the
+        // delayed launch-frame animation this monitor is meant to suppress.
+        let now = ProcessInfo.processInfo.systemUptime
+        guard let presentationMismatchStartedAt else {
+            self.presentationMismatchStartedAt = now
+            return
+        }
+        guard now - presentationMismatchStartedAt >= 0.75 else { return }
         guard slid == (window.alphaValue > 0.5) else { return }
         window.alphaValue = slid ? 0 : 1
         window.ignoresMouseEvents = slid
@@ -539,281 +486,6 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
 
     private func configureAppearance(for window: NSWindow) {
         JarvisWindowAppearance.configure(for: window)
-    }
-}
-
-private struct JarvisWindowFrameStore {
-    private static let defaultsKey = "Jarvis.MainWindow.frame"
-
-    func load() -> NSRect? {
-        if let data = UserDefaults.standard.data(forKey: Self.defaultsKey),
-           let frame = try? JSONDecoder().decode(JarvisStoredWindowFrame.self, from: data)
-        {
-            return frame.rect
-        }
-
-        // Migrate the string format used by the earlier window autosave fix.
-        if let legacyFrame = UserDefaults.standard.string(forKey: Self.defaultsKey) {
-            let rect = NSRectFromString(legacyFrame)
-            guard rect.width > 0, rect.height > 0 else { return nil }
-            save(rect)
-            return rect
-        }
-
-        return nil
-    }
-
-    func save(_ rect: NSRect) {
-        let frame = JarvisStoredWindowFrame(rect: rect)
-        guard let data = try? JSONEncoder().encode(frame) else { return }
-        UserDefaults.standard.set(data, forKey: Self.defaultsKey)
-    }
-}
-
-private struct JarvisStoredWindowFrame: Codable {
-    let x: Double
-    let y: Double
-    let width: Double
-    let height: Double
-
-    init(rect: NSRect) {
-        x = rect.origin.x
-        y = rect.origin.y
-        width = rect.width
-        height = rect.height
-    }
-
-    var rect: NSRect {
-        NSRect(x: x, y: y, width: width, height: height)
-    }
-}
-
-/// SwiftUI animates `setFrame` to the content minimum a few seconds after
-/// launch, and that animation also slides the window about a screen away.
-/// Replacing the frame before AppKit starts the animation keeps it put.
-/// `setContentSize` is included because the shrink keeps the top-left corner.
-private enum JarvisLaunchFrameBlock {
-    nonisolated(unsafe) weak static var window: NSWindow?
-    nonisolated(unsafe) static var frame: NSRect?
-    nonisolated(unsafe) static var isApplyingPinnedFrame = false
-    nonisolated(unsafe) static var isUserMoving = false
-
-    static let install: Void = {
-        exchange(
-            #selector(NSWindow.setFrame(_:display:animate:)),
-            #selector(NSWindow.jarvis_setFrame(_:display:animate:))
-        )
-        exchange(
-            #selector(NSWindow.setFrameOrigin(_:)),
-            #selector(NSWindow.jarvis_setFrameOrigin(_:))
-        )
-        exchange(
-            #selector(NSWindow.setContentSize(_:)),
-            #selector(NSWindow.jarvis_setContentSize(_:))
-        )
-        exchange(
-            NSSelectorFromString("_reallySetFrame:"),
-            #selector(NSWindow.jarvis_reallySetFrame(_:))
-        )
-        exchange(
-            NSSelectorFromString("_setFrame:"),
-            #selector(NSWindow.jarvis_setFrameIgnoringPublicAPI(_:))
-        )
-        exchange(
-            NSSelectorFromString("_setFrame:display:allowImplicitAnimation:stashSize:"),
-            #selector(NSWindow.jarvis_setFrameAllowingImplicitAnimation(_:display:allowImplicitAnimation:stashSize:))
-        )
-        exchange(
-            NSSelectorFromString("_setFrame:fromAdjustmentToScreen:animate:"),
-            #selector(NSWindow.jarvis_setFrameForScreenAdjustment(_:screen:animate:))
-        )
-        exchange(
-            #selector(NSWindow.setFrameTopLeftPoint(_:)),
-            #selector(NSWindow.jarvis_setFrameTopLeftPoint(_:))
-        )
-        exchange(
-            NSSelectorFromString("_setFrameCommon:display:stashSize:"),
-            #selector(NSWindow.jarvis_setFrameCommon(_:display:stashSize:))
-        )
-        exchange(
-            NSSelectorFromString("_setFrameCommon:display:fromServer:"),
-            #selector(NSWindow.jarvis_setFrameCommonFromServer(_:display:fromServer:))
-        )
-    }()
-
-    static func performPinned(_ body: () -> Void) {
-        let previous = isApplyingPinnedFrame
-        isApplyingPinnedFrame = true
-        defer { isApplyingPinnedFrame = previous }
-        body()
-    }
-
-    private static func exchange(_ original: Selector, _ replacement: Selector) {
-        guard let originalMethod = class_getInstanceMethod(NSWindow.self, original),
-              let replacementMethod = class_getInstanceMethod(NSWindow.self, replacement)
-        else { return }
-        method_exchangeImplementations(originalMethod, replacementMethod)
-    }
-}
-
-private extension NSWindow {
-    @objc func jarvis_setFrame(_ frame: NSRect, display: Bool, animate: Bool) {
-        if let pinned = jarvisPinnedFrame(insteadOf: frame) {
-            JarvisLaunchFrameBlock.performPinned {
-                jarvis_setFrame(pinned, display: display, animate: false)
-            }
-            return
-        }
-        jarvis_setFrame(frame, display: display, animate: animate)
-    }
-
-    @objc func jarvis_setFrameOrigin(_ point: NSPoint) {
-        let proposed = NSRect(origin: point, size: frame.size)
-        if let pinned = jarvisPinnedFrame(insteadOf: proposed) {
-            JarvisLaunchFrameBlock.performPinned {
-                jarvis_setFrameOrigin(pinned.origin)
-            }
-            return
-        }
-        jarvis_setFrameOrigin(point)
-    }
-
-    @objc func jarvis_setContentSize(_ size: NSSize) {
-        let current = frame
-        let proposedSize = frameRect(forContentRect: NSRect(origin: .zero, size: size)).size
-        let proposed = NSRect(
-            x: current.origin.x,
-            y: current.maxY - proposedSize.height,
-            width: proposedSize.width,
-            height: proposedSize.height
-        )
-        if let pinned = jarvisPinnedFrame(insteadOf: proposed) {
-            JarvisLaunchFrameBlock.performPinned {
-                jarvis_setFrame(pinned, display: true, animate: false)
-            }
-            return
-        }
-        jarvis_setContentSize(size)
-    }
-
-    @objc func jarvis_reallySetFrame(_ frame: NSRect) {
-        if let pinned = jarvisPinnedFrame(insteadOf: frame) {
-            JarvisLaunchFrameBlock.performPinned {
-                jarvis_reallySetFrame(pinned)
-            }
-            return
-        }
-        jarvis_reallySetFrame(frame)
-    }
-
-    /// `_setFrame:` is the private entry SwiftUI uses for implicit moves.
-    /// The Swift name has to differ from `jarvis_setFrame(_:display:animate:)`.
-    @objc(jarvis_setFrameIgnoringPublicAPI:)
-    func jarvis_setFrameIgnoringPublicAPI(_ frame: NSRect) {
-        if let pinned = jarvisPinnedFrame(insteadOf: frame) {
-            JarvisLaunchFrameBlock.performPinned {
-                jarvis_setFrameIgnoringPublicAPI(pinned)
-            }
-            return
-        }
-        jarvis_setFrameIgnoringPublicAPI(frame)
-    }
-
-    @objc(jarvis_setFrame:display:allowImplicitAnimation:stashSize:)
-    func jarvis_setFrameAllowingImplicitAnimation(
-        _ frame: NSRect,
-        display: Bool,
-        allowImplicitAnimation: Bool,
-        stashSize: Bool
-    ) {
-        if let pinned = jarvisPinnedFrame(insteadOf: frame) {
-            JarvisLaunchFrameBlock.performPinned {
-                jarvis_setFrameAllowingImplicitAnimation(
-                    pinned,
-                    display: display,
-                    allowImplicitAnimation: false,
-                    stashSize: stashSize
-                )
-            }
-            return
-        }
-        jarvis_setFrameAllowingImplicitAnimation(
-            frame,
-            display: display,
-            allowImplicitAnimation: allowImplicitAnimation,
-            stashSize: stashSize
-        )
-    }
-
-    @objc(jarvis_setFrame:fromAdjustmentToScreen:animate:)
-    func jarvis_setFrameForScreenAdjustment(_ frame: NSRect, screen: AnyObject?, animate: Bool) {
-        if let pinned = jarvisPinnedFrame(insteadOf: frame) {
-            JarvisLaunchFrameBlock.performPinned {
-                jarvis_setFrameForScreenAdjustment(pinned, screen: screen, animate: false)
-            }
-            return
-        }
-        jarvis_setFrameForScreenAdjustment(frame, screen: screen, animate: animate)
-    }
-
-    @objc(jarvis_setFrameCommon:display:stashSize:)
-    func jarvis_setFrameCommon(_ frame: NSRect, display: Bool, stashSize: Bool) {
-        if let pinned = jarvisPinnedFrame(insteadOf: frame) {
-            JarvisLaunchFrameBlock.performPinned {
-                jarvis_setFrameCommon(pinned, display: display, stashSize: stashSize)
-            }
-            return
-        }
-        jarvis_setFrameCommon(frame, display: display, stashSize: stashSize)
-    }
-
-    @objc(jarvis_setFrameCommon:display:fromServer:)
-    func jarvis_setFrameCommonFromServer(_ frame: NSRect, display: Bool, fromServer: Bool) {
-        if let pinned = jarvisPinnedFrame(insteadOf: frame) {
-            JarvisLaunchFrameBlock.performPinned {
-                jarvis_setFrameCommonFromServer(pinned, display: display, fromServer: fromServer)
-            }
-            return
-        }
-        jarvis_setFrameCommonFromServer(frame, display: display, fromServer: fromServer)
-    }
-
-    @objc func jarvis_setFrameTopLeftPoint(_ point: NSPoint) {
-        let userMoving = JarvisLaunchFrameBlock.isUserMoving
-            || NSApp.currentEvent?.type == .leftMouseDragged
-        guard let pinned = JarvisLaunchFrameBlock.frame,
-              JarvisLaunchFrameBlock.window === self,
-              !JarvisLaunchFrameBlock.isApplyingPinnedFrame,
-              !inLiveResize,
-              !userMoving
-        else {
-            jarvis_setFrameTopLeftPoint(point)
-            return
-        }
-        let pinnedTopLeft = NSPoint(x: pinned.origin.x, y: pinned.origin.y + pinned.height)
-        let moved = abs(point.x - pinnedTopLeft.x) > 1 || abs(point.y - pinnedTopLeft.y) > 1
-        guard moved else {
-            jarvis_setFrameTopLeftPoint(point)
-            return
-        }
-        JarvisLaunchFrameBlock.performPinned {
-            jarvis_setFrameTopLeftPoint(pinnedTopLeft)
-        }
-    }
-
-    func jarvisPinnedFrame(insteadOf proposed: NSRect) -> NSRect? {
-        guard !JarvisLaunchFrameBlock.isApplyingPinnedFrame else { return nil }
-        guard let guarded = JarvisLaunchFrameBlock.window, guarded === self,
-              let pinned = JarvisLaunchFrameBlock.frame
-        else { return nil }
-        let userMoving = JarvisLaunchFrameBlock.isUserMoving
-            || NSApp.currentEvent?.type == .leftMouseDragged
-        return JarvisMainWindowController.pinnedFrame(
-            insteadOf: proposed,
-            pinned: pinned,
-            isLiveResizing: inLiveResize,
-            isUserMoving: userMoving
-        )
     }
 }
 
