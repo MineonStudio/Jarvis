@@ -5,6 +5,9 @@ final class AIConnectionRequestTests: XCTestCase {
     override func setUp() {
         super.setUp()
         RecordingURLProtocol.capturedBody = nil
+        RecordingURLProtocol.capturedRequest = nil
+        RecordingURLProtocol.responseStatus = 200
+        RecordingURLProtocol.responseBody = #"{"choices":[{"message":{"role":"assistant","content":"OK"}}]}"#
     }
 
     override func tearDown() {
@@ -58,6 +61,62 @@ final class AIConnectionRequestTests: XCTestCase {
         XCTAssertNil(object["max_tokens"])
         XCTAssertNil(object["max_completion_tokens"])
         XCTAssertNil(object["thinking"])
+    }
+
+    func testOpenRouterConnectionUsesChatEndpointAndMinimalTextRequest() async throws {
+        URLProtocol.registerClass(RecordingURLProtocol.self)
+        defer { URLProtocol.unregisterClass(RecordingURLProtocol.self) }
+
+        try await OpenAICompatibleAPIClient().testConnection(configuration: AIAPIConfiguration(
+            endpoint: "https://openrouter.ai",
+            model: "anthropic/claude-test",
+            apiKey: " test-key "
+        ))
+
+        let request = try XCTUnwrap(RecordingURLProtocol.capturedRequest)
+        XCTAssertEqual(request.url?.absoluteString, "https://openrouter.ai/api/v1/chat/completions")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
+        let body = try XCTUnwrap(RecordingURLProtocol.capturedBody)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(object["model"] as? String, "anthropic/claude-test")
+        XCTAssertNil(object["response_format"], "Basic connectivity must work without JSON mode")
+        XCTAssertNil(object["temperature"], "Some reasoning models reject temperature")
+        XCTAssertEqual(object["max_tokens"] as? Int, 1024)
+    }
+
+    func testConnectionReportsOpenRouterCreditFailure() async throws {
+        URLProtocol.registerClass(RecordingURLProtocol.self)
+        defer { URLProtocol.unregisterClass(RecordingURLProtocol.self) }
+        RecordingURLProtocol.responseStatus = 402
+        RecordingURLProtocol.responseBody = #"{"error":{"message":"Insufficient credits"}}"#
+
+        do {
+            try await OpenAICompatibleAPIClient().testConnection(configuration: AIAPIConfiguration(
+                endpoint: "https://openrouter.ai/api/v1",
+                model: "test/model",
+                apiKey: "test-key"
+            ))
+            XCTFail("Expected the actual credit error")
+        } catch let error as AIAPIError {
+            XCTAssertEqual(error, .server("HTTP 402：Insufficient credits"))
+        }
+    }
+
+    func testConnectionReportsErrorEnvelopeEvenWithSuccessfulHTTPStatus() async throws {
+        URLProtocol.registerClass(RecordingURLProtocol.self)
+        defer { URLProtocol.unregisterClass(RecordingURLProtocol.self) }
+        RecordingURLProtocol.responseBody = #"{"error":{"message":"Provider unavailable"}}"#
+
+        do {
+            try await OpenAICompatibleAPIClient().testConnection(configuration: AIAPIConfiguration(
+                endpoint: "https://openrouter.ai/api/v1",
+                model: "test/model",
+                apiKey: "test-key"
+            ))
+            XCTFail("Expected the provider error")
+        } catch let error as AIAPIError {
+            XCTAssertEqual(error, .server("Provider unavailable"))
+        }
     }
 
     func testMahjongDecisionDisablesDeepSeekThinking() {
@@ -116,6 +175,9 @@ final class AIConnectionRequestTests: XCTestCase {
 
 private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var capturedBody: Data?
+    nonisolated(unsafe) static var capturedRequest: URLRequest?
+    nonisolated(unsafe) static var responseStatus = 200
+    nonisolated(unsafe) static var responseBody = ""
 
     override class func canInit(with _: URLRequest) -> Bool {
         true
@@ -126,6 +188,7 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     override func startLoading() {
+        Self.capturedRequest = request
         if let body = request.httpBody {
             Self.capturedBody = body
         } else if let stream = request.httpBodyStream {
@@ -146,13 +209,12 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
         }
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: 200,
+            statusCode: Self.responseStatus,
             httpVersion: nil,
             headerFields: ["Content-Type": "application/json"]
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        let envelope = #"{"choices":[{"message":{"role":"assistant","content":"{\"ok\":true}"}}]}"#
-        client?.urlProtocol(self, didLoad: Data(envelope.utf8))
+        client?.urlProtocol(self, didLoad: Data(Self.responseBody.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 

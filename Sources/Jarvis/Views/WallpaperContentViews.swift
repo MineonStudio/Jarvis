@@ -69,6 +69,12 @@ struct WallpaperView: View {
             },
             trailingToolbar: {
                 WallpaperLibraryToolbar(libraryMode: $libraryMode)
+                ToolbarItem(id: "wallpaper.system-settings", placement: .primaryAction) {
+                    Button("系统设置…", systemImage: "gearshape") {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
+                    }
+                    .help("在系统设置的“墙纸”中管理所有空间、显示器及锁屏相关选项。")
+                }
                 ToolbarSpacer(.fixed, placement: .primaryAction)
                 ToolbarItem(id: "wallpaper.tag-search", placement: .primaryAction) {
                     ClipboardSearchField(
@@ -675,7 +681,7 @@ struct WallpaperView: View {
 
     private func setWallpaper(_ item: WallpaperItem) {
         Task {
-            let message = await model.downloadAndApply(item, target: .both)
+            let message = await model.downloadAndApply(item, target: .desktop)
             app.showToast(message)
         }
     }
@@ -980,8 +986,8 @@ private struct WallpaperCard: View {
 
     private var setWallpaperAccessibilityLabel: String {
         isApplied
-            ? "当前壁纸"
-            : (isDownloading ? "正在设置壁纸" : "设为壁纸")
+            ? "已设置"
+            : (isDownloading ? "正在设置桌面壁纸" : "设为桌面壁纸")
     }
 
     @ViewBuilder
@@ -991,21 +997,23 @@ private struct WallpaperCard: View {
                 Image(systemName: "checkmark")
             }
             .buttonStyle(WallpaperCircleButtonStyle(tint: nil))
-            .disabled(isDownloading || isApplied)
+            .disabled(isDownloading)
             .accessibilityLabel(setWallpaperAccessibilityLabel)
+            .help("设置已连接显示器的桌面壁纸。锁屏及所有空间的行为由 macOS 系统设置管理。")
         } else {
             Button(action: onSet) {
                 Text(
                     isApplied
-                        ? "当前壁纸"
-                        : (isDownloading ? "正在设置…" : "设为壁纸")
+                        ? "已设置"
+                        : (isDownloading ? "正在设置…" : "设为桌面壁纸")
                 )
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             }
             .buttonStyle(JarvisCardActionPillButtonStyle())
-            .disabled(isDownloading || isApplied)
+            .disabled(isDownloading)
             .accessibilityLabel(setWallpaperAccessibilityLabel)
+            .help("设置已连接显示器的桌面壁纸。锁屏及所有空间的行为由 macOS 系统设置管理。")
         }
     }
 

@@ -112,6 +112,7 @@ final class AppModel {
     var aiAPIKeyMask = ""
     var aiSettingsLocked = false
     var aiConnectionTesting = false
+    var aiConnectionTestError: String?
     var meetingRecords: [MeetingRecord] = []
     var selectedMeetingID: UUID?
     var meetingProcessingState: MeetingProcessingState = .idle

@@ -34,6 +34,13 @@ enum JarvisDropdownMetrics {
     static let arrowSpacing: CGFloat = 5
     static let arrowPointSize: CGFloat = 10
 
+    static func menuOriginY(anchor: CGRect, panelHeight: CGFloat, visibleFrame: CGRect) -> CGFloat {
+        let below = anchor.minY - panelHeight - triggerGap
+        let above = anchor.maxY + triggerGap
+        let preferred = below >= visibleFrame.minY ? below : above
+        return min(max(preferred, visibleFrame.minY), max(visibleFrame.minY, visibleFrame.maxY - panelHeight))
+    }
+
     /// Width of the trigger's chevron at `arrowPointSize`. The trigger
     /// reserves the symbol's real width plus its spacing; a hand-picked
     /// fifteen points came up a point short, which clipped the longest title
@@ -130,6 +137,7 @@ struct JarvisDropdownMenu: View {
     let showsSelectedOption: Bool
     let usesLiquidGlass: Bool
     let isEnabled: Bool
+    let searchThreshold: Int?
     let onSelect: (String) -> Void
     @State private var isPresented = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -146,6 +154,7 @@ struct JarvisDropdownMenu: View {
         showsSelectedOption: Bool = false,
         usesLiquidGlass: Bool = false,
         isEnabled: Bool = true,
+        searchThreshold: Int? = nil,
         onSelect: @escaping (String) -> Void
     ) {
         self.title = title
@@ -159,6 +168,7 @@ struct JarvisDropdownMenu: View {
         self.showsSelectedOption = showsSelectedOption
         self.usesLiquidGlass = usesLiquidGlass
         self.isEnabled = isEnabled
+        self.searchThreshold = searchThreshold
         self.onSelect = onSelect
     }
 
@@ -217,6 +227,7 @@ struct JarvisDropdownMenu: View {
                 selectionID: selectionID,
                 showsSelectedOption: showsSelectedOption,
                 controlWidth: resolvedMenuWidth,
+                searchThreshold: searchThreshold,
                 onSelect: { optionID in
                     onSelect(optionID)
                     isPresented = false
@@ -248,86 +259,157 @@ struct JarvisDropdownPillMenuList: View {
     let selectionID: String?
     let showsSelectedOption: Bool
     let controlWidth: CGFloat
+    var searchThreshold: Int?
+    var maximumHeight: CGFloat = 400
     let onSelect: (String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var revealsOptions = false
     @State private var highlightedOptionID: String?
+    @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
+
+    private var showsSearch: Bool {
+        searchThreshold.map { options.count > $0 } ?? false
+    }
 
     private var visibleOptions: [JarvisDropdownOption] {
-        guard let selectionID, !showsSelectedOption else { return options }
-        return options.filter { $0.id != selectionID }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return options.filter { option in
+            (showsSelectedOption || option.id != selectionID)
+                && (query.isEmpty || option.title.localizedStandardContains(query))
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: JarvisDropdownMetrics.optionSpacing) {
-            ForEach(visibleOptions) { option in
-                let isSelected = selectionID == option.id
-                let isHighlighted = highlightedOptionID == option.id
-
-                Button {
-                    onSelect(option.id)
-                } label: {
-                    HStack(spacing: 8) {
-                        if let colorHex = option.colorHex,
-                           let color = Self.color(fromHex: colorHex)
-                        {
-                            Circle()
-                                .fill(color)
-                                .frame(width: 12, height: 12)
-                                .overlay(Circle().stroke(Color.primary.opacity(0.22), lineWidth: 0.7))
-                                .accessibilityHidden(true)
+        VStack(spacing: 8) {
+            if showsSearch {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("搜索模型", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .focused($searchFocused)
+                        .accessibilityLabel("搜索模型")
+                    if !searchText.isEmpty {
+                        Button { searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
                         }
-                        Text(option.title)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("清除搜索")
                     }
                 }
-                .buttonStyle(
-                    JarvisDropdownPillButtonStyle(
-                        controlWidth: controlWidth,
-                        isSelected: isSelected,
-                        isHighlighted: isHighlighted
-                    )
-                )
-                .accessibilityLabel(option.title)
-                .opacity(revealsOptions ? 1 : 0)
-                .offset(y: revealsOptions ? 0 : -8)
-                .animation(
-                    JarvisMotion.animation(
-                        JarvisMotion.content.delay(
-                            Double(visibleOptions.firstIndex(of: option) ?? 0) * 0.045
-                        ),
-                        reduceMotion: reduceMotion
-                    ),
-                    value: revealsOptions
-                )
-                .onHover { isHovering in
-                    withAnimation(
-                        JarvisMotion.animation(
-                            JarvisMotion.hover,
-                            reduceMotion: reduceMotion
-                        )
-                    ) {
-                        highlightedOptionID = isHovering ? option.id : nil
+                .padding(8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                Text("\(visibleOptions.count) / \(options.count) 个模型")
+                    .font(JarvisTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if options.count > 10 {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        LazyVStack(alignment: .leading, spacing: JarvisDropdownMetrics.optionSpacing) {
+                            if visibleOptions.isEmpty {
+                                Text("没有匹配的模型")
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, minHeight: 48)
+                            } else {
+                                optionButtons
+                            }
+                        }
+                    }
+                    .scrollIndicators(.visible)
+                    .frame(height: min(
+                        CGFloat(options.count) * (JarvisToolbarMetrics.controlSize
+                            + JarvisDropdownMetrics.optionSpacing),
+                        max(48, maximumHeight - (showsSearch ? 86 : 8))
+                    ))
+                    .onAppear {
+                        if let selectionID {
+                            proxy.scrollTo(selectionID, anchor: .center)
+                        }
+                    }
+                    .onChange(of: searchText) { _, _ in
+                        if let first = visibleOptions.first {
+                            proxy.scrollTo(first.id, anchor: .top)
+                        }
                     }
                 }
+            } else {
+                optionRows
             }
         }
         .frame(width: controlWidth, alignment: .leading)
-        .fixedSize(horizontal: true, vertical: false)
         .padding(JarvisDropdownMetrics.menuEdgePadding)
         .task {
             await Task.yield()
-            withAnimation(
-                JarvisMotion.animation(
-                    JarvisMotion.content,
-                    reduceMotion: reduceMotion
-                )
-            ) {
-                revealsOptions = true
-            }
+            revealsOptions = true
+            searchFocused = showsSearch
         }
-        .onDisappear {
-            highlightedOptionID = nil
+        .onDisappear { highlightedOptionID = nil }
+    }
+
+    private var optionRows: some View {
+        VStack(alignment: .leading, spacing: JarvisDropdownMetrics.optionSpacing) {
+            optionButtons
+        }
+        .frame(width: controlWidth, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var optionButtons: some View {
+        ForEach(visibleOptions) { option in
+            let isSelected = selectionID == option.id
+            let isHighlighted = highlightedOptionID == option.id
+
+            Button {
+                onSelect(option.id)
+            } label: {
+                HStack(spacing: 8) {
+                    if let colorHex = option.colorHex,
+                       let color = Self.color(fromHex: colorHex)
+                    {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 12, height: 12)
+                            .overlay(Circle().stroke(Color.primary.opacity(0.22), lineWidth: 0.7))
+                            .accessibilityHidden(true)
+                    }
+                    Text(option.title)
+                }
+            }
+            .buttonStyle(
+                JarvisDropdownPillButtonStyle(
+                    controlWidth: controlWidth,
+                    isSelected: isSelected,
+                    isHighlighted: isHighlighted
+                )
+            )
+            .accessibilityLabel(option.title)
+            .opacity(revealsOptions ? 1 : 0)
+            .offset(y: revealsOptions ? 0 : -8)
+            .animation(
+                JarvisMotion.animation(
+                    JarvisMotion.content.delay(
+                        options.count > 10 ? 0 : Double(visibleOptions.firstIndex(of: option) ?? 0) * 0.045
+                    ),
+                    reduceMotion: reduceMotion
+                ),
+                value: revealsOptions
+            )
+            .id(option.id)
+            .onHover { isHovering in
+                withAnimation(
+                    JarvisMotion.animation(
+                        JarvisMotion.hover,
+                        reduceMotion: reduceMotion
+                    )
+                ) {
+                    highlightedOptionID = isHovering ? option.id : nil
+                }
+            }
         }
     }
 
@@ -412,6 +494,7 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
     let selectionID: String?
     let showsSelectedOption: Bool
     let controlWidth: CGFloat
+    let searchThreshold: Int?
     let onSelect: (String) -> Void
 
     func makeNSView(context: Context) -> NSView {
@@ -428,6 +511,7 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
             selectionID: selectionID,
             showsSelectedOption: showsSelectedOption,
             controlWidth: controlWidth,
+            searchThreshold: searchThreshold,
             onSelect: onSelect,
             dismiss: { isPresented = false }
         )
@@ -458,6 +542,7 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
             selectionID: String?,
             showsSelectedOption: Bool,
             controlWidth: CGFloat,
+            searchThreshold: Int?,
             onSelect: @escaping (String) -> Void,
             dismiss: @escaping () -> Void
         ) {
@@ -475,6 +560,7 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
                     selectionID: selectionID,
                     showsSelectedOption: showsSelectedOption,
                     controlWidth: controlWidth,
+                    searchThreshold: searchThreshold,
                     onSelect: onSelect,
                     dismiss: dismiss
                 )
@@ -503,6 +589,7 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
             selectionID: String?,
             showsSelectedOption: Bool,
             controlWidth: CGFloat,
+            searchThreshold: Int?,
             onSelect: @escaping (String) -> Void,
             dismiss: @escaping () -> Void
         ) {
@@ -519,6 +606,8 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
                 selectionID: selectionID,
                 showsSelectedOption: showsSelectedOption,
                 controlWidth: controlWidth,
+                searchThreshold: searchThreshold,
+                maximumHeight: min(400, (parentWindow.screen?.visibleFrame.height ?? 800) - 16),
                 onSelect: { [weak self] optionID in
                     // 先提交外部选择；它可能触发父视图重绘。最后再写入关闭状态，
                     // 避免父视图因选择变化重绘时覆盖关闭状态并让面板保持打开。
@@ -577,18 +666,29 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
                 panelWidth: panelSize.width,
                 visibleFrame: visibleFrame
             )
-            let originY = anchorRect.minY
-                - panelSize.height
-                - JarvisDropdownMetrics.triggerGap
+            let originY = JarvisDropdownMetrics.menuOriginY(
+                anchor: anchorRect,
+                panelHeight: panelSize.height,
+                visibleFrame: visibleFrame
+            )
 
             panel.setFrameOrigin(NSPoint(x: originX, y: originY))
         }
 
         private func installOutsideClickMonitor() {
             outsideClickMonitor = NSEvent.addLocalMonitorForEvents(
-                matching: [.leftMouseDown]
+                matching: [.leftMouseDown, .keyDown]
             ) { [weak self] event in
                 guard let self, let panel = self.panel else { return event }
+
+                if event.type == .keyDown {
+                    if event.keyCode == 53 {
+                        self.dismiss()
+                        self.dismissAction?()
+                        return nil
+                    }
+                    return event
+                }
 
                 if event.window === panel {
                     return event

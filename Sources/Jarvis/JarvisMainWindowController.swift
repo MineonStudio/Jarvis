@@ -111,7 +111,6 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
     private var isCorrectingLaunchFrame = false
     private var isTrackingWindowMove = false
     private var didRestoreAnimation = false
-    private var presentationMismatchStartedAt: TimeInterval?
 
     func attach(to window: NSWindow?) {
         guard let window, self.window !== window else { return }
@@ -119,6 +118,7 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
         detach()
         self.window = window
         Self.activeController = self
+        window.level = .normal
         window.minSize = NSSize(
             width: Self.minimumWindowSize.width,
             height: Self.minimumWindowSize.height
@@ -147,8 +147,9 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
         window.minSize = frame.size
         window.contentMinSize = .zero
         Self.applyLaunchFrame(frame, to: window)
-        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow) + 1))
-        window.orderFrontRegardless()
+        // Applying a layout changes geometry, not the main window's stacking policy.
+        window.level = .normal
+        window.orderFront(nil)
         saveFrameImmediately()
     }
 
@@ -226,9 +227,8 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
 }
 
 extension JarvisMainWindowController {
-    /// The model frame stays correct while the window server still slides the
-    /// window across the screen. Hide that presentation for the life of the
-    /// window: the slide is replayed when settings opens, long after launch.
+    /// Keep the AppKit frame stable without interpreting WindowServer's
+    /// composited bounds: Mission Control legitimately scales and moves them.
     private func startLaunchFrameMonitor() {
         launchFrameMonitor?.invalidate()
         let timer = Timer(timeInterval: 1.0 / 60.0, target: self, selector: #selector(nudgePinnedFrame), userInfo: nil, repeats: true)
@@ -322,59 +322,6 @@ extension JarvisMainWindowController {
         if let pinnedLaunchFrame, !Self.framesMatch(window.frame, pinnedLaunchFrame) {
             correctLaunchFrameIfNeeded()
         }
-        hideIfPresentationSlid(window)
-    }
-
-    private func hideIfPresentationSlid(_ window: NSWindow) {
-        if isTrackingWindowMove || window.inLiveResize || (NSEvent.pressedMouseButtons & 1) != 0 {
-            return
-        }
-        guard window.isOnActiveSpace else {
-            presentationMismatchStartedAt = nil
-            window.alphaValue = 1
-            window.ignoresMouseEvents = false
-            return
-        }
-        guard window.windowNumber > 0 else { return }
-        let info = CGWindowListCopyWindowInfo(
-            [.optionIncludingWindow],
-            CGWindowID(window.windowNumber)
-        ) as? [[String: Any]]
-        guard let bounds = info?.first?[kCGWindowBounds as String] as? [String: CGFloat],
-              let presentedX = bounds["X"],
-              let width = bounds["Width"],
-              let height = bounds["Height"],
-              width > 200,
-              height > 200
-        else {
-            presentationMismatchStartedAt = nil
-            return
-        }
-        let model = window.frame
-        let slid = abs(presentedX - model.origin.x) > 40
-            || abs(width - model.width) > 40
-            || abs(height - model.height) > 40
-        guard slid else {
-            presentationMismatchStartedAt = nil
-            if window.alphaValue <= 0.5 {
-                window.alphaValue = 1
-                window.ignoresMouseEvents = false
-            }
-            return
-        }
-
-        // Space transitions temporarily move the composited window even though
-        // its AppKit frame is unchanged. Only treat a persistent offset as the
-        // delayed launch-frame animation this monitor is meant to suppress.
-        let now = ProcessInfo.processInfo.systemUptime
-        guard let presentationMismatchStartedAt else {
-            self.presentationMismatchStartedAt = now
-            return
-        }
-        guard now - presentationMismatchStartedAt >= 0.75 else { return }
-        guard slid == (window.alphaValue > 0.5) else { return }
-        window.alphaValue = slid ? 0 : 1
-        window.ignoresMouseEvents = slid
     }
 
     private func restoreWindowAnimation(on window: NSWindow) {

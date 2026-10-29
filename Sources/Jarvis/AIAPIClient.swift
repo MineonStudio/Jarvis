@@ -151,7 +151,7 @@ struct AIAPIConfiguration: Equatable, Sendable {
         }
         let path = components.path
         if path.isEmpty || path == "/" {
-            return provider == .deepSeek ? stripped : stripped + "/v1"
+            return stripped + provider.chatCompletionsPath.dropLast("/chat/completions".count)
         }
         return stripped
     }

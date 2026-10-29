@@ -799,146 +799,117 @@ final class WallpaperTests: XCTestCase {
     }
 
     @MainActor
-    func testWallpaperSystemServiceSynchronizesDesktopIdleAndLoginRecords() throws {
-        let screens = NSScreen.screens
-        guard !screens.isEmpty else { return }
-
-        let rootDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("jarvis-wallpaper-system-test-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: rootDirectory) }
-
-        let indexURL = rootDirectory.appendingPathComponent("Index.plist")
-        let sourceURL = rootDirectory.appendingPathComponent("source.png")
-        try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
-        try makeTestPNG().write(to: sourceURL)
-
-        let oldConfiguration = try PropertyListSerialization.data(
-            fromPropertyList: [
-                "type": "imageFile",
-                "url": ["relative": "file:///old-wallpaper.png"]
-            ],
-            format: .binary,
-            options: 0
-        )
-        let oldDesktop = [
-            "Content": [
-                "Choices": [["Configuration": oldConfiguration]]
-            ]
-        ] as [String: Any]
-        let oldIdle = [
-            "Content": [
-                "Choices": [["Configuration": oldConfiguration]]
-            ]
-        ] as [String: Any]
-        let index: [String: Any] = [
-            "AllSpacesAndDisplays": [
-                "Idle": oldIdle
-            ],
-            "SystemDefault": [
-                "Desktop": oldDesktop,
-                "Idle": oldIdle
-            ],
-            "Spaces": [
-                "space-1": [
-                    "Default": [
-                        "Desktop": oldDesktop,
-                        "Idle": oldIdle
-                    ]
-                ]
-            ],
-            "Displays": [
-                "display-1": [
-                    "Desktop": oldDesktop,
-                    "Idle": oldIdle
-                ]
-            ]
-        ]
-        try PropertyListSerialization.data(
-            fromPropertyList: index,
-            format: .binary,
-            options: 0
-        ).write(to: indexURL)
-        let staleIndexData = try Data(contentsOf: indexURL)
-
-        var desktopCalls: [URL] = []
-        var loginWindowURL: URL?
-        var refreshCount = 0
-        let desktopService = DesktopWallpaperService(
-            screensProvider: { screens },
-            setImage: { url, _, _ in
-                desktopCalls.append(url)
-                // NSWorkspace can rewrite the store after an earlier write.
-                // The service must write the unified state after this call.
-                try staleIndexData.write(to: indexURL, options: .atomic)
-            }
-        )
+    func testWallpaperSystemServiceVerifiesSelectedImagesAndKeepsImmutableCopies() async throws {
+        guard !NSScreen.screens.isEmpty else { throw XCTSkip("Requires a display") }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jarvis-public-wallpaper-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("selected.png")
+        let firstData = try makeTestPNG()
+        try firstData.write(to: source)
+        var selectedURL: URL?
+        var calls: [URL] = []
         let service = WallpaperSystemService(
-            desktopWallpaperService: desktopService,
-            wallpaperIndexURL: indexURL,
-            stableWallpaperDirectoryURL: rootDirectory.appendingPathComponent("SystemWallpaper"),
-            setLoginWindowWallpaper: { loginWindowURL = $0 },
-            refreshWallpaperAgent: { refreshCount += 1 }
+            desktopWallpaperService: DesktopWallpaperService(
+                getImage: { _ in selectedURL },
+                setImage: { url, _, _ in selectedURL = url; calls.append(url) }
+            ),
+            stableWallpaperDirectoryURL: root.appendingPathComponent("Stable")
         )
-
-        try service.apply(imageURL: sourceURL, target: .both)
-
-        let stableURL = try XCTUnwrap(loginWindowURL)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: stableURL.path))
-        XCTAssertEqual(try Data(contentsOf: stableURL), try Data(contentsOf: sourceURL))
-        XCTAssertEqual(desktopCalls, Array(repeating: stableURL, count: screens.count))
-        XCTAssertEqual(refreshCount, 1)
-
-        let updatedIndexValue = try PropertyListSerialization.propertyList(
-            from: Data(contentsOf: indexURL),
-            options: [],
-            format: nil
-        )
-        let updatedIndex = try XCTUnwrap(updatedIndexValue as? [String: Any])
-        let allSpaces = try XCTUnwrap(updatedIndex["AllSpacesAndDisplays"] as? [String: Any])
-
-        func configurationURL(in value: Any?) throws -> String {
-            let section = try XCTUnwrap(value as? [String: Any])
-            let content = try XCTUnwrap(section["Content"] as? [String: Any])
-            let choices = try XCTUnwrap(content["Choices"] as? [[String: Any]])
-            let firstChoice = try XCTUnwrap(choices.first)
-            let configuration = try XCTUnwrap(firstChoice["Configuration"] as? Data)
-            let decodedValue = try PropertyListSerialization.propertyList(
-                from: configuration,
-                options: [],
-                format: nil
-            )
-            let decoded = try XCTUnwrap(decodedValue as? [String: Any])
-            let url = try XCTUnwrap(decoded["url"] as? [String: Any])
-            return try XCTUnwrap(url["relative"] as? String)
-        }
-
-        XCTAssertEqual(try configurationURL(in: allSpaces["Desktop"]), stableURL.absoluteString)
-        XCTAssertEqual(try configurationURL(in: allSpaces["Idle"]), stableURL.absoluteString)
-
-        let systemDefault = try XCTUnwrap(updatedIndex["SystemDefault"] as? [String: Any])
-        XCTAssertEqual(try configurationURL(in: systemDefault["Desktop"]), stableURL.absoluteString)
-        XCTAssertEqual(try configurationURL(in: systemDefault["Idle"]), stableURL.absoluteString)
-
-        let spaces = try XCTUnwrap(updatedIndex["Spaces"] as? [String: Any])
-        let space = try XCTUnwrap(spaces["space-1"] as? [String: Any])
-        let defaultSpace = try XCTUnwrap(space["Default"] as? [String: Any])
-        XCTAssertEqual(try configurationURL(in: defaultSpace["Desktop"]), stableURL.absoluteString)
-        XCTAssertEqual(try configurationURL(in: defaultSpace["Idle"]), stableURL.absoluteString)
-
-        let displays = try XCTUnwrap(updatedIndex["Displays"] as? [String: Any])
-        let display = try XCTUnwrap(displays["display-1"] as? [String: Any])
-        XCTAssertEqual(try configurationURL(in: display["Desktop"]), stableURL.absoluteString)
-        XCTAssertEqual(try configurationURL(in: display["Idle"]), stableURL.absoluteString)
+        try await service.apply(imageURL: source, target: .desktop)
+        let firstURL = try XCTUnwrap(selectedURL)
+        XCTAssertEqual(try Data(contentsOf: firstURL), firstData)
+        let secondData = try makeTestPNG(red: true)
+        try secondData.write(to: source)
+        try await service.apply(imageURL: source, target: .desktop)
+        let secondURL = try XCTUnwrap(selectedURL)
+        XCTAssertNotEqual(firstURL, secondURL)
+        XCTAssertEqual(try Data(contentsOf: firstURL), firstData)
+        XCTAssertEqual(try Data(contentsOf: secondURL), secondData)
+        try FileManager.default.removeItem(at: source)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: secondURL.path))
+        XCTAssertEqual(calls.count, NSScreen.screens.count * 2)
     }
 
-    private func makeTestPNG() throws -> Data {
-        let image = NSImage(size: NSSize(width: 4, height: 2))
-        image.lockFocus()
-        NSColor.systemBlue.setFill()
-        NSRect(x: 0, y: 0, width: 4, height: 2).fill()
-        image.unlockFocus()
+    @MainActor
+    func testWallpaperSystemServiceReportsUnconfirmedSystemImage() async throws {
+        guard !NSScreen.screens.isEmpty else { throw XCTSkip("Requires a display") }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jarvis-unconfirmed-wallpaper-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("selected.png")
+        try makeTestPNG().write(to: source)
+        let service = WallpaperSystemService(
+            desktopWallpaperService: DesktopWallpaperService(
+                getImage: { _ in URL(fileURLWithPath: "/System/default.heic") },
+                setImage: { _, _, _ in }
+            ),
+            stableWallpaperDirectoryURL: root.appendingPathComponent("Stable")
+        )
+        do {
+            try await service.apply(imageURL: source, target: .desktop)
+            XCTFail("Must not report success when the system kept a different image")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("系统未确认"))
+        }
+    }
 
-        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: XCTUnwrap(image.tiffRepresentation)))
+    @MainActor
+    func testWallpaperSystemServiceRejectsLockScreenWithoutWritingFiles() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jarvis-unsupported-wallpaper-\(UUID().uuidString)")
+        let service = WallpaperSystemService(stableWallpaperDirectoryURL: root)
+        for target in [WallpaperSettingTarget.lockScreen, .both] {
+            do {
+                try await service.apply(imageURL: root.appendingPathComponent("missing.png"), target: target)
+                XCTFail("Lock screen is not supported by the public desktop API")
+            } catch {
+                XCTAssertEqual(error as? DesktopWallpaperServiceError, .lockScreenUnavailable)
+            }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.path))
+    }
+
+    /// Explicit opt-in: changes the real desktop and keeps durable image copies.
+    /// Run with newline-separated local images selected for manual verification.
+    @MainActor
+    func testPublicWallpaperIntegration() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["JARVIS_WALLPAPER_INTEGRATION_IMAGES"] else {
+            throw XCTSkip("Set JARVIS_WALLPAPER_INTEGRATION_IMAGES to verify the real desktop")
+        }
+        let service = WallpaperSystemService(
+            stableWallpaperDirectoryURL: FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support/Jarvis-Dev/SystemWallpaper")
+        )
+        for path in paths.split(separator: "\n") {
+            let source = URL(fileURLWithPath: String(path))
+            try await service.apply(imageURL: source, target: .desktop)
+            try await Task.sleep(for: .seconds(2))
+            for screen in NSScreen.screens {
+                let actual = try XCTUnwrap(NSWorkspace.shared.desktopImageURL(for: screen))
+                XCTAssertEqual(try Data(contentsOf: actual), try Data(contentsOf: source))
+            }
+        }
+    }
+
+    private func makeTestPNG(red: Bool = false) throws -> Data {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 2,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        let pixels = try XCTUnwrap(bitmap.bitmapData)
+        for y in 0 ..< 2 {
+            for x in 0 ..< 4 {
+                let offset = y * bitmap.bytesPerRow + x * 4
+                pixels[offset] = red ? 255 : 0
+                pixels[offset + 1] = 0
+                pixels[offset + 2] = red ? 0 : 255
+                pixels[offset + 3] = 255
+            }
+        }
         return try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
     }
 }

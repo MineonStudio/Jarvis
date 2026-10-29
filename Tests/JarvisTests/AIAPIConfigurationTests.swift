@@ -144,6 +144,17 @@ final class AIAPIConfigurationTests: XCTestCase {
             apiKey: "test-key"
         )
         XCTAssertEqual(deepSeekHost.openAIBaseURL, "https://api.deepseek.com")
+
+        let openRouterHost = AIAPIConfiguration(
+            endpoint: "https://openrouter.ai",
+            model: "test/model",
+            apiKey: "test-key"
+        )
+        XCTAssertEqual(openRouterHost.openAIBaseURL, "https://openrouter.ai/api/v1")
+        XCTAssertEqual(
+            OpenAICompatibleAPIClient.normalizedModelsURL(from: openRouterHost.endpoint)?.absoluteString,
+            "https://openrouter.ai/api/v1/models"
+        )
     }
 
     func testAPIConnectionTestRejectsMissingConfigurationBeforeNetworkCall() async {

@@ -47,6 +47,9 @@ struct AIAPISettingsCard: View {
                 if let error = app.aiModelsRefreshError {
                     errorRow(error)
                 }
+                if let error = app.aiConnectionTestError {
+                    errorRow("连接失败：\(error)")
+                }
                 actionsRow
             }
         }
@@ -273,7 +276,9 @@ struct AIAPISettingsCard: View {
                     help: "选择\(title)",
                     // 模型名很长。宽度跟设置卡片走，避免 480pt 的上限在变窄后被卡片裁掉。
                     maximumControlWidth: max(proxy.size.width, 1),
+                    showsSelectedOption: true,
                     isEnabled: !isDisabled,
+                    searchThreshold: 10,
                     onSelect: { selectedValue in
                         selection.wrappedValue = selectedValue
                     }

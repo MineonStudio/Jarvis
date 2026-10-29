@@ -647,7 +647,7 @@ struct SettingsView: View {
                         titleVisibility: .visible
                     ) {
                         if signingCertificatePrompt == .download {
-                            Button("下载并重启") {
+                            Button("下载并重启应用") {
                                 app.installLocalSigningCertificate()
                             }
                         } else if signingCertificatePrompt == .remove {

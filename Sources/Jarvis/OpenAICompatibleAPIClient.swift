@@ -12,18 +12,26 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = configuration.provider == .openRouter ? 60 : 30
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         Self.applyAuthentication(to: &request, configuration: configuration)
-        // json_object mode rejects prompts that do not contain the word "json".
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
+        var body: [String: Any] = [
             "model": configuration.model,
-            "temperature": 0,
-            "response_format": ["type": "json_object"],
             "messages": [
-                ["role": "user", "content": "Reply with JSON: {\"ok\":true}"]
+                ["role": "user", "content": "Reply with OK."]
             ]
-        ])
+        ]
+        if configuration.provider == .openRouter {
+            // The catalogue includes models without JSON mode or temperature support.
+            // A small explicit budget also avoids reserving an entire context window
+            // against the user's OpenRouter credit balance just for a connection test.
+            body["max_tokens"] = 1024
+        } else {
+            body["temperature"] = 0
+            body["response_format"] = ["type": "json_object"]
+            body["messages"] = [["role": "user", "content": "Reply with JSON: {\"ok\":true}"]]
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -32,9 +40,13 @@ struct OpenAICompatibleAPIClient: AITextCompletionAPI, AIAPIConnectionTesting, S
         guard (200 ..< 300).contains(httpResponse.statusCode) else {
             let message = Self.serverMessage(from: data)
                 ?? "AI 服务请求失败（\(httpResponse.statusCode)）"
-            throw AIAPIError.server(message)
+            throw AIAPIError.server("HTTP \(httpResponse.statusCode)：\(message)")
         }
 
+        // OpenRouter can return an error envelope after the HTTP headers were sent.
+        if let message = Self.serverMessage(from: data) {
+            throw AIAPIError.server(message)
+        }
         try Self.validateConnectionEnvelope(from: data)
     }
 

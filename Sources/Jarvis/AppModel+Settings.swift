@@ -154,6 +154,7 @@ extension AppModel {
             aiAPIKeyConfigured = false
             aiAPIKeyMask = ""
             aiSettingsLocked = false
+            aiConnectionTestError = nil
             showToast(JarvisFeedbackCopy.deleted)
             return true
         } catch {
@@ -164,6 +165,7 @@ extension AppModel {
 
     func editAIAPISettings() {
         aiSettingsLocked = false
+        aiConnectionTestError = nil
     }
 
     func clearAIModels() {
@@ -260,6 +262,7 @@ extension AppModel {
         apiKey: String
     ) async {
         guard !aiConnectionTesting else { return }
+        aiConnectionTestError = nil
 
         let trimmedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -283,6 +286,7 @@ extension AppModel {
             try await aiAPIConnectionTester.testConnection(configuration: configuration)
             showToast(JarvisFeedbackCopy.connectionSucceeded)
         } catch {
+            aiConnectionTestError = error.localizedDescription
             showToast(JarvisFeedbackCopy.connectionFailed)
         }
     }

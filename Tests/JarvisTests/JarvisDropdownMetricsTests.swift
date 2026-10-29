@@ -1,5 +1,6 @@
 import AppKit
 @testable import Jarvis
+import SwiftUI
 import XCTest
 
 final class JarvisDropdownMetricsTests: XCTestCase {
@@ -108,5 +109,40 @@ final class JarvisDropdownMetricsTests: XCTestCase {
         let withoutArrow = JarvisDropdownMetrics.triggerWidth(for: "最新", includesArrow: false)
 
         XCTAssertGreaterThan(withArrow, withoutArrow)
+    }
+
+    func testMenuOpensAboveTriggerNearBottomOfScreen() {
+        let screen = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        XCTAssertEqual(JarvisDropdownMetrics.menuOriginY(
+            anchor: CGRect(x: 400, y: 50, width: 200, height: 30),
+            panelHeight: 400,
+            visibleFrame: screen
+        ), 80 + JarvisDropdownMetrics.triggerGap)
+    }
+
+    func testMenuClampsToScreenWhenNeitherSideHasEnoughRoom() {
+        let screen = CGRect(x: 0, y: 100, width: 1000, height: 600)
+        let origin = JarvisDropdownMetrics.menuOriginY(
+            anchor: CGRect(x: 400, y: 350, width: 200, height: 30),
+            panelHeight: 400,
+            visibleFrame: screen
+        )
+        XCTAssertGreaterThanOrEqual(origin, screen.minY)
+        XCTAssertLessThanOrEqual(origin + 400, screen.maxY)
+    }
+
+    @MainActor
+    func testHundredsOfModelsFitInsideScrollablePanel() {
+        let view = NSHostingView(rootView: JarvisDropdownPillMenuList(
+            options: (0 ..< 500).map { JarvisDropdownOption(id: "model-\($0)", title: "Model \($0)") },
+            selectionID: "model-0",
+            showsSelectedOption: true,
+            controlWidth: 320,
+            searchThreshold: 10,
+            maximumHeight: 400,
+            onSelect: { _ in }
+        ))
+        XCTAssertGreaterThan(view.fittingSize.height, 200)
+        XCTAssertLessThanOrEqual(view.fittingSize.height, 400)
     }
 }

@@ -4,6 +4,29 @@ import XCTest
 
 @MainActor
 final class JarvisMainWindowControllerTests: XCTestCase {
+    func testApplyingWindowLayoutsKeepsTheMainWindowAtNormalLevel() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1400, height: 800),
+            styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: true
+        )
+        window.isReleasedWhenClosed = false
+        let controller = JarvisMainWindowController()
+        window.level = .floating
+        controller.attach(to: window)
+        XCTAssertEqual(window.level, .normal)
+        for frame in [
+            NSRect(x: 0, y: 0, width: 700, height: 500),
+            NSRect(x: 700, y: 0, width: 700, height: 1000)
+        ] {
+            XCTAssertTrue(JarvisMainWindowController.applyWindowLayoutFrame(frame, to: window))
+            XCTAssertEqual(window.level, .normal)
+            XCTAssertEqual(window.frame, frame)
+            XCTAssertEqual(window.alphaValue, 1)
+            XCTAssertFalse(window.ignoresMouseEvents)
+        }
+        window.close()
+    }
+
     func testSettingsModalUsesFixedCenteredLayoutSize() {
         XCTAssertEqual(
             SettingsLayout.modalSize,

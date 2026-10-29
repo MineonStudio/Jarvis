@@ -80,10 +80,13 @@ enum AIAPIProvider: String, CaseIterable, Hashable, Identifiable, Sendable {
         baseURLs.first?.url ?? ""
     }
 
-    /// DeepSeek's official OpenAI-compatible endpoint omits the `/v1` prefix.
-    /// Other presets use the conventional `/v1/chat/completions` path.
+    /// Provider-specific paths when a user enters only the API host.
     var chatCompletionsPath: String {
-        self == .deepSeek ? "/chat/completions" : "/v1/chat/completions"
+        switch self {
+        case .deepSeek: "/chat/completions"
+        case .openRouter: "/api/v1/chat/completions"
+        default: "/v1/chat/completions"
+        }
     }
 
     private static let hostMatchers: [(Self, String)] = [
