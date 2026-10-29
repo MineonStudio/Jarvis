@@ -5,6 +5,15 @@ key is embedded in `Resources/Info.plist`; the private key is kept in the
 release Mac's login Keychain and must never be committed or uploaded as a
 GitHub Actions secret.
 
+## 1.8.17 signing-key migration
+
+The original release key was lost during a clean system reinstall. Version
+1.8.17 establishes a new Ed25519 signing identity, explicitly approved by the
+maintainer. Existing versions cannot authenticate this release: users must
+manually install the 1.8.17 DMG or direct-download ZIP once. Subsequent releases
+must preserve this new key. Do not disable signature verification or republish
+older versions with manifests signed by the new key.
+
 ## Signing key
 
 The release key has already been initialized in the current Mac's login
