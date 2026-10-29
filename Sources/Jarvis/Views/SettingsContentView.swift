@@ -412,7 +412,6 @@ struct SettingsView: View {
             permissionSettingsCard
         case .appearance:
             themeSettingsCard
-            appIconSettingsCard
             accentColorSettingsCard
         case .wallpaperSources:
             WallpaperSourcesSettingsCard(enabledSourcesStorageValue: $enabledWallpaperSources)
@@ -554,20 +553,6 @@ struct SettingsView: View {
                 JarvisThemePicker(selection: Binding(
                     get: { app.themePreference },
                     set: { app.updateThemePreference($0) }
-                ))
-                .fixedSize(horizontal: true, vertical: false)
-            }
-        }
-    }
-
-    private var appIconSettingsCard: some View {
-        JarvisCard {
-            HStack(spacing: 14) {
-                SettingsCardHeader(title: "应用图标", systemImage: "square.grid.2x2.fill")
-                Spacer(minLength: 8)
-                JarvisAppIconPicker(selection: Binding(
-                    get: { app.appIconAppearance },
-                    set: { app.updateAppIconAppearance($0) }
                 ))
                 .fixedSize(horizontal: true, vertical: false)
             }
@@ -1320,30 +1305,6 @@ struct JarvisThemePicker: View {
     var body: some View {
         JarvisSegmentedControl(items: Array(JarvisTheme.allCases), selection: $selection) { theme, isSelected in
             Text(theme.title)
-                .font(JarvisTypography.controlEmphasis)
-                .foregroundStyle(isSelected ? Color.white : Color.secondary)
-                .fixedSize(horizontal: true, vertical: false)
-                .frame(
-                    minWidth: 54,
-                    minHeight: JarvisMetrics.segmentedItemHeight,
-                    maxHeight: JarvisMetrics.segmentedItemHeight
-                )
-                .padding(.horizontal, 8)
-                .padding(.vertical, JarvisMetrics.segmentedItemVerticalPadding)
-                .contentShape(Capsule())
-        }
-    }
-}
-
-struct JarvisAppIconPicker: View {
-    @Binding var selection: JarvisAppIconAppearance
-
-    var body: some View {
-        JarvisSegmentedControl(
-            items: Array(JarvisAppIconAppearance.allCases),
-            selection: $selection
-        ) { appearance, isSelected in
-            Text(appearance.title)
                 .font(JarvisTypography.controlEmphasis)
                 .foregroundStyle(isSelected ? Color.white : Color.secondary)
                 .fixedSize(horizontal: true, vertical: false)

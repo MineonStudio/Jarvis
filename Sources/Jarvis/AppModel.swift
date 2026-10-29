@@ -93,7 +93,6 @@ final class AppModel {
     var meetingShortcutConflictMessage = ""
     var windowLayoutShortcuts: [WindowLayout: ScreenshotShortcut] = [:]
     var themePreference: JarvisTheme = .system
-    var appIconAppearance: JarvisAppIconAppearance = .system
     var accentColorPreference: JarvisAccentColor = .system
     var systemColorScheme: ColorScheme = .light
     var activeColorScheme: ColorScheme {
@@ -234,7 +233,6 @@ final class AppModel {
     @ObservationIgnored let meetingShortcutKey = "jarvis.meeting.shortcut"
     @ObservationIgnored let windowLayoutShortcutKeyPrefix = "jarvis.window-layout.shortcut."
     @ObservationIgnored let themePreferenceKey = "jarvis.theme.preference"
-    @ObservationIgnored let appIconAppearanceKey = "jarvis.app-icon.appearance"
     @ObservationIgnored let accentColorPreferenceKey = "jarvis.accent-color.preference"
     @ObservationIgnored let clipboardCacheAutoCleanupEnabledKey = "jarvis.clipboard.cache.auto-cleanup.enabled"
     @ObservationIgnored let clipboardCacheAutoCleanupPeriodKey = "jarvis.clipboard.cache.auto-cleanup.period"
@@ -329,7 +327,6 @@ final class AppModel {
         loadWindowLayoutShortcuts()
         loadAIAPISettings()
         loadThemePreference()
-        loadAppIconAppearance()
         loadAccentColorPreference()
         loadLaunchAtLoginPreference()
         refreshSystemColorScheme()

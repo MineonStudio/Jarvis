@@ -24,20 +24,6 @@ extension AppModel {
     func updateThemePreference(_ preference: JarvisTheme) {
         themePreference = preference
         UserDefaults.standard.set(preference.rawValue, forKey: themePreferenceKey)
-        applyCurrentAppIconAppearance()
-    }
-
-    func updateAppIconAppearance(_ appearance: JarvisAppIconAppearance) {
-        appIconAppearance = appearance
-        UserDefaults.standard.set(appearance.rawValue, forKey: appIconAppearanceKey)
-        applyCurrentAppIconAppearance()
-    }
-
-    private func applyCurrentAppIconAppearance() {
-        JarvisDockIconController.shared.apply(
-            appearance: appIconAppearance,
-            isSystemDark: activeColorScheme == .dark
-        )
     }
 
     func updateAccentColorPreference(_ preference: JarvisAccentColor) {
@@ -306,7 +292,6 @@ extension AppModel {
         let bestMatch = appearance.bestMatch(from: [.aqua, .darkAqua])
         let newColorScheme: ColorScheme = bestMatch == .darkAqua ? .dark : .light
         systemColorScheme = newColorScheme
-        applyCurrentAppIconAppearance()
     }
 
     func loadThemePreference() {
@@ -316,24 +301,6 @@ extension AppModel {
             return
         }
         themePreference = preference
-    }
-
-    func loadAppIconAppearance() {
-        if let rawValue = UserDefaults.standard.string(forKey: appIconAppearanceKey),
-           let appearance = JarvisAppIconAppearance(rawValue: rawValue)
-        {
-            appIconAppearance = appearance
-            return
-        }
-
-        // Before the icon setting existed, the theme preference also controlled
-        // the Dock icon. Preserve that choice once for existing installations.
-        if let legacyTheme = UserDefaults.standard.string(forKey: themePreferenceKey),
-           let appearance = JarvisAppIconAppearance(rawValue: legacyTheme)
-        {
-            appIconAppearance = appearance
-            UserDefaults.standard.set(appearance.rawValue, forKey: appIconAppearanceKey)
-        }
     }
 
     func loadAccentColorPreference() {

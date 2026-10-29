@@ -24,21 +24,6 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(JarvisTheme.dark.resolvedColorScheme(system: .light), .dark)
     }
 
-    func testAppIconAppearanceResolvesSystemVariant() {
-        XCTAssertEqual(
-            JarvisAppIconAppearance.allCases.map(\.rawValue),
-            ["system", "light", "dark"]
-        )
-        XCTAssertEqual(
-            JarvisAppIconAppearance.system.resolvedVariant(isSystemDark: true),
-            .dark
-        )
-        XCTAssertEqual(
-            JarvisAppIconAppearance.system.resolvedVariant(isSystemDark: false),
-            .light
-        )
-    }
-
     func testAccentColorPreferencesExposeRequestedPalette() {
         XCTAssertEqual(
             JarvisAccentColor.allCases.map(\.rawValue),

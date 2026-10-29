@@ -42,41 +42,6 @@ enum JarvisTheme: String, CaseIterable, Identifiable {
     }
 }
 
-enum JarvisAppIconAppearance: String, CaseIterable, Identifiable {
-    case system
-    case light
-    case dark
-
-    var id: String {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .system: "跟随系统"
-        case .light: "浅色"
-        case .dark: "深色"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .system: "circle.lefthalf.filled"
-        case .light: "sun.max"
-        case .dark: "moon"
-        }
-    }
-
-    func resolvedVariant(isSystemDark: Bool) -> JarvisAppIconAppearance {
-        switch self {
-        case .system:
-            isSystemDark ? .dark : .light
-        case .light, .dark:
-            self
-        }
-    }
-}
-
 enum JarvisAccentColor: String, CaseIterable, Identifiable {
     case system
     case blue
