@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - Screenshot canvas window
 
-final class ScreenshotImagePanel: NSPanel {
+final class ScreenshotImagePanel: ScreenshotColorProbePanel {
     var onDoubleClick: (() -> Void)?
     var onMiddleClick: (() -> Void)?
     var onEscape: (() -> Void)?
@@ -54,6 +54,7 @@ final class ScreenshotImagePanel: NSPanel {
 }
 
 final class ScreenshotCanvasHostingView: NSHostingView<ScreenshotCanvasView> {
+    private lazy var colorProbe = ScreenshotColorProbe(data: editor.originalData)
     private let editor: ScreenshotEditorModel
     private let allowsSelectionTransform: Bool
     private let allowsWindowDrag: Bool
@@ -134,6 +135,31 @@ final class ScreenshotCanvasHostingView: NSHostingView<ScreenshotCanvasView> {
 
     func updateCanvasScale(_ scale: CGFloat) {
         rootView.canvasScale = scale
+    }
+
+    /// Window-level routing keeps C available after interacting with SwiftUI
+    /// controls, while leaving text fields and modified shortcuts untouched.
+    func handleColorProbeEvent(_ event: NSEvent) -> Bool {
+        guard rootView.interactive, allowsSelectionTransform else { return false }
+        if event.type == .mouseMoved {
+            colorProbe.update(in: self, editor: editor, scale: rootView.canvasScale)
+        } else if event.type == .keyDown,
+                  event.charactersIgnoringModifiers?.lowercased() == "c",
+                  event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift])
+        {
+            return colorProbe.update(in: self, editor: editor, scale: rootView.canvasScale, copy: true)
+        } else if event.type == .leftMouseDown || event.type == .leftMouseDragged {
+            colorProbe.hide()
+        }
+        return false
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.acceptsMouseMovedEvents = true
+        if window != nil, rootView.interactive, allowsSelectionTransform {
+            colorProbe.update(in: self, editor: editor, scale: rootView.canvasScale)
+        }
     }
 
     override func keyDown(with event: NSEvent) {

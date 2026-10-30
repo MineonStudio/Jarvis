@@ -3,7 +3,7 @@ import Combine
 
 // MARK: - Selection windows
 
-final class SelectionOverlayWindow: NSPanel {
+final class SelectionOverlayWindow: ScreenshotColorProbePanel {
     var onDoubleClick: (() -> Void)?
     var onMiddleClick: (() -> Void)?
     var onEscape: (() -> Void)?
