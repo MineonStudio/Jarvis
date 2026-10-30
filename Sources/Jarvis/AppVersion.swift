@@ -5,8 +5,8 @@ import Foundation
 import Security
 
 enum JarvisAppVersion {
-    private static let fallbackShortVersion = "1.4.3"
-    private static let fallbackBuild = "341"
+    private static let fallbackShortVersion = "1.8.18"
+    private static let fallbackBuild = "381"
 
     static var shortVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -49,6 +49,7 @@ enum JarvisUpdateError: LocalizedError {
     case downloadUnavailable
     case invalidArchive
     case invalidApplication
+    case incompatibleCodeIdentity
     case invalidManifest
     case invalidManifestSignature
     case missingSignedManifest
@@ -56,13 +57,9 @@ enum JarvisUpdateError: LocalizedError {
     case unsupportedInstallLocation
     case ambiguousInstallLocation
     case unsupportedUpdateChannel
-    case localSigningFailed(String)
-    case signingToolFailed(String)
     case toolFailed(String)
-    case checksumUnavailable
     case checksumMismatch
     case notNewerRelease
-    case privacyPermissionResetFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -72,6 +69,8 @@ enum JarvisUpdateError: LocalizedError {
             "更新包格式无效"
         case .invalidApplication:
             "更新包中的工作搭子 Jarvis 应用无效"
+        case .incompatibleCodeIdentity:
+            "更新包的代码签名身份与当前应用不一致，已保留当前版本。请安装使用固定发布证书签名的正式包"
         case .invalidManifest:
             "更新清单无效或与发布版本不匹配"
         case .invalidManifestSignature:
@@ -86,35 +85,22 @@ enum JarvisUpdateError: LocalizedError {
             "检测到多个工作搭子 Jarvis 安装副本，无法确定要更新哪一个。请保留一个安装副本后重试"
         case .unsupportedUpdateChannel:
             "开发版不能安装正式更新。请打开已安装的工作搭子 Jarvis 后再更新"
-        case let .localSigningFailed(reason):
-            "无法使用本机原有签名身份完成更新：\(reason)"
-        case let .signingToolFailed(message):
-            "使用本机签名身份签署更新失败：\(message)"
         case let .toolFailed(message):
             "解压更新包失败：\(message)"
-        case .checksumUnavailable:
-            "更新包缺少 SHA-256 校验信息，未进行安装"
         case .checksumMismatch:
             "更新包校验失败，未进行安装"
         case .notNewerRelease:
             "这个版本不比当前安装更新，已阻止安装"
-        case let .privacyPermissionResetFailed(message):
-            "清除旧的屏幕录制和辅助功能权限失败：\(message)"
         }
     }
 }
 
 struct JarvisUpdateService {
-    private static let legacyBootstrapMaximumVersion = "1.4.5"
     private static let manifestAssetName = "Jarvis-update-manifest.json"
     private static let signatureAssetName = "Jarvis-update-manifest.sig"
-    private static let releasesURL = URL(string: "https://github.com/MineonStudio/jarvis-macos/releases")!
+    private static let releasesURL = URL(string: "https://github.com/MineonStudio/Jarvis/releases")!
     static let updateLogURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Logs/Jarvis/update.log")
-
-    static func privacyPermissionResetArguments(bundleIdentifier: String) -> [[String]] {
-        JarvisPrivacyPermissionReset.arguments(bundleIdentifier: bundleIdentifier)
-    }
 
     func checkForLatestRelease() async throws -> JarvisReleaseInfo {
         let operationID = JarvisLog.operationID()
@@ -174,10 +160,8 @@ struct JarvisUpdateService {
     }
 
     /// Downloads, validates, and hands the update to a detached installer.
-    /// Matches the 1.3.10 path: a Mac with the local signing identity re-signs
-    /// the app and keeps permissions; everyone else resets those grants and
-    /// installs the ad-hoc build.
     func downloadAndInstall(_ release: JarvisReleaseInfo) async throws {
+        guard !JarvisAppIdentity.isDevelopment else { throw JarvisUpdateError.unsupportedUpdateChannel }
         let operationID = JarvisLog.operationID()
         var handedOffToInstaller = false
         JarvisLog.notice(
@@ -195,9 +179,8 @@ struct JarvisUpdateService {
                 fields: ["version": release.version]
             )
         }
-        // S-1：先验签更新清单。清单缺失、签名无效都直接中止更新，
-        // 不降级为无验签安装（fail-closed）。权限重置放在 zip 哈希核对之后，
-        // 避免清单或安装包对不上时已经清掉用户的 TCC 授权。
+        // Authenticate the manifest and archive before inspecting the app.
+        // Updates preserve the publisher signature and never reset privacy grants.
         let manifest = try await verifyUpdateManifest(for: release, operationID: operationID)
         guard JarvisUpdateSecurity.isNewer(
             remoteVersion: manifest.version,
@@ -236,7 +219,7 @@ struct JarvisUpdateService {
         }
 
         var request = URLRequest(url: release.downloadURL)
-        request.setValue("Jarvis macOS; +https://github.com/MineonStudio/jarvis-macos", forHTTPHeaderField: "User-Agent")
+        request.setValue("Jarvis macOS; +https://github.com/MineonStudio/Jarvis", forHTTPHeaderField: "User-Agent")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
         let (downloadedURL, response) = try await updateSession.download(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
@@ -248,11 +231,6 @@ struct JarvisUpdateService {
         let archiveURL = temporaryDirectory.appendingPathComponent(manifest.archiveName)
         try fileManager.moveItem(at: downloadedURL, to: archiveURL)
         try validateSignedArchive(at: archiveURL, manifest: manifest)
-
-        let keepsCodeIdentity = JarvisLocalSigning.isAvailable
-        if !keepsCodeIdentity {
-            try resetPrivacyPermissions()
-        }
 
         let extractionDirectory = temporaryDirectory.appendingPathComponent("extracted", isDirectory: true)
         try fileManager.createDirectory(at: extractionDirectory, withIntermediateDirectories: true)
@@ -267,9 +245,10 @@ struct JarvisUpdateService {
             throw JarvisUpdateError.invalidApplication
         }
 
-        if keepsCodeIdentity {
-            try JarvisLocalSigning.resign(appAt: newAppURL)
-        }
+        try JarvisCodeIdentity.validateUpdate(at: newAppURL, replacing: currentAppURL)
+        guard Self.bundleValue("CFBundleShortVersionString", in: newAppURL) == manifest.version,
+              Self.bundleValue("CFBundleVersion", in: newAppURL) == manifest.build
+        else { throw JarvisUpdateError.mismatchedVersion }
 
         let scriptURL = temporaryDirectory.appendingPathComponent("install-update.zsh")
         try makeInstallerScript(
@@ -289,24 +268,13 @@ struct JarvisUpdateService {
         handedOffToInstaller = true
     }
 
-    static func resetPrivacyPermissions(bundleIdentifier: String) throws {
-        try JarvisPrivacyPermissionReset.reset(bundleIdentifier: bundleIdentifier)
-    }
-
-    private func resetPrivacyPermissions() throws {
-        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
-            throw JarvisUpdateError.privacyPermissionResetFailed("无法读取应用 Bundle ID")
-        }
-        try Self.resetPrivacyPermissions(bundleIdentifier: bundleIdentifier)
-    }
-
     private func downloadSmallAsset(at url: URL, maximumBytes: Int) async throws -> Data {
         guard isAllowedGitHubAssetURL(url) else {
             throw JarvisUpdateError.invalidManifest
         }
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue("Jarvis macOS; +https://github.com/MineonStudio/jarvis-macos", forHTTPHeaderField: "User-Agent")
+        request.setValue("Jarvis macOS; +https://github.com/MineonStudio/Jarvis", forHTTPHeaderField: "User-Agent")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
         let (fileURL, response) = try await updateSession.download(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
@@ -426,10 +394,6 @@ struct JarvisUpdateService {
         url.scheme?.lowercased() == "https" && url.host?.lowercased() == "github.com"
     }
 
-    func isLegacyBootstrapRelease(_ version: String) -> Bool {
-        JarvisUpdateSecurity.normalizedVersion(version) == Self.legacyBootstrapMaximumVersion
-    }
-
     private static func bundleValue(_ key: String, in appURL: URL) -> String? {
         let infoURL = appURL.appendingPathComponent("Contents/Info.plist")
         guard let data = try? Data(contentsOf: infoURL),
@@ -504,18 +468,6 @@ struct JarvisUpdateService {
         }
     }
 
-    func verifyDigest(of fileURL: URL, expected: String?) throws {
-        guard let expected, expected.lowercased().hasPrefix("sha256:") else {
-            throw JarvisUpdateError.checksumUnavailable
-        }
-
-        let digest = try sha256(of: fileURL)
-        let expectedDigest = String(expected.dropFirst("sha256:".count))
-        guard digest.caseInsensitiveCompare(expectedDigest) == .orderedSame else {
-            throw JarvisUpdateError.checksumMismatch
-        }
-    }
-
     private func sha256(of fileURL: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { try? handle.close() }
@@ -568,28 +520,7 @@ struct JarvisUpdateService {
         guard bundleIdentifier == Bundle.main.bundleIdentifier else {
             return false
         }
-        return signingTeamIdentifier(of: url) == signingTeamIdentifier(of: Bundle.main.bundleURL)
-    }
-
-    func signingTeamIdentifier(of appURL: URL) -> String? {
-        var staticCode: SecStaticCode?
-        guard SecStaticCodeCreateWithPath(appURL as CFURL, [], &staticCode) == errSecSuccess,
-              let staticCode
-        else {
-            return nil
-        }
-
-        var information: CFDictionary?
-        guard SecCodeCopySigningInformation(
-            staticCode,
-            SecCSFlags(rawValue: kSecCSSigningInformation),
-            &information
-        ) == errSecSuccess,
-            let information = information as? [String: Any]
-        else {
-            return nil
-        }
-        return information[kSecCodeInfoTeamIdentifier as String] as? String
+        return true
     }
 
     private func runTool(_ path: String, arguments: [String]) throws {
@@ -618,8 +549,7 @@ extension JarvisUpdateService {
         currentAppURL: URL,
         newAppURL: URL,
         temporaryDirectory: URL,
-        parentProcessID: Int32,
-        requiresPermissionReset: Bool = false
+        parentProcessID: Int32
     ) throws {
         let backupURL = currentAppURL.deletingLastPathComponent()
             .appendingPathComponent("Jarvis.app.update-backup-\(UUID().uuidString)")
@@ -638,7 +568,6 @@ extension JarvisUpdateService {
         backup_app=\(shellQuote(backupURL.path))
         temp_dir=\(shellQuote(temporaryDirectory.path))
         parent_pid=\(parentProcessID)
-        needs_permission_reset=\(requiresPermissionReset ? "true" : "false")
 
         log "开始安装更新：$new_app -> $old_app"
         log "当前进程 PID：$parent_pid"
@@ -684,31 +613,10 @@ extension JarvisUpdateService {
             /bin/rm -rf "$backup_app" "$temp_dir"
         }
 
-        mark_permission_reset_pending() {
-            [[ "$needs_permission_reset" == "true" ]] || return 0
-            log "检测到签名身份切换，安排一次性权限迁移"
-            if ! /usr/bin/defaults write com.jarvis.mac jarvis.installation.permission-reset.pending -bool true; then
-                log "写入权限迁移标记失败，尝试直接清理旧授权"
-                /usr/bin/tccutil reset ScreenCapture com.jarvis.mac >/dev/null 2>&1 \\
-                    || log "屏幕录制旧授权清理失败，请在新版本的权限页面重新授权"
-                /usr/bin/tccutil reset Accessibility com.jarvis.mac >/dev/null 2>&1 \\
-                    || log "辅助功能旧授权清理失败，请在新版本的权限页面重新授权"
-                /usr/bin/tccutil reset Microphone com.jarvis.mac >/dev/null 2>&1 \\
-                    || log "麦克风旧授权清理失败，请在新版本的权限页面重新授权"
-                /usr/bin/tccutil reset Camera com.jarvis.mac >/dev/null 2>&1 \\
-                    || log "摄像头旧授权清理失败，请在新版本的权限页面重新授权"
-            fi
-        }
-
-        clear_permission_reset_pending() {
-            /usr/bin/defaults delete com.jarvis.mac jarvis.installation.permission-reset.pending >/dev/null 2>&1 || true
-        }
-
         restore_user_owned() {
             log "回滚到旧版本"
             /bin/rm -rf "$old_app"
             /bin/mv "$backup_app" "$old_app"
-            clear_permission_reset_pending
         }
 
         cleanup_with_authorization() {
@@ -747,7 +655,6 @@ extension JarvisUpdateService {
             fi
             log "新应用已替换到原路径"
             refresh_launch_services "$old_app"
-            mark_permission_reset_pending
 
             if launch_and_verify "$old_app"; then
                 cleanup_user_owned
@@ -781,7 +688,6 @@ extension JarvisUpdateService {
             fi
             log "管理员权限替换完成"
             refresh_launch_services "$old_app"
-            mark_permission_reset_pending
 
             if launch_and_verify "$old_app"; then
                 cleanup_with_authorization || log "清理备份文件失败：$backup_app"
@@ -791,7 +697,6 @@ extension JarvisUpdateService {
 
             log "新应用启动失败，执行管理员回滚"
             if restore_with_authorization; then
-                clear_permission_reset_pending
                 launch_and_verify "$old_app" || log "旧版本恢复后启动也失败"
             else
                 log "管理员回滚失败：$backup_app"
@@ -807,7 +712,15 @@ extension JarvisUpdateService {
         done
         log "应用进程已结束，开始替换"
 
-        if /usr/bin/codesign --verify --deep --strict "$new_app" >/dev/null 2>&1; then
+        abort_install() {
+            log "$1，保留旧版本并重新启动"
+            /usr/bin/open -na "$old_app" || log "旧版本重新启动失败"
+            /bin/rm -rf "$temp_dir"
+            exit 1
+        }
+        requirement=$(/usr/bin/codesign -d -r- "$old_app" 2>&1) || abort_install "无法读取当前代码身份"
+        requirement=$(print -r -- "$requirement" | /usr/bin/sed -n 's/^designated => //p')
+        if [[ -n "$requirement" ]] && /usr/bin/codesign --verify --deep --strict -R "=$requirement" "$new_app" >/dev/null 2>&1; then
             log "新应用签名校验通过"
         else
             log "新应用签名校验失败，保留旧版本并重新启动"
@@ -818,8 +731,9 @@ extension JarvisUpdateService {
 
         # 发布包没有开发者 ID 签名，留着 quarantine 会被 Gatekeeper 挡住启动，
         # 所以只在签名校验通过之后才摘。
-        target="$new_app"
-        \(JarvisSigningScript.stripQuarantine)
+        if /usr/bin/xattr -p com.apple.quarantine "$new_app" >/dev/null 2>&1; then
+            /usr/bin/xattr -dr com.apple.quarantine "$new_app" || abort_install "无法移除更新包隔离标记"
+        fi
 
         if replace_without_authorization; then
             exit 0

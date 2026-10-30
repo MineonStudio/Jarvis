@@ -7,13 +7,16 @@ on:
 jobs:
   quality:
     runs-on: macos-26
+    env:
+      JARVIS_SWIFTPM_SCRATCH_DIR: ${{ runner.temp }}/jarvis-swiftpm
+      JARVIS_WARNINGS_AS_ERRORS: "1"
     steps:
       - name: Check out source
         uses: actions/checkout@v5
 
       - name: Install static-analysis tools
         run: |
-          brew install swiftlint
+          if ! command -v swiftlint >/dev/null 2>&1; then brew install swiftlint; fi
           # macos-26 already has SwiftFormat 0.63.0 and brew install will not
           # replace it. 0.63.0 and 0.63.1 disagree on doc comments; this repo
           # is formatted with 0.63.1.
@@ -36,20 +39,30 @@ jobs:
         run: swiftlint lint --config .swiftlint.yml --baseline .swiftlint-baseline.json --strict
 
       - name: Build
-        run: swift build -c release
+        run: swift build -c release --scratch-path "$JARVIS_SWIFTPM_SCRATCH_DIR" -Xswiftc -warnings-as-errors
 
       - name: Test
-        run: swift test
+        run: swift test --scratch-path "$JARVIS_SWIFTPM_SCRATCH_DIR" -Xswiftc -warnings-as-errors
 
       - name: Package app bundle
-        run: ./build_app.sh
+        run: |
+          export JARVIS_SIGNING_KEYCHAIN="$RUNNER_TEMP/jarvis-ci.keychain-db"
+          signing_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$signing_password"
+          trap 'security delete-keychain "$JARVIS_SIGNING_KEYCHAIN"' EXIT
+          security create-keychain -p "$signing_password" "$JARVIS_SIGNING_KEYCHAIN"
+          security unlock-keychain -p "$signing_password" "$JARVIS_SIGNING_KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$JARVIS_SIGNING_KEYCHAIN"
+          ./script/setup_signing.sh --development
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$signing_password" "$JARVIS_SIGNING_KEYCHAIN" >/dev/null
+          JARVIS_DEV_BUILD=1 ./build_app.sh
 
       - name: Check packaged identity
         run: |
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' dist/Jarvis.app/Contents/Info.plist
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/Jarvis.app/Contents/Info.plist
-          test -f dist/Jarvis.app/Contents/Resources/Assets.car
-          codesign -d --entitlements - dist/Jarvis.app >/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' dist/Jarvis-Dev.app/Contents/Info.plist
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/Jarvis-Dev.app/Contents/Info.plist
+          test -f dist/Jarvis-Dev.app/Contents/Resources/Assets.car
+          codesign -d --entitlements - dist/Jarvis-Dev.app >/dev/null
 
       - name: Check diff whitespace
         run: git diff --check

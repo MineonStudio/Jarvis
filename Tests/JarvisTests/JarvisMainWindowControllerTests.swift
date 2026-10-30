@@ -4,7 +4,10 @@ import XCTest
 
 @MainActor
 final class JarvisMainWindowControllerTests: XCTestCase {
-    func testApplyingWindowLayoutsKeepsTheMainWindowAtNormalLevel() {
+    func testApplyingWindowLayoutsKeepsTheMainWindowAtNormalLevel() throws {
+        // AppKit constrains frames to the real screen. Use on-screen targets
+        // so this stacking-policy test also works on small CI displays.
+        let area = try XCTUnwrap(NSScreen.main).visibleFrame.insetBy(dx: 20, dy: 20)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1400, height: 800),
             styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: true
@@ -15,8 +18,8 @@ final class JarvisMainWindowControllerTests: XCTestCase {
         controller.attach(to: window)
         XCTAssertEqual(window.level, .normal)
         for frame in [
-            NSRect(x: 0, y: 0, width: 700, height: 500),
-            NSRect(x: 700, y: 0, width: 700, height: 1000)
+            NSRect(x: area.minX, y: area.minY, width: area.width / 2, height: area.height / 2),
+            NSRect(x: area.midX, y: area.minY, width: area.width / 2, height: area.height)
         ] {
             XCTAssertTrue(JarvisMainWindowController.applyWindowLayoutFrame(frame, to: window))
             XCTAssertEqual(window.level, .normal)

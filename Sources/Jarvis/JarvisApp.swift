@@ -19,7 +19,6 @@ struct JarvisApp: App {
     init() {
         NSApplication.shared.setActivationPolicy(JarvisApplicationPresentation.activationPolicy)
         JarvisInstallSource.recordIfMissing()
-        JarvisFreshInstallPermissionCleanup.runIfNeeded()
         JarvisLog.notice(
             category: .lifecycle,
             event: "process.started",

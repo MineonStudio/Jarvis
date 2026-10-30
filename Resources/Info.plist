@@ -15,26 +15,15 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.8.17</string>
+	<string>1.8.18</string>
 	<key>CFBundleVersion</key>
-	<string>380</string>
+	<string>381</string>
 	<key>JarvisInstallSource</key>
 	<string>direct-download</string>
 	<key>JarvisUpdatePublicKey</key>
 	<string>wcyuvJC5KV1tE9869J/Vfns0v1vz+Zfz9b/UMs/Fxy0=</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>工作搭子 Jarvis 用于在局域网麻将对局和文件传输中发现并连接同一网络的设备。</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_http._tcp</string>
-		<string>_mahjong._tcp</string>
-	</array>
-	<key>NSAudioCaptureUsageDescription</key>
-	<string>工作搭子 Jarvis 在会议记录中采集系统播放音频，以便识别耳机中远程参会者的发言；原始音频保存在本机。</string>
-	<key>NSCameraUsageDescription</key>
-	<string>工作搭子 Jarvis 需要使用摄像头，让聊天网页支持视频和拍照功能。</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSExceptionDomains</key>
@@ -55,8 +44,19 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>工作搭子 Jarvis 在会议记录中采集系统播放音频，以便识别耳机中远程参会者的发言；原始音频保存在本机。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_http._tcp</string>
+		<string>_mahjong._tcp</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>工作搭子 Jarvis 需要使用摄像头，让聊天网页支持视频和拍照功能。</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>工作搭子 Jarvis 用于在局域网麻将对局和文件传输中发现并连接同一网络的设备。</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>工作搭子 Jarvis 在会议记录中使用麦克风保存你的发言，也用于聊天网页的语音输入和语音通话；原始录音保存在本机。</string>
 	<key>NSScreenCaptureUsageDescription</key>

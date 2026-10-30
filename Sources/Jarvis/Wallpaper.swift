@@ -597,7 +597,7 @@ protocol WallpaperSourceProviding: Sendable {
 
 enum WallpaperHTTP {
     static let userAgent =
-        "Jarvis/\(JarvisAppVersion.shortVersion) (https://github.com/MineonStudio/jarvis-macos; wallpaper)"
+        "Jarvis/\(JarvisAppVersion.shortVersion) (https://github.com/MineonStudio/Jarvis; wallpaper)"
 
     static func request(url: URL, timeout: TimeInterval = 12) -> URLRequest {
         var request = URLRequest(url: url)

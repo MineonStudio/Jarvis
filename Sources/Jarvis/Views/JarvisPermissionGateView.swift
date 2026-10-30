@@ -104,22 +104,12 @@ struct JarvisPermissionGateOverlay: View {
 
 struct JarvisPermissionGateView: View {
     @Environment(AppModel.self) private var app
-    @State private var isAdoptingIdentity = false
-    @State private var adoptionFailure: String?
-
     private var remainingCount: Int {
         JarvisRequiredPermission.allCases.count { !app.isRequiredPermissionGranted($0) }
     }
 
-    private var hasPersistentSigningIdentity: Bool {
-        JarvisLocalSigning.isSignedWithInstalledIdentity(appAt: Bundle.main.bundleURL)
-    }
-
     private var invitationLine: String {
-        guard hasPersistentSigningIdentity else {
-            return "先固定这台 Mac 上的应用身份，之后同渠道更新就能保留授权。"
-        }
-        return switch remainingCount {
+        switch remainingCount {
         case 0: "都好了，我们开始。"
         case 1: "就差这一步了。"
         default: "打开这些，我们就开始。"
@@ -144,16 +134,7 @@ struct JarvisPermissionGateView: View {
                     .multilineTextAlignment(.center)
             }
 
-            if hasPersistentSigningIdentity {
-                JarvisPermissionList()
-            } else if JarvisLocalSigning.canAdoptLocalIdentity {
-                signingAdoptionCard
-            } else {
-                Text("请先把工作搭子 Jarvis移到“应用程序”文件夹，再完成本机签名。固定应用身份后才能开始授权。")
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(Color.jarvisTextSecondary)
-                    .multilineTextAlignment(.center)
-            }
+            JarvisPermissionList()
         }
         .padding(.horizontal, 28)
         .padding(.top, 30)
@@ -161,76 +142,6 @@ struct JarvisPermissionGateView: View {
         .frame(width: 400)
         .jarvisGlass(cornerRadius: 24, interactive: false)
         .shadow(color: Color.black.opacity(0.16), radius: 32, y: 14)
-        .onAppear {
-            // 签名是在应用退出之后由脚本完成的，失败原因只能由下一次启动认领。
-            if let reason = JarvisLocalSigning.consumeAdoptionFailure() {
-                adoptionFailure = "上次签名失败：\(reason)"
-            }
-        }
-    }
-
-    /// Releases are ad-hoc signed. Signing this copy with a certificate made
-    /// on this Mac before granting permissions lets later same-channel updates
-    /// preserve those grants.
-    private var signingAdoptionCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "signature")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.jarvisAccent)
-                Text("让以后的更新不再重新授权")
-                    .font(JarvisTypography.bodyEmphasis)
-            }
-
-            Text("先在这台 Mac 上生成一张本机证书并签名，再授予屏幕录制、辅助功能、麦克风和摄像头权限。之后同渠道更新会沿用这个身份，证书不会离开这台 Mac。")
-                .font(JarvisTypography.caption)
-                .foregroundStyle(Color.jarvisTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("点下去工作搭子 Jarvis会自己关掉再重新打开，中途不用管它；万一失败也会自动开回来并在这里说明原因。")
-                .font(JarvisTypography.caption)
-                .foregroundStyle(Color.jarvisTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let adoptionFailure {
-                Text(adoptionFailure)
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Button {
-                startAdoption()
-            } label: {
-                HStack(spacing: 6) {
-                    if isAdoptingIdentity {
-                        ProgressView().controlSize(.small)
-                    }
-                    Text(isAdoptingIdentity ? "正在签名…" : "签名并立即重启")
-                }
-            }
-            .buttonStyle(JarvisSecondaryButtonStyle())
-            .disabled(isAdoptingIdentity)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.jarvisAccent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    private func startAdoption() {
-        isAdoptingIdentity = true
-        adoptionFailure = nil
-        do {
-            try JarvisLocalSigning.adoptLocalIdentity()
-            // The detached script waits for this process to exit before it
-            // swaps in the newly signed copy and opens it again.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                NSApp.terminate(nil)
-            }
-        } catch {
-            isAdoptingIdentity = false
-            adoptionFailure = "签名失败：\(error.localizedDescription)"
-        }
     }
 }
 

@@ -731,14 +731,6 @@ extension AppModel {
 
     func downloadAndInstallUpdate() {
         guard case let .available(release) = updateState else { return }
-        if !JarvisLocalSigning.isAvailable {
-            let alert = NSAlert()
-            alert.messageText = "安装后需要重新授权"
-            alert.informativeText = "这次更新会清除屏幕录制、辅助功能、麦克风和摄像头授权。"
-            alert.addButton(withTitle: "继续")
-            alert.addButton(withTitle: "取消")
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-        }
         updateState = .downloading(version: release.version)
         Task { @MainActor [weak self] in
             guard let self else { return }

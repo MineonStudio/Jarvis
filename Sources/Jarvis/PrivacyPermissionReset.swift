@@ -15,9 +15,8 @@ enum JarvisPrivacyPermissionResetError: LocalizedError {
     }
 }
 
-/// Reset Jarvis's TCC grants when its signing identity or install channel
-/// changes, then let the replacement app request them again. Do not reset on
-/// ordinary same-channel launches or updates.
+/// Explicit user-requested repair only. Startup, installation, and updates
+/// must never reset privacy grants automatically.
 enum JarvisPrivacyPermissionReset {
     static func arguments(bundleIdentifier: String) -> [[String]] {
         [

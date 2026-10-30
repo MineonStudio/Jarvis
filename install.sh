@@ -1,229 +1,105 @@
 #!/bin/zsh
-#
-# Installs Jarvis with a code-signing identity that lives on this Mac.
-#
-# Shipping builds are ad-hoc signed, so macOS treats every update as a
-# different app and drops the Screen Recording, Accessibility, and Keychain
-# grants with it. This script creates a self-signed certificate in your login
-# keychain and signs the app with it, so grants made once survive updates.
-#
-# What it does, in order:
-#   1. downloads the latest release zip over curl (which, unlike a browser,
-#      does not set the quarantine flag, so Gatekeeper does not block it)
-#   2. verifies the bundle identifier and that the signature is intact
-#   3. creates a "Jarvis Local Signing" certificate if you do not have one
-#   4. re-signs Jarvis.app with that certificate and the app's entitlements
-#   5. replaces /Applications/Jarvis.app and launches it
-#
-# Nothing here leaves your Mac: the certificate and its private key stay in
-# your login keychain. Pass --uninstall to remove the app and the certificate.
-#
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/MineonStudio/jarvis-macos/dev/install.sh | zsh
-#   zsh install.sh --uninstall
-
+# Installs the publisher-signed app without creating or modifying any keys.
 set -euo pipefail
-
-REPOSITORY="MineonStudio/jarvis-macos"
+umask 077
+REPOSITORY="MineonStudio/Jarvis"
 BUNDLE_IDENTIFIER="com.jarvis.mac"
-APP_NAME="Jarvis.app"
-# Overridable so the script can be exercised without touching /Applications or
-# a real login keychain entry.
-IDENTITY_NAME="${JARVIS_SIGNING_IDENTITY:-Jarvis Local Signing}"
+RELEASE_CERTIFICATE_SHA1="775BBDC3A7E604D25E2FABB204E2FD23349A61C8"
 INSTALL_DIR="${JARVIS_INSTALL_DIR:-/Applications}"
+APP_PATH="$INSTALL_DIR/Jarvis.app"
 LAUNCH_AFTER_INSTALL=1
-
-WORK_DIR=""
+UNINSTALL=0
+WORK_DIR=''
+BACKUP_PATH=''
 cleanup() {
-  [[ -n "$WORK_DIR" && -d "$WORK_DIR" ]] && rm -rf "$WORK_DIR"
+  [[ -z "$WORK_DIR" ]] || rm -rf "$WORK_DIR"
 }
 trap cleanup EXIT
-
-log() {
-  print -r -- "$*"
-}
-
-die() {
-  print -ru2 -- "错误：$*"
-  exit 1
-}
-
-# 共享片段用 fail 汇报失败。这里没有需要放回来的应用：走到签名这一步时
-# 要么是全新安装，要么还没退出正在运行的旧副本。
-fail() {
-  die "$1"
-}
-
+die() { print -ru2 -- "错误：$*"; exit 1; }
 for argument in "$@"; do
   case "$argument" in
     --uninstall) UNINSTALL=1 ;;
     --no-launch) LAUNCH_AFTER_INSTALL=0 ;;
-    -h|--help) log "用法：zsh install.sh [--no-launch] [--uninstall]"; exit 0 ;;
+    -h|--help) print -r -- '用法：zsh install.sh [--no-launch] [--uninstall]'; exit 0 ;;
     *) die "未知参数：$argument" ;;
   esac
 done
-
-# Only worth interrupting a running copy when this is a replacement; a first
-# install, or one aimed somewhere else, has nothing to quit.
+[[ "$(uname -s)" == Darwin ]] || die '只能在 macOS 上运行。'
 quit_running_app_if_replacing() {
-  [[ -d "${INSTALL_DIR}/${APP_NAME}" ]] || return 0
-  local target="${INSTALL_DIR}/${APP_NAME}/Contents/MacOS/Jarvis"
+  [[ -d "$APP_PATH" ]] || return 0
+  local target="$APP_PATH/Contents/MacOS/Jarvis"
   app_is_running() {
-    /bin/ps -axo pid=,command= \
-      | /usr/bin/grep -F "$target" \
-      | /usr/bin/grep -v -F "/usr/bin/grep" >/dev/null 2>&1
+    /bin/ps -axo pid=,command= | /usr/bin/grep -F "$target" | /usr/bin/grep -v -F /usr/bin/grep >/dev/null 2>&1
   }
   app_is_running || return 0
-  log "退出正在运行的贾维斯…"
-  osascript -e 'tell application "Jarvis" to quit' >/dev/null 2>&1 || true
+  osascript -e 'tell application id "com.jarvis.mac" to quit' >/dev/null 2>&1 || true
   local tick
   for tick in {1..150}; do
     app_is_running || return 0
     sleep 0.1
   done
-  die "贾维斯仍在运行。请先退出后再安装，以免替换正在使用的应用。"
+  die 'Jarvis 仍在运行，请先退出后再安装。'
 }
-
-if [[ "${UNINSTALL:-0}" == "1" ]]; then
+if (( UNINSTALL )); then
   quit_running_app_if_replacing
-  rm -rf "${INSTALL_DIR}/${APP_NAME}"
-
-  UNINSTALL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jarvis-uninstall.XXXXXX")"
-  if security find-certificate -c "$IDENTITY_NAME" -p "$HOME/Library/Keychains/login.keychain-db" \
-      > "$UNINSTALL_DIR/identity.crt" 2>/dev/null; then
-    security remove-trusted-cert "$UNINSTALL_DIR/identity.crt" >/dev/null 2>&1 || true
-    security delete-identity -c "$IDENTITY_NAME" >/dev/null 2>&1 || true
-    log "已移除证书 ${IDENTITY_NAME} 及其信任设置。"
-  fi
-  rm -rf "$UNINSTALL_DIR"
-
-  log "已移除 ${INSTALL_DIR}/${APP_NAME}"
+  rm -rf "$APP_PATH"
+  print -r -- "已移除 $APP_PATH；应用数据与钥匙串未改动。"
   exit 0
 fi
-
-[[ "$(uname -s)" == "Darwin" ]] || die "只能在 macOS 上运行。"
-if [[ -d "$INSTALL_DIR" ]]; then
-  [[ -w "$INSTALL_DIR" ]] || die "${INSTALL_DIR} 不可写，请用管理员账户运行。"
-else
-  mkdir -p "$INSTALL_DIR" 2>/dev/null || die "无法创建 ${INSTALL_DIR}。"
-fi
-
+mkdir -p "$INSTALL_DIR"
+[[ -w "$INSTALL_DIR" ]] || die "$INSTALL_DIR 不可写。"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jarvis-install.XXXXXX")"
-
-log "查询最新版本…"
-RELEASE_JSON="$WORK_DIR/release.json"
-curl -fsSL \
-  -H "Accept: application/vnd.github+json" \
-  -H "User-Agent: Jarvis installer" \
-  "https://api.github.com/repos/${REPOSITORY}/releases/latest" > "$RELEASE_JSON" \
-  || die "无法获取版本信息，请检查网络。"
-
-VERSION="$(sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' "$RELEASE_JSON" | head -1)"
-# Read the URL and digest from the asset object that carries the download, so
-# a release with several files cannot pair a digest with the wrong archive.
-# Same selection rule as the app: a .zip whose name mentions Jarvis.
-ASSET_LINE="$(grep -n -i -m1 '"name": *"[^"]*jarvis[^"]*\.zip"' "$RELEASE_JSON" | cut -d: -f1)"
-[[ -n "$ASSET_LINE" ]] || die "最新版本没有可用的安装包。"
-# The remaining fields of that object follow its name; stop well before the
-# next asset begins.
-ASSET_JSON="$(tail -n +"$ASSET_LINE" "$RELEASE_JSON" | head -40)"
-ZIP_URL="$(print -r -- "$ASSET_JSON" | sed -n 's/.*"browser_download_url": *"\([^"]*\)".*/\1/p' | head -1)"
-DIGEST="$(print -r -- "$ASSET_JSON" | sed -n 's/.*"digest": *"\([^"]*\)".*/\1/p' | head -1)"
-[[ -n "$VERSION" && -n "$ZIP_URL" ]] || die "最新版本没有可用的安装包。"
-
-log "下载 ${VERSION}…"
-ARCHIVE="$WORK_DIR/Jarvis.zip"
-curl -fsSL -o "$ARCHIVE" "$ZIP_URL" || die "下载失败。"
-
-[[ -n "$DIGEST" ]] || die "安装包缺少校验和，拒绝安装。"
-ACTUAL="sha256:$(shasum -a 256 "$ARCHIVE" | cut -d' ' -f1)"
-[[ "$ACTUAL" == "$DIGEST" ]] || die "校验和不匹配，安装包可能不完整。"
-log "校验和匹配。"
-
-log "解压…"
-/usr/bin/ditto -x -k "$ARCHIVE" "$WORK_DIR/extracted"
-SOURCE_APP="$WORK_DIR/extracted/${APP_NAME}"
-[[ -d "$SOURCE_APP" ]] || die "安装包里没有找到 ${APP_NAME}。"
-
-EXTRACTED_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
-  "$SOURCE_APP/Contents/Info.plist" 2>/dev/null || true)"
-[[ "$EXTRACTED_BUNDLE_ID" == "$BUNDLE_IDENTIFIER" ]] \
-  || die "安装包的 Bundle ID 是 ${EXTRACTED_BUNDLE_ID}，不是 ${BUNDLE_IDENTIFIER}。"
-codesign --verify --deep --strict "$SOURCE_APP" >/dev/null 2>&1 \
-  || die "安装包的签名校验失败。"
-
-# 下面这几个别名照着 JarvisSigningScript 的约定取名，好让本脚本直接嵌入
-# 与两份内嵌脚本完全相同的那几段：证书、信任设置和签名是三处都要做对的事，
-# JarvisSigningScriptTests 会断言这里与那边逐字一致。
-identity="$IDENTITY_NAME"
-bundle_id="$BUNDLE_IDENTIFIER"
-work="$WORK_DIR"
-login_keychain="$HOME/Library/Keychains/login.keychain-db"
-
-if ! /usr/bin/security find-identity -p codesigning 2>/dev/null | /usr/bin/grep -qF "$identity"; then
-    log "生成本机签名证书"
-    /usr/bin/openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
-        -keyout "$work/key.pem" -out "$work/cert.pem" \
-        -subj "/CN=$identity/O=Jarvis Local" \
-        -addext "basicConstraints=critical,CA:false" \
-        -addext "keyUsage=critical,digitalSignature" \
-        -addext "extendedKeyUsage=critical,codeSigning" || fail "生成证书失败"
-    /usr/bin/security import "$work/cert.pem" -k "$login_keychain" \
-        -T /usr/bin/codesign || fail "导入证书失败"
-    /usr/bin/security import "$work/key.pem" -k "$login_keychain" \
-        -T /usr/bin/codesign -T /usr/bin/security || fail "导入私钥失败"
-    /usr/bin/security find-identity -p codesigning | /usr/bin/grep -qF "$identity" \
-        || fail "证书导入后仍查不到"
+curl -fsSL -H 'Accept: application/vnd.github+json' \
+  "https://api.github.com/repos/$REPOSITORY/releases/latest" -o "$WORK_DIR/release.json"
+# Native JSON parsing, with exact asset selection; no Python or Swift install required.
+cat > "$WORK_DIR/release.js" <<'JXA'
+ObjC.import('Foundation');
+function run(args) {
+  const content = $.NSString.stringWithContentsOfFileEncodingError(args[0], $.NSUTF8StringEncoding, null);
+  const release = JSON.parse(ObjC.unwrap(content));
+  const version = release.tag_name.replace(/^v/, '');
+  if (!/^\d+(\.\d+)*$/.test(version) || release.prerelease || release.draft) throw Error('Invalid stable release');
+  const asset = release.assets.find(a => a.name === 'Jarvis-' + version + '-macos.zip');
+  if (!asset || !/^sha256:[a-f0-9]{64}$/.test(asset.digest || '')) throw Error('Missing archive digest');
+  const url = 'https://github.com/MineonStudio/Jarvis/releases/download/v' + version + '/' + asset.name;
+  if (asset.browser_download_url !== url) throw Error('Unexpected asset URL');
+  return [version, url, asset.digest].join('\n');
+}
+JXA
+RELEASE_INFO="$(osascript -l JavaScript "$WORK_DIR/release.js" "$WORK_DIR/release.json")"
+FIELDS=("${(@f)RELEASE_INFO}")
+[[ "${#FIELDS}" == 3 ]] || die '无法读取发布信息。'
+VERSION="$FIELDS[1]"
+curl -fsSL "$FIELDS[2]" -o "$WORK_DIR/Jarvis.zip"
+ACTUAL="sha256:$(shasum -a 256 "$WORK_DIR/Jarvis.zip" | cut -d' ' -f1)"
+[[ "$ACTUAL" == "$FIELDS[3]" ]] || die '安装包校验和不匹配。'
+ditto -x -k "$WORK_DIR/Jarvis.zip" "$WORK_DIR/extracted"
+SOURCE_APP="$WORK_DIR/extracted/Jarvis.app"
+[[ -d "$SOURCE_APP" ]] || die '安装包中没有 Jarvis.app。'
+REQUIREMENT="identifier \"$BUNDLE_IDENTIFIER\" and certificate root = H\"$RELEASE_CERTIFICATE_SHA1\""
+codesign --verify --deep --strict -R "=$REQUIREMENT" "$SOURCE_APP" || die '发布证书校验失败。'
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$SOURCE_APP/Contents/Info.plist")" == "$BUNDLE_IDENTIFIER" ]] || die 'Bundle ID 不匹配。'
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$SOURCE_APP/Contents/Info.plist")" == "$VERSION" ]] || die '版本不匹配。'
+# Stage and validate at the destination before interrupting an installed copy.
+STAGED_PATH="$(mktemp -d "$INSTALL_DIR/.jarvis-install.XXXXXX")"
+if ! ditto "$SOURCE_APP" "$STAGED_PATH/Jarvis.app" || ! codesign --verify --deep --strict -R "=$REQUIREMENT" "$STAGED_PATH/Jarvis.app"; then
+  rm -rf "$STAGED_PATH"
+  die '复制或签名校验失败，原安装未改动。'
 fi
-
-# Make the certificate a complete code-signing identity rather than one
-# Keychain only lists under the plain code-signing policy. Trust is per-user
-# and only affects code signed by this key, which never leaves this Mac.
-# TCC carries grants across rebuilds either way; whether Keychain access also
-# stops re-asking is still being verified, so do not document it as a fix.
-if ! /usr/bin/security find-identity -v -p codesigning 2>/dev/null | /usr/bin/grep -qF "$identity"; then
-    log "把证书加入信任设置"
-    /usr/bin/security find-certificate -c "$identity" -p \
-        "$login_keychain" > "$work/identity.crt" || fail "导出证书失败"
-    /usr/bin/security add-trusted-cert -r trustRoot -p codeSign \
-        -k "$login_keychain" "$work/identity.crt" >/dev/null 2>&1 \
-        || log "写入信任设置失败，继续签名"
-fi
-
-cat > "$work/entitlements.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>com.apple.security.cs.allow-jit</key>
-	<true/>
-	<key>com.apple.security.device.audio-input</key>
-	<true/>
-	<key>com.apple.security.device.camera</key>
-	<true/>
-</dict>
-</plist>
-PLIST
-
-log "使用本地证书签名"
-target="$SOURCE_APP"
-entitlements="$work/entitlements.plist"
-/usr/bin/codesign --force --options runtime --entitlements "$entitlements" \
-    --sign "$identity" "$target" || fail "签名失败"
-/usr/bin/codesign --verify --deep --strict "$target" || fail "签名校验失败"
-
+xattr -dr com.apple.quarantine "$STAGED_PATH/Jarvis.app" 2>/dev/null || true
 quit_running_app_if_replacing
-
-rm -rf "${INSTALL_DIR}/${APP_NAME}"
-/usr/bin/ditto "$SOURCE_APP" "${INSTALL_DIR}/${APP_NAME}"
-# The zip came from curl, but strip any quarantine flag that a previous
-# browser download or an archive round-trip may have left behind.
-xattr -dr com.apple.quarantine "${INSTALL_DIR}/${APP_NAME}" 2>/dev/null || true
-
-log "已安装到 ${INSTALL_DIR}/${APP_NAME}"
-
-if [[ "$LAUNCH_AFTER_INSTALL" == "1" ]]; then
-  open "${INSTALL_DIR}/${APP_NAME}"
-  log "已启动。首次运行请允许屏幕录制、辅助功能、麦克风和摄像头；"
-  log "屏幕录制和辅助功能授权后需要重启一次贾维斯。"
+BACKUP_PATH="$STAGED_PATH/Previous.app"
+if [[ -e "$APP_PATH" ]]; then
+  mv "$APP_PATH" "$BACKUP_PATH" || die '无法备份原安装。'
 fi
+if ! mv "$STAGED_PATH/Jarvis.app" "$APP_PATH"; then
+  [[ ! -e "$BACKUP_PATH" ]] || mv "$BACKUP_PATH" "$APP_PATH"
+  die '安装失败，已尝试恢复原安装。'
+fi
+if (( LAUNCH_AFTER_INSTALL )) && ! open "$APP_PATH"; then
+  rm -rf "$APP_PATH"
+  [[ ! -e "$BACKUP_PATH" ]] || mv "$BACKUP_PATH" "$APP_PATH"
+  die '启动失败，已尝试恢复原安装。'
+fi
+rm -rf "$STAGED_PATH"
+print -r -- "已安装 $VERSION 到 $APP_PATH。首次使用请在应用中授权。"

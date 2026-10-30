@@ -34,9 +34,7 @@ ditto -c -k --sequesterRsrc --keepParent "$DIRECT_STAGING_DIR/Jarvis.app" "$DIRE
 ditto "$APP_DIR" "$UPDATE_STAGING_DIR/Jarvis.app"
 /usr/libexec/PlistBuddy -c 'Set :JarvisInstallSource unknown' "$UPDATE_STAGING_DIR/Jarvis.app/Contents/Info.plist"
 xattr -cr "$UPDATE_STAGING_DIR/Jarvis.app"
-codesign --force --options runtime \
-  --entitlements "$ROOT_DIR/Resources/Jarvis.entitlements" \
-  --sign - "$UPDATE_STAGING_DIR/Jarvis.app" >/dev/null
+"$ROOT_DIR/script/sign_app.sh" "$UPDATE_STAGING_DIR/Jarvis.app" release
 codesign --verify --deep --strict "$UPDATE_STAGING_DIR/Jarvis.app"
 ditto -c -k --sequesterRsrc --keepParent "$UPDATE_STAGING_DIR/Jarvis.app" "$UPDATE_ZIP"
 

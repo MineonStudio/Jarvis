@@ -13,9 +13,6 @@ private enum JarvisUpdateSigningTool {
         }
 
         switch command {
-        case "generate":
-            let key = try loadOrCreatePrivateKey()
-            print(key.publicKey.rawRepresentation.base64EncodedString())
         case "public-key":
             let key = try loadPrivateKey()
             print(key.publicKey.rawRepresentation.base64EncodedString())
@@ -38,26 +35,8 @@ private enum JarvisUpdateSigningTool {
         NSError(
             domain: "JarvisUpdateSigningTool",
             code: 2,
-            userInfo: [NSLocalizedDescriptionKey: "用法：generate | public-key | sign-manifest <version> <build> <bundle-id> <archive.zip> <manifest.json> <manifest.sig>"]
+            userInfo: [NSLocalizedDescriptionKey: "用法：public-key | sign-manifest <version> <build> <bundle-id> <archive.zip> <manifest.json> <manifest.sig>"]
         )
-    }
-
-    private static func loadOrCreatePrivateKey() throws -> Curve25519.Signing.PrivateKey {
-        if let existing = try? loadPrivateKey() { return existing }
-        let key = Curve25519.Signing.PrivateKey()
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecAttrLabel as String: "Jarvis update signing key",
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            kSecValueData as String: key.rawRepresentation
-        ]
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess || status == errSecDuplicateItem else {
-            throw securityError(status)
-        }
-        return try loadPrivateKey()
     }
 
     private static func loadPrivateKey() throws -> Curve25519.Signing.PrivateKey {

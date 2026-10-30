@@ -32,21 +32,15 @@ final class AppVersionTests: XCTestCase {
         let release = try JarvisReleaseInfo(
             version: "1.4.5",
             build: "344",
-            releaseURL: XCTUnwrap(URL(string: "https://github.com/MineonStudio/jarvis-macos/releases/tag/v1.4.5")),
-            downloadURL: XCTUnwrap(URL(string: "https://github.com/MineonStudio/jarvis-macos/releases/download/v1.4.5/Jarvis-update.zip")),
-            manifestURL: XCTUnwrap(URL(string: "https://github.com/MineonStudio/jarvis-macos/releases/download/v1.4.5/Jarvis-update-manifest.json")),
-            signatureURL: XCTUnwrap(URL(string: "https://github.com/MineonStudio/jarvis-macos/releases/download/v1.4.5/Jarvis-update-manifest.sig")),
+            releaseURL: XCTUnwrap(URL(string: "https://github.com/MineonStudio/Jarvis/releases/tag/v1.4.5")),
+            downloadURL: XCTUnwrap(URL(string: "https://github.com/MineonStudio/Jarvis/releases/download/v1.4.5/Jarvis-update.zip")),
+            manifestURL: XCTUnwrap(URL(string: "https://github.com/MineonStudio/Jarvis/releases/download/v1.4.5/Jarvis-update-manifest.json")),
+            signatureURL: XCTUnwrap(URL(string: "https://github.com/MineonStudio/Jarvis/releases/download/v1.4.5/Jarvis-update-manifest.sig")),
             archiveName: "Jarvis-update.zip"
         )
 
         XCTAssertTrue(service.isNewer(release, than: "1.4.5", build: "343"))
         XCTAssertFalse(service.isNewer(release, than: "1.4.5", build: "344"))
-    }
-
-    func testLegacyBootstrapIsRestrictedToThePublishedBridgeVersion() {
-        XCTAssertTrue(service.isLegacyBootstrapRelease("v1.4.5"))
-        XCTAssertFalse(service.isLegacyBootstrapRelease("1.4.4"))
-        XCTAssertFalse(service.isLegacyBootstrapRelease("1.4.6"))
     }
 
     func testSignedUpdateManifestRequiresValidSignatureAndFields() throws {
@@ -109,11 +103,11 @@ final class AppVersionTests: XCTestCase {
     func testReleaseAssetURLsArePinnedToVersionAndApprovedNames() {
         XCTAssertEqual(
             JarvisUpdateService.releaseAssetURL(version: "1.4.16", name: "Jarvis-update.zip")?.absoluteString,
-            "https://github.com/MineonStudio/jarvis-macos/releases/download/v1.4.16/Jarvis-update.zip"
+            "https://github.com/MineonStudio/Jarvis/releases/download/v1.4.16/Jarvis-update.zip"
         )
         XCTAssertEqual(
             JarvisUpdateService.releaseAssetURL(version: "v1.4.16", name: "Jarvis-update.zip")?.absoluteString,
-            "https://github.com/MineonStudio/jarvis-macos/releases/download/v1.4.16/Jarvis-update.zip"
+            "https://github.com/MineonStudio/Jarvis/releases/download/v1.4.16/Jarvis-update.zip"
         )
         XCTAssertNil(JarvisUpdateService.releaseAssetURL(version: "../latest", name: "Jarvis-update.zip"))
         XCTAssertNil(JarvisUpdateService.releaseAssetURL(version: "1.4.16", name: "Jarvis-1.4.16-macos.zip"))
@@ -173,34 +167,9 @@ final class AppVersionTests: XCTestCase {
         }
     }
 
-    func testUpdateDigestIsRequiredAndVerified() throws {
-        let fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("jarvis-update-digest-\(UUID().uuidString).zip")
-        defer { try? FileManager.default.removeItem(at: fileURL) }
-        let data = Data("Jarvis 0.9.0".utf8)
-        try data.write(to: fileURL)
-
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        XCTAssertNoThrow(try service.verifyDigest(of: fileURL, expected: "sha256:\(digest)"))
-        XCTAssertThrowsError(try service.verifyDigest(of: fileURL, expected: nil)) { error in
-            guard let updateError = error as? JarvisUpdateError,
-                  case .checksumUnavailable = updateError
-            else {
-                return XCTFail("Expected missing digest error, got \(error)")
-            }
-        }
-        XCTAssertThrowsError(try service.verifyDigest(of: fileURL, expected: "sha256:\(String(repeating: "0", count: 64))")) { error in
-            guard let updateError = error as? JarvisUpdateError,
-                  case .checksumMismatch = updateError
-            else {
-                return XCTFail("Expected digest mismatch error, got \(error)")
-            }
-        }
-    }
-
     func testPrivacyPermissionResetCommandsUseBundleIdentity() {
         XCTAssertEqual(
-            JarvisUpdateService.privacyPermissionResetArguments(
+            JarvisPrivacyPermissionReset.arguments(
                 bundleIdentifier: "com.jarvis.mac"
             ),
             [
@@ -260,67 +229,6 @@ final class AppVersionTests: XCTestCase {
         XCTAssertFalse(JarvisLaunchAtLoginPreference.load(from: defaults))
     }
 
-    func testFreshInstallPermissionCleanupRunsOncePerInstallationFingerprint() throws {
-        let temporaryRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent("jarvis-fresh-install-test-\(UUID().uuidString)", isDirectory: true)
-        let bundleURL = temporaryRoot.appendingPathComponent("Jarvis.app", isDirectory: true)
-        try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: temporaryRoot) }
-
-        let suiteName = "jarvis-fresh-install-defaults-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        var resetCount = 0
-        let firstRun = try JarvisFreshInstallPermissionCleanup.runIfNeeded(
-            bundleURL: bundleURL,
-            bundleIdentifier: "com.jarvis.mac",
-            defaults: defaults
-        ) {
-            resetCount += 1
-        }
-        let secondRun = try JarvisFreshInstallPermissionCleanup.runIfNeeded(
-            bundleURL: bundleURL,
-            bundleIdentifier: "com.jarvis.mac",
-            defaults: defaults
-        ) {
-            resetCount += 1
-        }
-
-        XCTAssertTrue(firstRun)
-        XCTAssertFalse(secondRun)
-        XCTAssertEqual(resetCount, 1)
-    }
-
-    func testPendingIdentityTransitionForcesOnePermissionReset() throws {
-        let temporaryRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent("jarvis-pending-reset-test-\(UUID().uuidString)", isDirectory: true)
-        let bundleURL = temporaryRoot.appendingPathComponent("Jarvis.app", isDirectory: true)
-        try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: temporaryRoot) }
-
-        let suiteName = "jarvis-pending-reset-defaults-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(
-            JarvisFreshInstallPermissionCleanup.installationFingerprint(for: bundleURL),
-            forKey: "jarvis.installation.permission-reset.fingerprint"
-        )
-
-        var resetCount = 0
-        let didReset = try JarvisFreshInstallPermissionCleanup.runIfNeeded(
-            bundleURL: bundleURL,
-            bundleIdentifier: "com.jarvis.mac",
-            defaults: defaults,
-            force: true
-        ) {
-            resetCount += 1
-        }
-
-        XCTAssertTrue(didReset)
-        XCTAssertEqual(resetCount, 1)
-    }
-
     func testLaunchServicesCleanupKeepsRunningAndResolvedAppsAndTargetsJarvisResidueOnly() {
         let dump = """
         bundle id:                  Jarvis (0x1)
@@ -363,7 +271,7 @@ final class AppVersionTests: XCTestCase {
         )
     }
 
-    func testInstallerOnlySchedulesResetWhenSigningIdentityChanges() throws {
+    func testInstallerPreservesPermissionsAndVerifiesIdentityBeforeReplacing() throws {
         let scriptURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("jarvis-update-test-\(UUID().uuidString).zsh")
         defer { try? FileManager.default.removeItem(at: scriptURL) }
@@ -377,8 +285,9 @@ final class AppVersionTests: XCTestCase {
         )
         let script = try String(contentsOf: scriptURL, encoding: .utf8)
         try assertZshSyntax(of: scriptURL)
-        XCTAssertTrue(script.contains("needs_permission_reset=false"))
-        XCTAssertTrue(script.contains("[[ \"$needs_permission_reset\" == \"true\" ]] || return 0"))
+        XCTAssertFalse(script.contains("tccutil"))
+        XCTAssertFalse(script.contains("permission-reset"))
+        XCTAssertTrue(script.contains("--strict -R"))
         XCTAssertFalse(script.contains("reset_screen_recording_permission"))
         XCTAssertFalse(script.contains("kill -TERM"))
         XCTAssertFalse(script.contains("kill -KILL"))
@@ -395,25 +304,5 @@ final class AppVersionTests: XCTestCase {
         } else {
             XCTFail("Installer should verify the signature before removing quarantine")
         }
-    }
-
-    func testInstallerSchedulesPermissionResetForIdentityTransition() throws {
-        let scriptURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("jarvis-update-transition-test-\(UUID().uuidString).zsh")
-        defer { try? FileManager.default.removeItem(at: scriptURL) }
-
-        try service.makeInstallerScript(
-            at: scriptURL,
-            currentAppURL: URL(fileURLWithPath: "/Applications/Jarvis.app"),
-            newAppURL: URL(fileURLWithPath: "/tmp/Jarvis.app"),
-            temporaryDirectory: URL(fileURLWithPath: "/tmp/JarvisUpdate"),
-            parentProcessID: 1234,
-            requiresPermissionReset: true
-        )
-        let script = try String(contentsOf: scriptURL, encoding: .utf8)
-        try assertZshSyntax(of: scriptURL)
-        XCTAssertTrue(script.contains("needs_permission_reset=true"))
-        XCTAssertTrue(script.contains("jarvis.installation.permission-reset.pending -bool true"))
-        XCTAssertTrue(script.contains("clear_permission_reset_pending"))
     }
 }

@@ -19,9 +19,7 @@ mkdir -p "$OUTPUT_DIR"
 ditto "$APP_DIR" "$STAGING_DIR/Jarvis.app"
 /usr/libexec/PlistBuddy -c 'Set :JarvisInstallSource dmg' "$STAGING_DIR/Jarvis.app/Contents/Info.plist"
 xattr -cr "$STAGING_DIR/Jarvis.app"
-codesign --force --options runtime \
-  --entitlements "$ROOT_DIR/Resources/Jarvis.entitlements" \
-  --sign - "$STAGING_DIR/Jarvis.app" >/dev/null
+"$ROOT_DIR/script/sign_app.sh" "$STAGING_DIR/Jarvis.app" release
 ln -s /Applications "$STAGING_DIR/Applications"
 
 codesign --verify --deep --strict "$STAGING_DIR/Jarvis.app"

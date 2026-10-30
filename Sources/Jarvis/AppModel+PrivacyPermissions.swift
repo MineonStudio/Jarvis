@@ -34,30 +34,6 @@ extension AppModel {
         }
     }
 
-    func installLocalSigningCertificate() {
-        guard JarvisLocalSigning.canAdoptLocalIdentity else {
-            showToast("请先把工作搭子 Jarvis移到“应用程序”文件夹，再下载证书")
-            return
-        }
-        do {
-            try JarvisLocalSigning.adoptLocalIdentity()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                NSApp.terminate(nil)
-            }
-        } catch {
-            showToast("证书安装失败：\(error.localizedDescription)")
-        }
-    }
-
-    func removeLocalSigningCertificate() {
-        do {
-            try JarvisLocalSigning.removeInstalledIdentity()
-            showToast("已移除本机签名证书")
-        } catch {
-            showToast(error.localizedDescription)
-        }
-    }
-
     func clearAllPrivacyPermissionsAndRestart() {
         // 在退出之前同步做重置：失败时弹框告知并停下来，否则用户在应用
         // 已经退出的情况下看不到任何失败提示。

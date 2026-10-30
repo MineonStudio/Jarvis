@@ -8,23 +8,23 @@ macOS 26 及以上。
 
 ## 安装
 
-[下载最新版](https://github.com/MineonStudio/jarvis-macos/releases/latest)，打开 DMG，把 Jarvis.app 拖进「应用程序」。
+[下载最新版](https://github.com/MineonStudio/Jarvis/releases/latest)，打开 DMG，把 Jarvis.app 拖进「应用程序」。
 
 或者：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MineonStudio/jarvis-macos/dev/install.sh | zsh
+curl -fsSL https://raw.githubusercontent.com/MineonStudio/Jarvis/dev/install.sh | zsh
 ```
 
-脚本会下载发布包，在登录钥匙串里生成一张「Jarvis Local Signing」证书，签完名再安装。证书只留在这台 Mac 上。之后更新时，屏幕录制、辅助功能、麦克风和摄像头可以沿用。钥匙串仍可能再问一次。
+安装包已使用固定发布证书签名。安装和更新无需在你的电脑生成证书或重新签名，正常更新不会主动清除权限。首次安装可能需要在系统设置“隐私与安全性”中允许打开。
 
 卸载：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MineonStudio/jarvis-macos/dev/install.sh | zsh -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/MineonStudio/Jarvis/dev/install.sh | zsh -s -- --uninstall
 ```
 
-从 DMG 拖进去的包没有这张证书。第一次打开时，权限页可以补上同样的签名。
+卸载脚本只移除应用，保留数据和钥匙串。新版不再兼容旧版本的本机改签流程；首次切换需要手动安装并重新授权。
 
 ## 快捷键
 

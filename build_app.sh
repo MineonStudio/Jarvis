@@ -1,5 +1,9 @@
 #!/bin/zsh
 set -euo pipefail
+# SwiftUI macro plugins require the complete Xcode toolchain.
+if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app/Contents/Developer ]]; then
+  export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+fi
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # File Provider can attach FinderInfo to SwiftPM resource bundles inside the
@@ -15,30 +19,35 @@ if [[ "$JARVIS_DEV_BUILD" == "1" ]]; then
   # Development builds sign with a stable local identity so TCC and Keychain
   # grants survive rebuilds. Ad-hoc signing derives a new identity from every
   # binary, which makes macOS treat each build as a different app.
-  DEFAULT_CODESIGN_IDENTITY="Jarvis Dev Signing"
+  SIGNING_MODE="development"
   DEFAULT_INSTALL_SOURCE="development"
 else
   DEFAULT_APP_DIR="$ROOT_DIR/dist/Jarvis.app"
   DEFAULT_BUNDLE_IDENTIFIER="com.jarvis.mac"
   DEFAULT_DISPLAY_NAME="工作搭子 Jarvis"
   DEFAULT_BUNDLE_NAME="Jarvis"
-  DEFAULT_CODESIGN_IDENTITY=""
+  SIGNING_MODE="release"
   DEFAULT_INSTALL_SOURCE="direct-download"
 fi
-JARVIS_CODESIGN_IDENTITY="${JARVIS_CODESIGN_IDENTITY:-$DEFAULT_CODESIGN_IDENTITY}"
 APP_DIR="${JARVIS_APP_DIR:-$DEFAULT_APP_DIR}"
 JARVIS_BUNDLE_IDENTIFIER="${JARVIS_BUNDLE_IDENTIFIER:-$DEFAULT_BUNDLE_IDENTIFIER}"
 JARVIS_DISPLAY_NAME="${JARVIS_DISPLAY_NAME:-$DEFAULT_DISPLAY_NAME}"
 JARVIS_BUNDLE_NAME="${JARVIS_BUNDLE_NAME:-$DEFAULT_BUNDLE_NAME}"
 JARVIS_INSTALL_SOURCE="${JARVIS_INSTALL_SOURCE:-$DEFAULT_INSTALL_SOURCE}"
-JARVIS_VERSION="${JARVIS_VERSION:-1.8.17}"
-JARVIS_BUILD="${JARVIS_BUILD:-380}"
+JARVIS_VERSION="${JARVIS_VERSION:-1.8.18}"
+JARVIS_BUILD="${JARVIS_BUILD:-381}"
 ICON_ASSET_NAME="jarvis-${JARVIS_VERSION//./-}"
 
 cd "$ROOT_DIR"
-swift build -c release --scratch-path "$SWIFTPM_SCRATCH_DIR"
+SWIFT_BUILD_ARGUMENTS=(-c release --scratch-path "$SWIFTPM_SCRATCH_DIR")
+if [[ "${JARVIS_WARNINGS_AS_ERRORS:-0}" == 1 ]]; then
+  SWIFT_BUILD_ARGUMENTS+=(-Xswiftc -warnings-as-errors)
+fi
+swift build "${SWIFT_BUILD_ARGUMENTS[@]}"
 
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
+# Remove codesign's unfinished executable left by a cancelled Keychain prompt.
+rm -f "$APP_DIR/Contents/MacOS/Jarvis.cstemp"
 cp "$BUILD_DIR/Jarvis" "$APP_DIR/Contents/MacOS/Jarvis"
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 
@@ -151,25 +160,7 @@ ENTITLEMENTS="$ROOT_DIR/Resources/Jarvis.entitlements"
 # Cloud-backed workspaces can attach Finder/File Provider attributes to copied
 # bundle files. Code signing rejects these attributes on the generated app.
 xattr -cr "$APP_DIR"
-# The self-signed development certificate is not a trusted root, so Keychain
-# reports it only under the plain code-signing policy, not the "valid
-# identities" list that `security find-identity -v` prints.
-if [[ -n "$JARVIS_CODESIGN_IDENTITY" ]] \
-   && ! security find-identity -p codesigning 2>/dev/null | grep -qF "$JARVIS_CODESIGN_IDENTITY"; then
-  echo "warning: signing identity '$JARVIS_CODESIGN_IDENTITY' not found; using ad-hoc instead" >&2
-  JARVIS_CODESIGN_IDENTITY=""
-fi
-
-if [[ -n "$JARVIS_CODESIGN_IDENTITY" ]]; then
-  codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$JARVIS_CODESIGN_IDENTITY" "$APP_DIR" >/dev/null
-else
-  # Shipping default is ad-hoc: there is no paid Apple Developer ID to sign
-  # or notarize with. Each new binary is a new TCC identity, so in-app
-  # updates must tccutil-reset Screen Recording, Accessibility, Microphone,
-  # and Camera before
-  # replacing the bundle (see JarvisPrivacyPermissionReset).
-  codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign - "$APP_DIR" >/dev/null
-fi
+"$ROOT_DIR/script/sign_app.sh" "$APP_DIR" "$SIGNING_MODE"
 
 # Refresh the local LaunchServices registration so System Settings and Finder
 # resolve the standalone ICNS immediately after a local production build.
