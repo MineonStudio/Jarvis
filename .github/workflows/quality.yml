@@ -40,6 +40,24 @@ jobs:
         # Preserve existing debt while rejecting every new warning or error.
         run: swiftlint lint --config .swiftlint.yml --baseline .swiftlint-baseline.json --strict
 
+      - name: Prepare isolated CI signing
+        run: |
+          signing_keychain="$RUNNER_TEMP/jarvis-ci.keychain-db"
+          signing_certificate="$RUNNER_TEMP/jarvis-ci-signing.pem"
+          echo "JARVIS_SIGNING_KEYCHAIN=$signing_keychain" >> "$GITHUB_ENV"
+          signing_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$signing_password"
+          security create-keychain -p "$signing_password" "$signing_keychain"
+          security unlock-keychain -p "$signing_password" "$signing_keychain"
+          security set-keychain-settings -lut 21600 "$signing_keychain"
+          security list-keychains -d user -s "$signing_keychain" "$HOME/Library/Keychains/login.keychain-db"
+          JARVIS_SIGNING_KEYCHAIN="$signing_keychain" ./script/setup_signing.sh --development
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$signing_password" "$signing_keychain" >/dev/null
+          security find-certificate -c "Jarvis Dev Signing" -p "$signing_keychain" > "$signing_certificate"
+          sudo -n security add-trusted-cert -d -r trustRoot -p codeSign -k "$signing_keychain" "$signing_certificate"
+          cp /usr/bin/true "$RUNNER_TEMP/jarvis-signing-probe"
+          JARVIS_SIGNING_KEYCHAIN="$signing_keychain" ./script/sign_app.sh "$RUNNER_TEMP/jarvis-signing-probe" development
+
       - name: Build
         run: swift build -c release --scratch-path "$JARVIS_SWIFTPM_SCRATCH_DIR" -Xswiftc -warnings-as-errors
 
@@ -47,17 +65,7 @@ jobs:
         run: swift test --scratch-path "$JARVIS_SWIFTPM_SCRATCH_DIR" -Xswiftc -warnings-as-errors
 
       - name: Package app bundle
-        run: |
-          export JARVIS_SIGNING_KEYCHAIN="$RUNNER_TEMP/jarvis-ci.keychain-db"
-          signing_password="$(openssl rand -hex 32)"
-          echo "::add-mask::$signing_password"
-          trap 'security delete-keychain "$JARVIS_SIGNING_KEYCHAIN"' EXIT
-          security create-keychain -p "$signing_password" "$JARVIS_SIGNING_KEYCHAIN"
-          security unlock-keychain -p "$signing_password" "$JARVIS_SIGNING_KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$JARVIS_SIGNING_KEYCHAIN"
-          ./script/setup_signing.sh --development
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$signing_password" "$JARVIS_SIGNING_KEYCHAIN" >/dev/null
-          JARVIS_DEV_BUILD=1 ./build_app.sh
+        run: JARVIS_DEV_BUILD=1 ./build_app.sh
 
       - name: Check packaged identity
         run: |
@@ -68,3 +76,13 @@ jobs:
 
       - name: Check diff whitespace
         run: git diff --check
+
+      - name: Clean up CI signing
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/jarvis-ci-signing.pem" ]]; then
+            sudo -n security remove-trusted-cert -d "$RUNNER_TEMP/jarvis-ci-signing.pem"
+          fi
+          if [[ -f "$RUNNER_TEMP/jarvis-ci.keychain-db" ]]; then
+            security delete-keychain "$RUNNER_TEMP/jarvis-ci.keychain-db"
+          fi
