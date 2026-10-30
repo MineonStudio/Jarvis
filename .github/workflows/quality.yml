@@ -8,11 +8,13 @@ jobs:
   quality:
     runs-on: macos-26
     env:
-      JARVIS_SWIFTPM_SCRATCH_DIR: ${{ runner.temp }}/jarvis-swiftpm
       JARVIS_WARNINGS_AS_ERRORS: "1"
     steps:
       - name: Check out source
         uses: actions/checkout@v5
+
+      - name: Configure build workspace
+        run: echo "JARVIS_SWIFTPM_SCRATCH_DIR=$RUNNER_TEMP/jarvis-swiftpm" >> "$GITHUB_ENV"
 
       - name: Install static-analysis tools
         run: |
