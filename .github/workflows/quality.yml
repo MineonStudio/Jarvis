@@ -40,6 +40,9 @@ jobs:
         # Preserve existing debt while rejecting every new warning or error.
         run: swiftlint lint --config .swiftlint.yml --baseline .swiftlint-baseline.json --strict
 
+      # Hosted macOS jobs run in fresh VMs. The test-only signing keychain and
+      # trust entry live for this job and are destroyed with its runner. Explicit
+      # Keychain deletion after signing can wait for an unavailable GUI session.
       - name: Prepare isolated CI signing
         run: |
           signing_keychain="$RUNNER_TEMP/jarvis-ci.keychain-db"
@@ -76,13 +79,3 @@ jobs:
 
       - name: Check diff whitespace
         run: git diff --check
-
-      - name: Clean up CI signing
-        if: always()
-        run: |
-          if [[ -f "$RUNNER_TEMP/jarvis-ci-signing.pem" ]]; then
-            sudo -n security remove-trusted-cert -d "$RUNNER_TEMP/jarvis-ci-signing.pem"
-          fi
-          if [[ -f "$RUNNER_TEMP/jarvis-ci.keychain-db" ]]; then
-            security delete-keychain "$RUNNER_TEMP/jarvis-ci.keychain-db"
-          fi
