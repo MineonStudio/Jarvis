@@ -1,11 +1,10 @@
 import AppKit
-import AVKit
 import SwiftUI
 
 @MainActor
 final class ClipboardMediaPreviewController {
     private let previewController = FullscreenMediaPreviewController()
-    private var player: AVPlayer?
+    private let videoPreviewController = EntertainmentVideoPreviewController()
 
     func show(item: ClipboardItem) {
         dismiss()
@@ -60,53 +59,11 @@ final class ClipboardMediaPreviewController {
             return
         }
 
-        let mediaPlayer = AVPlayer(url: URL(fileURLWithPath: path))
-        player = mediaPlayer
-        previewController.show(
-            displaySize: FullscreenMediaPreviewSizing.videoDisplaySize(maximumSize: maximumSize),
-            allowsHitTesting: true,
-            onDismiss: { [weak self] in
-                self?.dismiss()
-            }
-        ) {
-            ClipboardAVPlayerView(player: mediaPlayer)
-        }
+        videoPreviewController.show(url: URL(fileURLWithPath: path))
     }
 
     func dismiss() {
-        player?.pause()
-        player = nil
+        videoPreviewController.dismiss()
         previewController.dismiss()
-    }
-}
-
-private struct ClipboardAVPlayerView: NSViewRepresentable {
-    let player: AVPlayer
-
-    func makeNSView(context _: Context) -> AVPlayerView {
-        let view = AVPlayerView()
-        view.player = player
-        view.controlsStyle = .floating
-        view.videoGravity = AVLayerVideoGravity.resizeAspect
-        view.showsFullScreenToggleButton = false
-        view.allowsVideoFrameAnalysis = false
-        view.allowsMagnification = false
-        DispatchQueue.main.async {
-            guard view.player === player else { return }
-            player.play()
-        }
-        return view
-    }
-
-    func updateNSView(_ view: AVPlayerView, context _: Context) {
-        if view.player !== player {
-            view.player?.pause()
-            view.player = player
-        }
-    }
-
-    static func dismantleNSView(_ view: AVPlayerView, coordinator _: ()) {
-        view.player?.pause()
-        view.player = nil
     }
 }

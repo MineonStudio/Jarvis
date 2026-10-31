@@ -4,11 +4,21 @@ import ImageIO
 /// Both a reused selection panel and a new editing panel route hover and C
 /// through the same path, without intercepting events outside screenshot UI.
 class ScreenshotColorProbePanel: NSPanel {
+    func isCanvasEvent(_ event: NSEvent) -> Bool {
+        guard let surface = contentView as? ScreenshotEditingSurface else { return true }
+        let point = event.type == .keyDown ? mouseLocationOutsideOfEventStream : event.locationInWindow
+        return surface.isCanvasLocation(point)
+    }
+
     override func sendEvent(_ event: NSEvent) {
-        if let canvas = contentView as? ScreenshotCanvasHostingView,
-           canvas.handleColorProbeEvent(event)
-        {
-            return
+        let canvas = (contentView as? ScreenshotEditingSurface)?.canvas as? ScreenshotCanvasHostingView
+            ?? contentView as? ScreenshotCanvasHostingView
+        if isCanvasEvent(event) {
+            if canvas?.handleColorProbeEvent(event) == true {
+                return
+            }
+        } else {
+            canvas?.hideColorProbe()
         }
         super.sendEvent(event)
     }
@@ -83,7 +93,8 @@ final class ScreenshotColorProbe {
 
     @discardableResult
     func update(in view: NSView, editor: ScreenshotEditorModel, scale: CGFloat, copy: Bool = false) -> Bool {
-        guard let window = view.window, scale > 0, editor.textInputAnchor == nil,
+        guard let window = view.window, let overlayHost = view.superview,
+              window.contentView !== view, scale > 0, editor.textInputAnchor == nil,
               !(window.firstResponder is NSTextView), let selection = editor.selectionRect
         else { hide(); return false }
         let local = view.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
@@ -98,8 +109,8 @@ final class ScreenshotColorProbe {
         } else if copiedAt != point {
             copiedAt = nil
         }
-        if badge.superview !== view {
-            view.addSubview(badge)
+        if badge.superview !== overlayHost {
+            overlayHost.addSubview(badge, positioned: .above, relativeTo: view)
         }
         badge.sample = sample
         badge.copied = copiedAt == point
@@ -112,7 +123,7 @@ final class ScreenshotColorProbe {
         }
         origin.x = max(view.bounds.minX, origin.x)
         origin.y = max(view.bounds.minY, origin.y)
-        badge.setFrameOrigin(origin)
+        badge.frame = overlayHost.convert(CGRect(origin: origin, size: badge.frame.size), from: view)
         badge.isHidden = false
         return true
     }

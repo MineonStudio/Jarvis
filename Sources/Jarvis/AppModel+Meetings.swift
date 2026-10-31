@@ -142,7 +142,7 @@ extension AppModel {
         language: MeetingLanguage = .simplifiedChinese,
         reusing recordID: UUID? = nil
     ) async {
-        guard meetingCurrentRecordingID == nil, !isStartingMeetingRecording else { return }
+        guard canBeginMeetingCapture else { return }
         guard !meetingRecorder.isStopping else {
             showToast(JarvisFeedbackCopy.meetingStopInProgress)
             return

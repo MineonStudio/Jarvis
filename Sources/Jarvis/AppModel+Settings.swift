@@ -543,6 +543,7 @@ extension AppModel {
     // MARK: - UserDefaults loading
 
     func loadScreenshotShortcut() {
+        JarvisFunctionShortcutMigration.apply()
         guard let data = UserDefaults.standard.data(forKey: screenshotShortcutKey),
               let shortcut = try? JSONDecoder().decode(ScreenshotShortcut.self, from: data)
         else {

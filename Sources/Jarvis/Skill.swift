@@ -2,12 +2,17 @@ import Foundation
 
 enum SkillID: String, CaseIterable, Hashable, Identifiable {
     case screenshot
+    case screenRecording
     case clipboard
     case windowLayout
     case resume
     case wallpaper
     case meetingNotes
     case lanTransfer
+
+    static var sidebarCases: [Self] {
+        allCases.filter { $0 != .windowLayout }
+    }
 
     var id: String {
         rawValue
@@ -16,6 +21,7 @@ enum SkillID: String, CaseIterable, Hashable, Identifiable {
     var title: String {
         switch self {
         case .screenshot: "截图技能"
+        case .screenRecording: "屏幕录制"
         case .clipboard: "剪贴板技能"
         case .windowLayout: "窗口布局技能"
         case .resume: "简历制作技能"
@@ -28,6 +34,7 @@ enum SkillID: String, CaseIterable, Hashable, Identifiable {
     var navigationTitle: String {
         switch self {
         case .screenshot: "截图"
+        case .screenRecording: "屏幕录制"
         case .clipboard: "剪贴板"
         case .windowLayout: "窗口布局"
         case .resume: "简历制作"
@@ -40,6 +47,7 @@ enum SkillID: String, CaseIterable, Hashable, Identifiable {
     var icon: String {
         switch self {
         case .screenshot: "viewfinder"
+        case .screenRecording: "record.circle"
         case .clipboard: "clipboard"
         case .windowLayout: "macwindow.on.rectangle"
         case .resume: "doc.text.magnifyingglass"

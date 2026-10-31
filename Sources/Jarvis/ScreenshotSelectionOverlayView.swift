@@ -243,7 +243,7 @@ final class SelectionOverlayView: NSView {
         }
         context.saveGState()
         context.addPath(dimPath)
-        context.setFillColor(NSColor.black.withAlphaComponent(0.46).cgColor)
+        context.setFillColor(NSColor.black.withAlphaComponent(0.23).cgColor)
         context.fillPath(using: .evenOdd)
         context.restoreGState()
 

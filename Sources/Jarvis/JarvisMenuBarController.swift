@@ -21,6 +21,9 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
     private var lastStyledAppearanceName: NSAppearance.Name?
     private var menuConfigured = false
     private var isMeetingRecording = false
+    private var isScreenRecording = false
+    private var screenRecordingElapsed: TimeInterval = 0
+    private var screenRecordingPaused = false
     private var meetingElapsed: TimeInterval = 0
     private var meetingModelsReady = true
     private var lastRenderedMeetingElapsedSeconds = -1
@@ -41,6 +44,15 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         action: #selector(toggleMeetingRecording),
         keyEquivalent: ""
     )
+    private let screenRecordingMenuItem = NSMenuItem(title: "屏幕录制…", action: #selector(toggleScreenRecording), keyEquivalent: "")
+
+    func updateScreenRecordingState(active: Bool, paused: Bool, elapsed: TimeInterval) {
+        isScreenRecording = active
+        screenRecordingPaused = paused
+        screenRecordingElapsed = elapsed
+        screenRecordingMenuItem.title = active ? "停止屏幕录制" : "屏幕录制…"
+        refreshStatusItemPresentation()
+    }
 
     deinit {
         appearanceObservation?.invalidate()
@@ -117,6 +129,11 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         guard let app else { return }
         screenshotMenuItem.title = "框选截图"
         configureMenuShortcut(screenshotMenuItem, with: app.screenshotShortcut)
+        if let shortcut = app.screenRecording.shortcuts.bindings["open"] {
+            configureMenuShortcut(screenRecordingMenuItem, with: shortcut)
+        } else {
+            screenRecordingMenuItem.keyEquivalent = ""
+        }
         clipboardMenuItem.title = "打开剪贴板"
         configureMenuShortcut(clipboardMenuItem, with: app.clipboardShortcut)
         updateMeetingMenuItem()
@@ -140,11 +157,9 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
 
-        addMenuItem(
-            title: "打开工作搭子 Jarvis",
-            action: #selector(openMainWindow)
-        )
         addMenuItem(screenshotMenuItem)
+        addMenuItem(screenRecordingMenuItem)
+        configureMenuShortcut(screenRecordingMenuItem, with: .screenRecordingDefault)
         addMenuItem(clipboardMenuItem)
         addMenuItem(meetingMenuItem)
         menu.addItem(.separator())
@@ -164,7 +179,7 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
         addMenuItem(
-            title: "退出工作搭子 Jarvis",
+            title: "退出Jarvis",
             action: #selector(terminate),
             keyEquivalent: "q"
         )
@@ -225,8 +240,9 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
 
     private func refreshStatusItemPresentation(_ button: NSStatusBarButton? = nil) {
         guard let button = button ?? statusItem?.button else { return }
-        if isMeetingRecording {
-            button.image = MeetingRecordingStyle.makeStatusBarImage(for: meetingElapsed)
+        if isMeetingRecording || isScreenRecording {
+            let duration = isScreenRecording ? screenRecordingElapsed : meetingElapsed
+            button.image = MeetingRecordingStyle.makeStatusBarImage(for: duration)
             button.imagePosition = .imageOnly
             button.imageScaling = .scaleProportionallyDown
             button.contentTintColor = nil
@@ -238,7 +254,7 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
             button.layer?.cornerRadius = 0
             button.layer?.masksToBounds = false
             button.setAccessibilityLabel(
-                "停止录制，已录制 \(MeetingRecordingStyle.formatDuration(meetingElapsed))"
+                "\(isScreenRecording ? "屏幕录制" : "会议录音")\(screenRecordingPaused && isScreenRecording ? "已暂停" : "进行中")，\(MeetingRecordingStyle.formatDuration(duration))"
             )
         } else {
             styleStatusItemButton(button)
@@ -328,6 +344,10 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func captureScreenshot() {
         app?.captureScreenshot()
+    }
+
+    @objc private func toggleScreenRecording() {
+        app?.screenRecording.handlePrimaryShortcut()
     }
 
     func reopenMainWindow() {

@@ -165,6 +165,8 @@ struct ShortcutSettingsCard: View {
                 }
             }
 
+            ScreenRecordingShortcutSettings(shortcuts: app.screenRecording.shortcuts)
+
             shortcutRow(
                 title: "剪贴板",
                 shortcut: $clipboardShortcut,
@@ -180,7 +182,7 @@ struct ShortcutSettingsCard: View {
             }
 
             shortcutRow(
-                title: "录音",
+                title: "会议录制",
                 shortcut: $meetingShortcut,
                 isRecording: $isRecordingMeetingShortcut,
                 conflictMessage: app.meetingShortcutConflictMessage

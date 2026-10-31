@@ -38,6 +38,7 @@ enum AppSection: Hashable, Identifiable {
         case .entertainment: "娱乐广场"
         case .gamePlaza: "游戏广场"
         case .skill(.screenshot): "截图"
+        case .skill(.screenRecording): "屏幕录制"
         case .skill(.clipboard): "剪贴板"
         case .skill(.windowLayout): "窗口布局"
         case .skill(.resume): "简历制作"
@@ -79,6 +80,7 @@ private struct ScreenshotSaveRequest {
 @Observable
 final class AppModel {
     var selectedSection: AppSection = .home
+    var screenRecording = ScreenRecordingCoordinator()
     var clipboardItems: [ClipboardItem] = []
     var latestScreenshotData: Data?
     var screenshotHistory: [ScreenshotHistoryItem] = []
@@ -379,6 +381,7 @@ final class AppModel {
         refreshPermissionStatus()
         synchronizeLaunchAtLogin()
         refreshMeetingModelState()
+        screenRecording.bind(app: self)
         startDeferredStartup()
         JarvisLog.info(
             category: .lifecycle,

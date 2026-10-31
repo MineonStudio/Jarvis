@@ -85,10 +85,19 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(shortcut.modifierFlags, [.command, .shift])
     }
 
-    func testMeetingShortcutDefaultsToF3() {
-        XCTAssertEqual(ScreenshotShortcut.meetingDefault.keyCode, 99)
-        XCTAssertEqual(ScreenshotShortcut.meetingDefault.displayString, "F3")
-        XCTAssertEqual(ScreenshotShortcut.meetingDefault.menuKeyEquivalent, "\u{F706}")
+    func testPrimaryShortcutsUseF1ThroughF4WithoutModifiers() {
+        let defaults: [(ScreenshotShortcut, UInt16, String, String)] = [
+            (.default, 122, "F1", "\u{F704}"),
+            (.screenRecordingDefault, 120, "F2", "\u{F705}"),
+            (.clipboardDefault, 99, "F3", "\u{F706}"),
+            (.meetingDefault, 118, "F4", "\u{F707}")
+        ]
+        for (shortcut, code, title, equivalent) in defaults {
+            XCTAssertEqual(shortcut.keyCode, code)
+            XCTAssertEqual(shortcut.displayString, title)
+            XCTAssertEqual(shortcut.menuKeyEquivalent, equivalent)
+            XCTAssertEqual(shortcut.modifierFlags, [])
+        }
         XCTAssertEqual(ScreenshotShortcut.meetingDefault.modifierFlags, [])
     }
 }

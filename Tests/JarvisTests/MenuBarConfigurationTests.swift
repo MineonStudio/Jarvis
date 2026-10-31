@@ -18,6 +18,7 @@ final class MenuBarConfigurationTests: XCTestCase {
         let actionableItems = menu.items.filter { !$0.isSeparatorItem }
 
         XCTAssertEqual(actionableItems.count, 5 + WindowLayout.allCases.count)
+        XCTAssertFalse(actionableItems.contains { $0.title.contains("\u{63a7}\u{5236}\u{6761}") })
         for item in actionableItems {
             XCTAssertNotNil(item.action, item.title)
             XCTAssertIdentical(item.target, controller, item.title)
@@ -43,6 +44,14 @@ final class MenuBarConfigurationTests: XCTestCase {
                 layout.title
             )
         }
+    }
+
+    func testScreenRecordingMenuUsesF2() throws {
+        let controller = JarvisMenuBarController()
+        let menu = controller.configuredMenuForTesting()
+        let item = try XCTUnwrap(menu.items.first { $0.title == "屏幕录制…" })
+        XCTAssertEqual(item.keyEquivalent, ScreenshotShortcut.screenRecordingDefault.menuKeyEquivalent)
+        XCTAssertEqual(item.keyEquivalentModifierMask, [])
     }
 
     func testStatusItemUsesStableNamespacedAutosaveName() {

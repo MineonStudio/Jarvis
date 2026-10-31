@@ -238,6 +238,12 @@ private struct JarvisHomePrompt: Identifiable {
 
     static let featurePrompts: [JarvisHomePrompt] = [
         .init(
+            id: "screen-recording",
+            message: "想演示操作或记录问题？屏幕录制支持全屏、窗口和自定义区域。",
+            destination: .skill(.screenRecording),
+            permission: nil
+        ),
+        .init(
             id: "work-companion",
             message: "我是你的工作搭子 Jarvis。办公时帮你处理琐事，休息时一起放松。",
             destination: .gamePlaza,

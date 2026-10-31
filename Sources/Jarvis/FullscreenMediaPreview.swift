@@ -53,18 +53,6 @@ enum FullscreenMediaPreviewSizing {
         )
     }
 
-    static func videoDisplaySize(maximumSize: CGSize) -> CGSize {
-        let preferred = CGSize(width: 960, height: 620)
-        let scale = min(
-            1,
-            min(
-                maximumSize.width / preferred.width,
-                maximumSize.height / preferred.height
-            )
-        )
-        return CGSize(width: preferred.width * scale, height: preferred.height * scale)
-    }
-
     static let textPanelWidth: CGFloat = 640
     static let textPanelMinimumHeight: CGFloat = 400
     static let textPanelMaximumHeight: CGFloat = 680
@@ -176,6 +164,7 @@ final class FullscreenMediaPreviewController {
     func show(
         displaySize: CGSize,
         allowsHitTesting: Bool = false,
+        capturesAllScrollEvents: Bool = false,
         onDismiss: @escaping () -> Void,
         @ViewBuilder content: @escaping () -> some View
     ) {
@@ -193,12 +182,13 @@ final class FullscreenMediaPreviewController {
         )
         hostingView.sizingOptions = []
         hostingView.appearance = NSApp.effectiveAppearance
-        show(contentView: hostingView, model: model)
+        show(contentView: hostingView, model: model, capturesAllScrollEvents: capturesAllScrollEvents)
     }
 
     func show(
         contentView: NSView,
-        model: FullscreenMediaPreviewModel
+        model: FullscreenMediaPreviewModel,
+        capturesAllScrollEvents: Bool = false
     ) {
         dismiss()
 
@@ -212,6 +202,7 @@ final class FullscreenMediaPreviewController {
         PreviewWindowSupport.configureBorderlessPreviewPanel(previewPanel)
         previewPanel.appearance = NSApp.effectiveAppearance
         previewPanel.isMovableByWindowBackground = false
+        previewPanel.capturesAllScrollEvents = capturesAllScrollEvents
         previewPanel.onWindowClose = { [weak self] in
             self?.dismiss()
         }
@@ -279,6 +270,7 @@ final class FullscreenMediaPreviewController {
 }
 
 private final class FullscreenMediaPreviewPanel: NSPanel {
+    var capturesAllScrollEvents = false
     var onEscape: (() -> Void)?
     var onScrollZoom: ((CGFloat) -> Void)?
     var onWindowClose: (() -> Void)?
@@ -308,7 +300,7 @@ private final class FullscreenMediaPreviewPanel: NSPanel {
             return
         }
         if event.type == .scrollWheel, abs(event.scrollingDeltaY) > 0.01 {
-            if let contentView,
+            if !capturesAllScrollEvents, let contentView,
                let hitView = contentView.hitTest(event.locationInWindow),
                hitView.enclosingScrollView != nil
             {

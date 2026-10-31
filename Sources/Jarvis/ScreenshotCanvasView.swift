@@ -469,7 +469,7 @@ private struct ScreenshotSelectionOverlay: View {
                     path.addRect(CGRect(origin: .zero, size: editor.canvasSize))
                     path.addRect(selectionRect)
                 }
-                .fill(Color.black.opacity(0.58), style: FillStyle(eoFill: true))
+                .fill(Color.black.opacity(0.29), style: FillStyle(eoFill: true))
                 .allowsHitTesting(false)
 
                 Path { path in

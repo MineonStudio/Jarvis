@@ -1,9 +1,31 @@
 import AppKit
+import AVKit
 @testable import Jarvis
+import SwiftUI
 import XCTest
 
 @MainActor
 final class ScreenshotHistoryPreviewTests: XCTestCase {
+    func testNativeVideoFillsTheZoomFrameWithoutAnIntrinsicPlayerSizeLimit() throws {
+        for size in [CGSize(width: 1600, height: 900), CGSize(width: 500, height: 1200), CGSize(width: 2400, height: 1600)] {
+            let player = AVPlayer()
+            let hosting = NSHostingView(rootView: NativeVideoPreviewView(player: player)
+                .frame(width: size.width, height: size.height))
+            hosting.frame = CGRect(origin: .zero, size: size)
+            hosting.layoutSubtreeIfNeeded()
+            let surface = try XCTUnwrap(videoSurface(in: hosting))
+            XCTAssertEqual(surface.playerView.frame.width, size.width, accuracy: 1)
+            XCTAssertEqual(surface.playerView.frame.height, size.height, accuracy: 1)
+        }
+    }
+
+    private func videoSurface(in view: NSView) -> NativeVideoPreviewSurface? {
+        if let surface = view as? NativeVideoPreviewSurface {
+            return surface
+        }
+        return view.subviews.lazy.compactMap { self.videoSurface(in: $0) }.first
+    }
+
     func testMouseZoomUsesBoundedTenPercentSteps() {
         let model = FullscreenMediaPreviewModel()
 
