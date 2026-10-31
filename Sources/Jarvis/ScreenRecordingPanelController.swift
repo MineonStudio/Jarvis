@@ -7,7 +7,11 @@ final class ScreenRecordingPanelController {
     private var panel: NSPanel?
     private var savedLauncherFrame: CGRect?
     var launcherFrame: CGRect? {
-        panel?.frame ?? savedLauncherFrame
+        guard let panel else { return savedLauncherFrame }
+        if let container = panel.contentView as? ScreenRecordingOptionsContainer {
+            return panel.convertToScreen(container.toolbar.frame)
+        }
+        return panel.frame
     }
 
     private var regionBorder: NSPanel?
@@ -26,13 +30,14 @@ final class ScreenRecordingPanelController {
     func showLauncher() {
         if let panel {
             panel.level = launcherLevel
-            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
+            panel.makeKey()
             updateRegionBorder()
             return
         }
         let panel = ScreenRecordingLauncherPanel(
             contentRect: CGRect(x: 0, y: 0, width: ScreenRecordingToolbarLayout.width, height: ScreenRecordingToolbarLayout.height),
-            styleMask: [.borderless],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -56,7 +61,10 @@ final class ScreenRecordingPanelController {
             panel.setFrameOrigin(CGPoint(x: frame.midX - ScreenRecordingToolbarLayout.width / 2, y: frame.minY + 32))
         }
         self.panel = panel
-        panel.makeKeyAndOrderFront(nil)
+        // Nonactivating panels can receive keyboard focus in the current Space
+        // without activating the main Jarvis window on another desktop.
+        panel.orderFrontRegardless()
+        panel.makeKey()
         updateRegionBorder()
     }
 
@@ -157,8 +165,8 @@ final class ScreenRecordingPanelController {
 
     func hide() {
         borderTrackingTask?.cancel()
-        if let panel {
-            savedLauncherFrame = panel.frame
+        if panel != nil {
+            savedLauncherFrame = launcherFrame
         }
         showModeHint(nil)
         regionBorder?.orderOut(nil); regionBorder?.close(); regionBorder = nil
@@ -170,6 +178,10 @@ private final class ScreenRecordingLauncherPanel: NSPanel {
     var onCancel: (() -> Void)?
     override var canBecomeKey: Bool {
         true
+    }
+
+    override var canBecomeMain: Bool {
+        false
     }
 
     override func cancelOperation(_: Any?) {

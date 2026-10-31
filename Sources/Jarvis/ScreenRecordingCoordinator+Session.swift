@@ -42,7 +42,12 @@ extension ScreenRecordingCoordinator {
             let filter = try makeFilter(content: content)
             let config = try makeConfiguration(filter: filter, content: content)
             try prepareSession(filter: filter, configuration: config)
-            hiddenWindow = NSApp.windows.first { $0.frameAutosaveName == JarvisMainWindowController.frameAutosaveName }
+            // Only hide a visible main window in the recording Space. Windows on
+            // other desktops must retain their visibility and stacking order.
+            hiddenWindow = NSApp.windows.first {
+                $0.frameAutosaveName == JarvisMainWindowController.frameAutosaveName
+                    && $0.isVisible && $0.isOnActiveSpace && !$0.isMiniaturized
+            }
             hiddenWindow?.orderOut(nil)
             installCountdownCancellation()
             for seconds in stride(from: settings.countdown, through: 1, by: -1) {
@@ -214,7 +219,8 @@ extension ScreenRecordingCoordinator {
         sessionFilter = nil; sessionConfiguration = nil
         phase = .idle
         panelController?.hide()
-        hiddenWindow?.makeKeyAndOrderFront(nil)
+        // Restore visibility without taking focus or switching back to its Space.
+        hiddenWindow?.orderBack(nil)
         hiddenWindow = nil
         updateMenuBar()
     }

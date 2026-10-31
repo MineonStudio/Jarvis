@@ -10,7 +10,7 @@ final class ScreenRecordingRegionController {
         self.completion = completion
         let panel = ScreenRecordingSelectionPanel(
             contentRect: screen.frame,
-            styleMask: [.borderless],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -24,7 +24,6 @@ final class ScreenRecordingRegionController {
         panel.contentView = canvas
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(canvas)
-        NSApp.activate(ignoringOtherApps: true)
         window = panel
     }
 

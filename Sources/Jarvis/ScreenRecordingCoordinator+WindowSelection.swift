@@ -7,15 +7,16 @@ extension ScreenRecordingCoordinator {
         panelController?.showLauncher()
         let mainWindow = NSApp.windows.first {
             $0.frameAutosaveName == JarvisMainWindowController.frameAutosaveName && $0.isVisible
+                && $0.isOnActiveSpace && !$0.isMiniaturized
         }
         mainWindow?.orderOut(nil)
         Task { [self] in
             await refreshSources()
-            guard selectingTarget else { mainWindow?.orderFront(nil); return }
+            guard selectingTarget else { mainWindow?.orderBack(nil); return }
             windowID = nil
             guard !windows.isEmpty else {
                 selectingTarget = false
-                mainWindow?.orderFront(nil)
+                mainWindow?.orderBack(nil)
                 showingSetup = true
                 panelController?.showLauncher()
                 return
@@ -24,7 +25,7 @@ extension ScreenRecordingCoordinator {
                 guard let self else { return }
                 windowID = id
                 selectingTarget = false
-                mainWindow?.orderFront(nil)
+                mainWindow?.orderBack(nil)
                 showingSetup = true
                 panelController?.showLauncher()
                 Task { await self.refreshPreview() }

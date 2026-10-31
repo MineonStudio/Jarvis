@@ -15,7 +15,7 @@ final class ScreenRecordingWindowSelectionController {
         }
         for (screen, candidates) in screens {
             let panel = ScreenRecordingSelectionPanel(
-                contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false
+                contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false
             )
             panel.level = .statusBar
             panel.isOpaque = false
@@ -35,7 +35,6 @@ final class ScreenRecordingWindowSelectionController {
                 panel.makeFirstResponder(canvas)
             }
         }
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func cancel() {

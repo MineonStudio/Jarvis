@@ -35,7 +35,10 @@ struct ScreenRecordingOptionsButton: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject {
         let recorder: ScreenRecordingCoordinator
-        private var panel: ScreenRecordingOptionsPanel?
+        private weak var window: NSWindow?
+        private weak var toolbar: NSView?
+        private weak var optionsView: NSView?
+        private var toolbarAutoresizingMask: NSView.AutoresizingMask = []
         private var localMonitor: Any?
         private var globalMonitor: Any?
         private var activationObserver: NSObjectProtocol?
@@ -46,59 +49,79 @@ struct ScreenRecordingOptionsButton: NSViewRepresentable {
         }
 
         @objc func showOptions(_ sender: NSButton) {
-            if panel?.isVisible == true {
+            if optionsView != nil {
                 close(); return
             }
-            guard let window = sender.window else { return }
+            guard let window = sender.window, let toolbar = window.contentView else { return }
             recorder.panelController?.showModeHint(nil)
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            DispatchQueue.main.async { [weak self, weak sender, weak window] in
-                guard let self, let sender, let window, sender.window === window, window.isVisible else { return }
-                let anchor = window.convertToScreen(sender.convert(sender.bounds, to: nil))
-                let visible = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? anchor.insetBy(dx: -400, dy: -500)
-                let width = min(ScreenRecordingOptionsLayout.width(microphoneNames: recorder.microphones.map(\.localizedName)), visible.width - 16)
-                let options = ScreenRecordingOptionsPopover(recorder: recorder, width: width, height: 1)
-                let measurement = NSHostingView(rootView: options.content.frame(width: width).fixedSize(horizontal: false, vertical: true))
-                let height = min(ceil(measurement.fittingSize.height), visible.height - 16)
-                let x = min(max(anchor.midX - width / 2, visible.minX + 8), visible.maxX - width - 8)
-                let above = anchor.maxY + 8
-                let y = min(max(above + height <= visible.maxY ? above : anchor.minY - height - 8, visible.minY + 8), visible.maxY - height - 8)
-                let panel = ScreenRecordingOptionsPanel(
-                    contentRect: CGRect(x: x, y: y, width: width, height: height),
-                    styleMask: [.borderless], backing: .buffered, defer: false
-                )
-                panel.title = "屏幕录制选项"
-                panel.isReleasedWhenClosed = false
-                panel.isOpaque = false
-                panel.backgroundColor = .clear
-                panel.hasShadow = true
-                panel.hidesOnDeactivate = false
-                panel.level = NSWindow.Level(rawValue: max(NSWindow.Level.popUpMenu.rawValue, window.level.rawValue + 1))
-                panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-                panel.onCancel = { [weak self] in self?.close() }
-                panel.contentView = NSHostingView(rootView: ScreenRecordingOptionsPopover(recorder: recorder, width: width, height: height)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .clipShape(RoundedRectangle(cornerRadius: 12)))
-                self.panel = panel
-                anchorButton = sender
-                panel.makeKeyAndOrderFront(nil)
-                installDismissalMonitors()
-            }
+            window.orderFrontRegardless()
+            window.makeKey()
+            let anchor = window.convertToScreen(sender.convert(sender.bounds, to: nil))
+            let visible = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? anchor.insetBy(dx: -400, dy: -500)
+            let width = min(ScreenRecordingOptionsLayout.width(microphoneNames: recorder.microphones.map(\.localizedName)), visible.width - 16)
+            let options = ScreenRecordingOptionsPopover(recorder: recorder, width: width, height: 1)
+            let measurement = NSHostingView(rootView: options.content.frame(width: width).fixedSize(horizontal: false, vertical: true))
+            let height = min(ceil(measurement.fittingSize.height), visible.height - 16)
+            let x = min(max(anchor.midX - width / 2, visible.minX + 8), visible.maxX - width - 8)
+            let above = anchor.maxY + 8
+            let y = min(max(above + height <= visible.maxY ? above : anchor.minY - height - 8, visible.minY + 8), visible.maxY - height - 8)
+            let optionsFrame = CGRect(x: x, y: y, width: width, height: height)
+            let toolbarFrame = window.frame
+            let expandedFrame = toolbarFrame.union(optionsFrame)
+            let hostingView = NSHostingView(rootView: ScreenRecordingOptionsPopover(recorder: recorder, width: width, height: height)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: 12)))
+            hostingView.sizingOptions = []
+
+            // Keep native glass and pickers in the same key window. A separate
+            // key panel dims the launcher's native glass regardless of SwiftUI's
+            // controlActiveState environment value.
+            self.window = window
+            self.toolbar = toolbar
+            optionsView = hostingView
+            anchorButton = sender
+            toolbarAutoresizingMask = toolbar.autoresizingMask
+            toolbar.autoresizingMask = []
+            let container = ScreenRecordingOptionsContainer(frame: CGRect(origin: .zero, size: expandedFrame.size), toolbar: toolbar)
+            window.contentView = container
+            container.addSubview(toolbar)
+            window.setFrame(expandedFrame, display: false)
+            toolbar.frame = toolbarFrame.offsetBy(dx: -expandedFrame.minX, dy: -expandedFrame.minY)
+            hostingView.frame = optionsFrame.offsetBy(dx: -expandedFrame.minX, dy: -expandedFrame.minY)
+            container.addSubview(hostingView)
+            installDismissalMonitors()
         }
 
         private func installDismissalMonitors() {
-            localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseUp, .rightMouseUp, .keyDown]) { [weak self] event in
+                var consumed = false
                 MainActor.assumeIsolated {
-                    guard let self, let panel = self.panel, event.window !== panel else { return }
-                    if let anchorButton = self.anchorButton, event.window === anchorButton.window,
-                       anchorButton.bounds.contains(anchorButton.convert(event.locationInWindow, from: nil))
-                    {
+                    guard let self, let optionsView = self.optionsView else { return }
+                    if event.type == .keyDown {
+                        guard event.keyCode == JarvisKeyCode.escape else { return }
+                        self.close()
+                        consumed = true
                         return
                     }
-                    self.close()
+                    if event.window === self.window {
+                        if optionsView.bounds.contains(optionsView.convert(event.locationInWindow, from: nil)) {
+                            return
+                        }
+                        if let anchorButton = self.anchorButton,
+                           anchorButton.bounds.contains(anchorButton.convert(event.locationInWindow, from: nil))
+                        {
+                            return
+                        }
+                        // Let toolbar buttons finish handling mouse-up before
+                        // shrinking the window changes their event coordinates.
+                        if event.type == .leftMouseUp || event.type == .rightMouseUp {
+                            DispatchQueue.main.async { [weak self] in self?.close() }
+                        }
+                    } else {
+                        self.close()
+                    }
                 }
-                return event
+                return consumed ? nil : event
             }
             globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
                 Task { @MainActor in self?.close() }
@@ -119,31 +142,35 @@ struct ScreenRecordingOptionsButton: NSViewRepresentable {
                 NotificationCenter.default.removeObserver(activationObserver)
             }
             localMonitor = nil; globalMonitor = nil; activationObserver = nil
-            panel?.orderOut(nil); panel?.close(); panel = nil
+            if let window, let toolbar, optionsView != nil {
+                let frame = window.convertToScreen(toolbar.frame)
+                optionsView?.removeFromSuperview()
+                toolbar.removeFromSuperview()
+                window.contentView = toolbar
+                window.setFrame(frame, display: false)
+                toolbar.frame = CGRect(origin: .zero, size: frame.size)
+                toolbar.autoresizingMask = toolbarAutoresizingMask
+                window.makeFirstResponder(toolbar)
+            }
+            optionsView = nil
+            toolbar = nil
+            window = nil
             anchorButton = nil
         }
     }
 }
 
-private final class ScreenRecordingOptionsPanel: NSPanel {
-    var onCancel: (() -> Void)?
-    override var canBecomeKey: Bool {
-        true
+/// Both surfaces share one responder chain and one native active appearance.
+final class ScreenRecordingOptionsContainer: NSView {
+    let toolbar: NSView
+
+    init(frame: CGRect, toolbar: NSView) {
+        self.toolbar = toolbar
+        super.init(frame: frame)
     }
 
-    override var canBecomeMain: Bool {
-        false
-    }
-
-    override func cancelOperation(_: Any?) {
-        onCancel?()
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == JarvisKeyCode.escape {
-            onCancel?()
-        } else {
-            super.keyDown(with: event)
-        }
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
