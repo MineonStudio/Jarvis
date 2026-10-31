@@ -262,7 +262,8 @@ extension ScreenshotCaptureController {
         let panels = makePresentationPanels(presentation)
         resultWindow = panels.imagePanel
         toolbarLayout = panels.toolbarLayout
-        NSApp.activate(ignoringOtherApps: true)
+        // The editing panel takes keyboard focus without activating the app,
+        // which would bring its main window’s Space forward when editing ends.
         panels.imagePanel.orderFrontRegardless()
         panels.imagePanel.makeKey()
 
