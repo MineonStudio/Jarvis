@@ -260,13 +260,11 @@ extension ScreenshotCaptureController {
             allowsWindowDrag: allowsWindowDrag
         )
         let panels = makePresentationPanels(presentation)
-        panels.imagePanel.addChildWindow(panels.toolbarPanel, ordered: .above)
         resultWindow = panels.imagePanel
-        toolbarWindow = panels.toolbarPanel
         toolbarLayout = panels.toolbarLayout
+        NSApp.activate(ignoringOtherApps: true)
         panels.imagePanel.orderFrontRegardless()
         panels.imagePanel.makeKey()
-        panels.toolbarPanel.orderFrontRegardless()
 
         editorObservation = editor.objectWillChange.sink { [weak self, weak editor] _ in
             DispatchQueue.main.async {
@@ -295,16 +293,18 @@ extension ScreenshotCaptureController {
         )
         let toolbarLayout = ScreenshotToolbarLayoutModel(width: placement.rect.width)
         toolbarLayout.placesSecondaryRowAboveMain = placement.placesSecondaryRowAboveMain
-        let toolbarPanel = makeToolbarPanel(
+        let toolbarView = makeToolbarView(
             frame: placement.rect,
             layout: toolbarLayout,
             presentation: presentation
         )
-        return ScreenshotPresentationPanels(
-            imagePanel: imagePanel,
-            toolbarPanel: toolbarPanel,
-            toolbarLayout: toolbarLayout
-        )
+        if let canvas = imagePanel.contentView {
+            let surface = ScreenshotEditingSurface(canvas: canvas, toolbar: toolbarView)
+            imagePanel.contentView = surface
+            surface.place(canvasFrame: presentation.capture.screenFrame, toolbarFrame: placement.rect, in: imagePanel)
+            imagePanel.makeFirstResponder(canvas)
+        }
+        return ScreenshotPresentationPanels(imagePanel: imagePanel, toolbarLayout: toolbarLayout)
     }
 
     private func makeImagePanel(_ presentation: ScreenshotPresentation) -> NSPanel {
@@ -400,25 +400,11 @@ extension ScreenshotCaptureController {
         return imagePanel
     }
 
-    private func makeToolbarPanel(
+    private func makeToolbarView(
         frame: CGRect,
         layout: ScreenshotToolbarLayoutModel,
         presentation: ScreenshotPresentation
-    ) -> NSPanel {
-        let toolbarPanel = NSPanel(
-            contentRect: frame,
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        toolbarPanel.level = .screenSaver
-        toolbarPanel.backgroundColor = .clear
-        toolbarPanel.isOpaque = false
-        toolbarPanel.hasShadow = false
-        toolbarPanel.hidesOnDeactivate = false
-        toolbarPanel.isReleasedWhenClosed = false
-        toolbarPanel.animationBehavior = .none
-        toolbarPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    ) -> NSView {
         let toolbarHostingView = NSHostingView(
             rootView: ScreenshotToolbar(
                 editor: presentation.editor,
@@ -433,10 +419,8 @@ extension ScreenshotCaptureController {
                 }
             )
         )
-        toolbarHostingView.autoresizingMask = NSView.AutoresizingMask(arrayLiteral: .width, .height)
-        toolbarPanel.contentView = toolbarHostingView
         toolbarHostingView.frame = NSRect(origin: .zero, size: frame.size)
-        return toolbarPanel
+        return toolbarHostingView
     }
 
     private func handleToolbarAction(
@@ -570,14 +554,8 @@ extension ScreenshotCaptureController {
         captureTask?.cancel()
         captureTask = nil
         activeEditor?.cancelTranslation()
-        if let resultWindow, let toolbarWindow {
-            resultWindow.removeChildWindow(toolbarWindow)
-        }
-        toolbarWindow?.orderOut(nil)
-        toolbarWindow?.close()
         resultWindow?.orderOut(nil)
         resultWindow?.close()
-        toolbarWindow = nil
         resultWindow = nil
         activeEditor = nil
         activeCaptureScreenFrame = nil

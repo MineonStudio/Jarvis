@@ -35,31 +35,7 @@ struct MosaicToolIcon: View {
     }
 }
 
-/// 两条胶囊共用同一套表面：圆角裁成胶囊 + 一层玻璃。复制两份的话，改一处漏一处
-/// 不会有任何信号。
-///
-/// `interactive: false`：胶囊里装的是自己带玻璃的按钮，胶囊再对指针起反应就会和
-/// 按钮的悬停/按下叠成两层反馈。
-private struct ScreenshotToolbarPillSurface: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .clipShape(Capsule())
-            .contentShape(Capsule())
-            .jarvisGlass(in: Capsule(), interactive: false)
-    }
-}
-
-private extension View {
-    func screenshotToolbarPill() -> some View {
-        modifier(ScreenshotToolbarPillSurface())
-    }
-}
-
-/// 二级行里的可选项（马赛克的模式/效果、文字的粗体/斜体/删除线）。
-///
-/// 选中态走全局那一套 `jarvisSelectionPill`（恒为胶囊 + accent 实心），和
-/// `JarvisToolbarSelectionButton`、分组选择器是同一份实现；它到行胶囊两端的距离
-/// 由 `ScreenshotToolbarMetrics.secondaryRowHorizontalPadding` 给出，和上下同值。
+/// 二级行里的可选项，与录屏范围按钮共用中性色胶囊选中态。
 struct ScreenshotToolbarOptionButton: View {
     var icon: String?
     var title: String?
@@ -82,10 +58,10 @@ struct ScreenshotToolbarOptionButton: View {
                         .font(selected ? JarvisTypography.controlEmphasis : JarvisTypography.control)
                 }
             }
-            .foregroundStyle(selected ? Color.white : Color.jarvisTextSecondary)
+            .foregroundStyle(Color.jarvisTextSecondary)
             .padding(.horizontal, title == nil ? 0 : 9)
             .frame(width: title == nil ? 28 : nil, height: ScreenshotToolbarMetrics.secondaryControlHeight)
-            .jarvisSelectionPill(isSelected: selected, isHovered: isHovered)
+            .captureToolbarSelection(isSelected: selected, isHovered: isHovered)
             .contentShape(Capsule())
         }
         .buttonStyle(JarvisPressButtonStyle(pressedScale: 0.97, pressedOpacity: 0.84))
@@ -131,7 +107,7 @@ private struct TranslationLanguageChip: View {
                     .font(.system(size: 9, weight: .semibold))
                     .accessibilityHidden(true)
             }
-            .foregroundStyle(Color.primary)
+            .foregroundStyle(Color.jarvisTextSecondary)
             .padding(.horizontal, 9)
             .frame(height: ScreenshotToolbarMetrics.secondaryControlHeight)
             .background(Color.primary.opacity(0.06), in: Capsule())
@@ -371,10 +347,10 @@ private struct ScreenshotStrokeStageButton: View {
     var body: some View {
         Button(action: action) {
             Capsule()
-                .fill(selected ? Color.white : Color.secondary)
+                .fill(Color.jarvisTextSecondary)
                 .frame(width: 14, height: markHeight)
                 .frame(width: 28, height: ScreenshotToolbarMetrics.secondaryControlHeight)
-                .jarvisSelectionPill(isSelected: selected, isHovered: isHovered)
+                .captureToolbarSelection(isSelected: selected, isHovered: isHovered)
                 .contentShape(Capsule())
         }
         .buttonStyle(JarvisPressButtonStyle(pressedScale: 0.97, pressedOpacity: 0.84))
@@ -411,7 +387,7 @@ private struct SecondaryCapsuleButton: View {
                 .font(isProminent ? JarvisTypography.controlEmphasis : JarvisTypography.control)
                 .foregroundStyle(
                     isEnabled
-                        ? (isProminent ? Color.white : Color.primary)
+                        ? (isProminent ? Color.white : Color.jarvisTextSecondary)
                         : Color.secondary.opacity(0.5)
                 )
                 .padding(.horizontal, 11)
@@ -448,15 +424,17 @@ struct ScreenshotToolbar: View {
 
 extension ScreenshotToolbar {
     var body: some View {
-        VStack(spacing: ScreenshotToolbarMetrics.pillSpacing) {
-            if layout.placesSecondaryRowAboveMain {
-                // 工具栏在选区上方：主行贴着选区（窗口下沿），二级行向上伸展。
-                // 否则收起二级行时窗口一变矮，主行会跟着弹一下。
-                secondaryRow
-                mainRow
-            } else {
-                mainRow
-                secondaryRow
+        GlassEffectContainer(spacing: ScreenshotToolbarMetrics.pillSpacing) {
+            VStack(spacing: ScreenshotToolbarMetrics.pillSpacing) {
+                if layout.placesSecondaryRowAboveMain {
+                    // 工具栏在选区上方：主行贴着选区（窗口下沿），二级行向上伸展。
+                    // 否则收起二级行时窗口一变矮，主行会跟着弹一下。
+                    secondaryRow
+                    mainRow
+                } else {
+                    mainRow
+                    secondaryRow
+                }
             }
         }
         // 不额外留边：胶囊就是窗口本身，留白会变成同样的死区，也会让工具栏放到
@@ -480,7 +458,7 @@ extension ScreenshotToolbar {
             .frame(height: ScreenshotToolbarMetrics.mainRowHeight)
             .padding(.horizontal, ScreenshotToolbarMetrics.mainRowHorizontalPadding)
             .frame(maxWidth: .infinity)
-            .screenshotToolbarPill()
+            .captureToolbarGlassSurface()
     }
 
     /// 二级行：按内容自适应，居中显示。
@@ -490,7 +468,7 @@ extension ScreenshotToolbar {
             secondaryControl
                 .frame(height: ScreenshotToolbarMetrics.secondaryRowHeight)
                 .padding(.horizontal, ScreenshotToolbarMetrics.secondaryRowHorizontalPadding)
-                .screenshotToolbarPill()
+                .captureToolbarGlassSurface()
         }
     }
 
@@ -580,10 +558,8 @@ extension ScreenshotToolbar {
                             )
                         )
                 } else if tool == .mosaic {
-                    // 自绘图标不吃外层的 foregroundStyle，得自己跟上：选中的底色就是
-                    // accent，图标再用 accent 画就整个糊在一起了。
                     MosaicToolIcon(
-                        color: editor.selectedTool == tool ? Color.white : Color.secondary
+                        color: Color.jarvisTextSecondary
                     )
                 } else {
                     Image(systemName: tool.icon)
@@ -595,25 +571,20 @@ extension ScreenshotToolbar {
                         )
                 }
             }
-            // 选中就是胶囊，和二级行、别的模块的分段控件同一套（`jarvisSelectionPill`）：
-            // 42 高的胶囊嵌在 64 高的行里，四边各让出 11——正好是行高减按钮高的一半，
-            // 圆头和行胶囊同心。原来只把图标染成 accent、没有胶囊，「选中了哪个」在
-            // 一排图标里要靠颜色去猜。
-            .foregroundStyle(editor.selectedTool == tool ? Color.white : Color.secondary)
+            .foregroundStyle(Color.jarvisTextSecondary)
             .frame(
                 width: ScreenshotToolbarIconMetrics.box,
                 height: ScreenshotToolbarIconMetrics.box
             )
             .frame(
-                width: ScreenshotToolbarMetrics.mainButtonSize,
+                width: ScreenshotToolbarMetrics.mainButtonWidth,
                 height: ScreenshotToolbarMetrics.mainButtonSize
             )
-            .jarvisSelectionPill(
+            .captureToolbarSelection(
                 isSelected: editor.selectedTool == tool,
                 isHovered: hoveredTool == tool
             )
-            // 命中区仍是整块 42×42：胶囊只管观感。改成 Capsule 会把这颗按钮四角
-            // 约两成面积变成点不动的死区，同一行里别的按钮却还是矩形。
+            // 保留完整矩形命中区，胶囊仅负责选中态外观。
             .contentShape(Rectangle())
         }
         .buttonStyle(JarvisPressButtonStyle(pressedScale: 0.94, pressedOpacity: 0.76))
@@ -649,17 +620,15 @@ extension ScreenshotToolbar {
             } else {
                 ScreenshotTranslationIcon(
                     isSelected: editor.translationMode,
-                    selectedColor: .white
+                    selectedColor: .jarvisTextSecondary
                 )
             }
         }
         .frame(
-            width: ScreenshotToolbarMetrics.mainButtonSize,
+            width: ScreenshotToolbarMetrics.mainButtonWidth,
             height: ScreenshotToolbarMetrics.mainButtonSize
         )
-        // 翻译按钮和四个工具按钮同在一个容器里，选中态就得是同一枚胶囊；
-        // 只给图标染色的话，这一排里就剩它一个「选了没选要靠猜」。
-        .jarvisSelectionPill(isSelected: editor.translationMode, isHovered: isHoveringTranslation)
+        .captureToolbarSelection(isSelected: editor.translationMode, isHovered: isHoveringTranslation)
         .contentShape(Rectangle())
         .buttonStyle(JarvisPressButtonStyle(pressedScale: 0.94, pressedOpacity: 0.76))
         .animation(
@@ -909,7 +878,6 @@ extension ScreenshotToolbar {
         action: @escaping () -> Void
     ) -> some View {
         let actionKind = help
-        let tint = iconColor ?? Color.secondary
         return Button(action: action) {
             Image(systemName: icon)
                 .font(
@@ -918,19 +886,19 @@ extension ScreenshotToolbar {
                         weight: .medium
                     )
                 )
-                .foregroundStyle(enabled ? tint : tint.opacity(0.35))
+                .foregroundStyle(iconColor ?? .jarvisTextSecondary)
                 .frame(
                     width: ScreenshotToolbarIconMetrics.box,
                     height: ScreenshotToolbarIconMetrics.box
                 )
                 .frame(
-                    width: ScreenshotToolbarMetrics.mainButtonSize,
+                    width: ScreenshotToolbarMetrics.mainButtonWidth,
                     height: ScreenshotToolbarMetrics.mainButtonSize
                 )
-                .jarvisSelectionPill(isSelected: false, isHovered: hoveredAction == actionKind)
+                .captureToolbarSelection(isSelected: false, isHovered: hoveredAction == actionKind)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(JarvisPressButtonStyle(pressedScale: 0.94, pressedOpacity: 0.76))
+        .buttonStyle(.plain)
         .animation(
             JarvisMotion.animation(JarvisMotion.hover, reduceMotion: reduceMotion),
             value: hoveredAction
@@ -954,7 +922,7 @@ extension ScreenshotToolbar {
     private var toolbarDivider: some View {
         Rectangle()
             .fill(ScreenshotToolbarDivider.color)
-            .frame(width: ScreenshotToolbarMetrics.dividerLineWidth, height: 28)
+            .frame(width: ScreenshotToolbarMetrics.dividerLineWidth, height: 24)
             .padding(.horizontal, ScreenshotToolbarMetrics.dividerHorizontalPadding)
     }
 }

@@ -49,7 +49,6 @@ struct ScreenshotPresentation {
 
 struct ScreenshotPresentationPanels {
     let imagePanel: NSPanel
-    let toolbarPanel: NSPanel
     let toolbarLayout: ScreenshotToolbarLayoutModel
 }
 
@@ -204,28 +203,25 @@ enum ScreenshotToolbarMetrics {
     }
 
     /// 主按钮行的高度。
-    static let mainRowHeight: CGFloat = 64
+    static let mainRowHeight: CGFloat = ScreenRecordingToolbarLayout.height
     /// 二级控件行的高度。
-    static let secondaryRowHeight: CGFloat = 40
+    static let secondaryRowHeight: CGFloat = 44
     /// 两条胶囊之间的缝。上下分成两块之后这里不再画分隔线。
     static let pillSpacing: CGFloat = 6
-    /// 主按钮行里每颗按钮的边长。
-    static let mainButtonSize: CGFloat = 42
+    /// 主按钮高度与录屏控件一致，宽度保留图标两侧的点击空间。
+    static let mainButtonSize: CGFloat = ScreenRecordingToolbarLayout.controlHeight
+    static let mainButtonWidth: CGFloat = ScreenRecordingToolbarLayout.modeWidth
     /// 二级行里控件（选项药丸、下拉芯片、文字按钮）的统一高度。
     ///
     /// 二级行本身已经是一条大胶囊，里面的控件不再各自套容器——它们只用这一点
     /// 高度上的药丸底表示选中，不再多叠一层圆角。
-    static let secondaryControlHeight: CGFloat = 26
+    static let secondaryControlHeight: CGFloat = 28
 
     /// 主按钮行的左右内缩。胶囊两端的圆头半径是行高的一半，内缩不够会把
     /// 最外侧按钮的图标切掉。下限由 `minimumCapsuleInset` 推出，
     /// `ScreenshotToolbarCapsuleTests` 钉着这个约束。
-    static let mainRowHorizontalPadding: CGFloat = 11
-    /// 二级行的左右内缩 = 行高减控件高的一半，和上下内缩**同一个数**：选中胶囊的
-    /// 圆头圆心才会和行胶囊的圆头圆心重合，看上去是"嵌"进去的。原来写死 20，横向
-    /// 比纵向（(40−26)/2 = 7）宽出一大截，选中药丸在圆头上明显偏内。
-    ///
-    /// 下限由 `minimumCapsuleInset` 推出，`ScreenshotToolbarCapsuleTests` 钉着。
+    static let mainRowHorizontalPadding: CGFloat = ScreenRecordingToolbarLayout.padding
+    /// 二级行内缩与上下留白一致，保持内外胶囊同心。
     static var secondaryRowHorizontalPadding: CGFloat {
         JarvisSegmentedMetrics.padding(
             containerHeight: secondaryRowHeight,
@@ -244,7 +240,7 @@ enum ScreenshotToolbarMetrics {
     /// 主按钮行的内容宽度。颗数来自 `ScreenshotToolbarComposition`，不在这里再数一遍。
     /// 它和面板的固定宽度一起决定内缩的**上界**——内缩不是越大越好。
     static var mainRowContentWidth: CGFloat {
-        (CGFloat(ScreenshotToolbarComposition.buttonCount) * mainButtonSize)
+        (CGFloat(ScreenshotToolbarComposition.buttonCount) * mainButtonWidth)
             + (CGFloat(ScreenshotToolbarComposition.dividerCount) * dividerFootprint)
     }
 
@@ -354,7 +350,6 @@ final class ScreenshotCaptureController {
     let screenshotService = ScreenshotService()
     var selectionWindows: [SelectionOverlayWindow] = []
     var resultWindow: NSPanel?
-    var toolbarWindow: NSPanel?
     var activeEditor: ScreenshotEditorModel?
     var editorObservation: AnyCancellable?
     var toolbarLayout: ScreenshotToolbarLayoutModel?

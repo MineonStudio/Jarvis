@@ -21,35 +21,6 @@ struct ScreenshotShortcut: Codable, Equatable {
     let keyCode: UInt16
     let modifiers: UInt
 
-    /// F1 is the default global shortcut for screenshot capture.
-    static let `default` = ScreenshotShortcut(
-        keyCode: 122, // F1
-        modifiers: 0
-    )
-
-    /// Previous builds used F2 and then ⌘⇧J for screenshot capture while the
-    /// clipboard panel was being introduced. Both built-in values migrate to F1.
-    static let legacyDefault = ScreenshotShortcut(
-        keyCode: 120, // F2
-        modifiers: 0
-    )
-
-    static let previousDefault = ScreenshotShortcut(
-        keyCode: 38, // J
-        modifiers: NSEvent.ModifierFlags([.command, .shift]).rawValue
-    )
-
-    static let clipboardDefault = ScreenshotShortcut(
-        keyCode: 120, // F2
-        modifiers: 0
-    )
-
-    /// F3 toggles the local meeting recorder.
-    static let meetingDefault = ScreenshotShortcut(
-        keyCode: 99, // F3
-        modifiers: 0
-    )
-
     private static let functionKeyCodes: Set<UInt16> = [
         122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111
     ]
@@ -221,6 +192,30 @@ enum ScreenshotShortcutValidation: Equatable {
 }
 
 final class ScreenshotShortcutManager {
+    var isRegistered: Bool {
+        hotKey != nil
+    }
+
+    static func availability(of candidate: ScreenshotShortcut, probeID: UInt32) -> ScreenshotShortcutValidation {
+        var slot: EventHotKeyRef?
+        let id = EventHotKeyID(signature: 0x4A41_5256, id: probeID)
+        let status = RegisterEventHotKey(
+            UInt32(candidate.keyCode),
+            candidate.carbonModifiers,
+            id,
+            GetEventDispatcherTarget(),
+            0,
+            &slot
+        )
+        if let slot {
+            UnregisterEventHotKey(slot)
+        }
+        if status == noErr {
+            return .available
+        }
+        return status == eventHotKeyExistsErr ? .conflict : .unavailable
+    }
+
     private let handler: @MainActor @Sendable () -> Void
     private let hotKeyID: UInt32
     private var binding: ScreenshotShortcut

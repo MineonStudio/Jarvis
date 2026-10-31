@@ -29,11 +29,14 @@ enum ScreenshotTimeFilter: String, CaseIterable, Identifiable {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> Bool {
+        // Screenshot timestamps follow the last edit; other history modules use creation time.
+        matches(date: item.updatedAt, now: now, calendar: calendar)
+    }
+
+    func matches(date: Date, now: Date = Date(), calendar: Calendar = .current) -> Bool {
         guard let components else { return true }
         guard let startDate = calendar.date(byAdding: components, to: now) else { return false }
-        // Use updatedAt because the screenshot list is ordered and displayed
-        // by the last edit time, so filtering follows the visible timestamp.
-        return item.updatedAt >= startDate
+        return date >= startDate
     }
 
     private var components: DateComponents? {

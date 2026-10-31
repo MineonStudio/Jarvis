@@ -23,6 +23,7 @@ final class SelectionOverlayWindow: ScreenshotColorProbePanel {
         }
         if event.type == .leftMouseDown,
            event.clickCount == 2,
+           isCanvasEvent(event),
            let onDoubleClick
         {
             onDoubleClick()
@@ -30,6 +31,7 @@ final class SelectionOverlayWindow: ScreenshotColorProbePanel {
         }
         if event.type == .otherMouseDown,
            event.buttonNumber == 2,
+           isCanvasEvent(event),
            let onMiddleClick
         {
             onMiddleClick()

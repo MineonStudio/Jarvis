@@ -37,6 +37,7 @@ final class ScreenshotImagePanel: ScreenshotColorProbePanel {
         }
         if event.type == .leftMouseDown,
            event.clickCount == 2,
+           isCanvasEvent(event),
            let onDoubleClick
         {
             onDoubleClick()
@@ -44,6 +45,7 @@ final class ScreenshotImagePanel: ScreenshotColorProbePanel {
         }
         if event.type == .otherMouseDown,
            event.buttonNumber == 2,
+           isCanvasEvent(event),
            let onMiddleClick
         {
             onMiddleClick()
@@ -135,6 +137,10 @@ final class ScreenshotCanvasHostingView: NSHostingView<ScreenshotCanvasView> {
 
     func updateCanvasScale(_ scale: CGFloat) {
         rootView.canvasScale = scale
+    }
+
+    func hideColorProbe() {
+        colorProbe.hide()
     }
 
     /// Window-level routing keeps C available after interacting with SwiftUI

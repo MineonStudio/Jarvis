@@ -235,6 +235,32 @@ private final class JarvisApplicationDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
         guard let appModel else { return .terminateNow }
 
+        if appModel.screenRecording.isActive {
+            guard appModel.screenRecording.phase == .recording || appModel.screenRecording.phase == .paused else {
+                let alert = NSAlert()
+                alert.messageText = "屏幕录制正在准备或保存"
+                alert.informativeText = "请等待操作完成，或取消倒计时后再退出。"
+                alert.runModal()
+                return .terminateCancel
+            }
+            let alert = NSAlert()
+            alert.messageText = "正在进行屏幕录制"
+            alert.informativeText = "退出前将停止录制并保存视频。"
+            alert.addButton(withTitle: "取消")
+            alert.addButton(withTitle: "停止并保存后退出")
+            guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+            Task { @MainActor in
+                await appModel.screenRecording.stop()
+                let mayExit = appModel.screenRecording.lastSaveSucceeded
+                    && Self.confirmResumeDiscardIfNeeded(appModel) && appModel.launchPreparedUpdateInstaller()
+                if !mayExit {
+                    appModel.cancelPermissionResetAndRelaunch()
+                }
+                NSApp.reply(toApplicationShouldTerminate: mayExit)
+            }
+            return .terminateLater
+        }
+
         if appModel.meetingCurrentRecordingID != nil {
             let alert = NSAlert()
             alert.messageText = "正在录音"

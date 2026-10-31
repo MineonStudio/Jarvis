@@ -471,11 +471,10 @@ extension ScreenshotCaptureController {
         to window: NSWindow,
         updating layout: ScreenshotToolbarLayoutModel?
     ) {
+        guard let surface = window.contentView as? ScreenshotEditingSurface else { return }
+        let canvasFrame = surface.canvasFrameOnScreen
+        surface.place(canvasFrame: canvasFrame, toolbarFrame: placement.rect, in: window)
         let frame = placement.rect
-        if window.frame != frame {
-            window.setFrame(frame, display: false, animate: false)
-            window.contentView?.frame = NSRect(origin: .zero, size: frame.size)
-        }
         guard let layout else { return }
         if layout.width != frame.width {
             layout.width = frame.width
@@ -486,8 +485,9 @@ extension ScreenshotCaptureController {
     }
 
     func resizeToolbar(for editor: ScreenshotEditorModel, on screenFrame: CGRect) {
-        guard let toolbarWindow else { return }
-        let imageFrame = editor.selectionFrame(on: screenFrame) ?? screenFrame
+        guard let resultWindow, let surface = resultWindow.contentView as? ScreenshotEditingSurface else { return }
+        let canvasFrame = surface.canvasFrameOnScreen
+        let imageFrame = editor.selectionFrame(on: canvasFrame) ?? screenFrame
         let placement = toolbarFrame(
             for: imageFrame,
             height: editor.secondaryBarVisible
@@ -495,7 +495,7 @@ extension ScreenshotCaptureController {
                 : ScreenshotToolbarMetrics.compactHeight,
             width: ScreenshotToolbarMetrics.baseWidth
         )
-        applyToolbarFrame(placement, to: toolbarWindow, updating: toolbarLayout)
+        applyToolbarFrame(placement, to: resultWindow, updating: toolbarLayout)
     }
 
     func finishSelection(

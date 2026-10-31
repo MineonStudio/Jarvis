@@ -69,8 +69,8 @@ final class ScreenshotToolbarCapsuleTests: XCTestCase {
     /// 面板宽度由主按钮行推出（主行内容固定，窗口跟着它），钉成具体数值：这条
     /// 一改，工具栏在屏幕上的落位、以及二级行能有多少余量都会跟着变。
     func testPanelWidthFollowsTheMainRow() {
-        // 12 颗按钮 × 42 + 2 条分隔线 × 17 + 两侧内缩 11 × 2。
-        XCTAssertEqual(ScreenshotToolbarMetrics.baseWidth, 560, accuracy: 0.001)
+        // 12 颗图标按钮 × 40 + 2 条分隔线 × 17 + 两侧内缩 8 × 2。
+        XCTAssertEqual(ScreenshotToolbarMetrics.baseWidth, 530, accuracy: 0.001)
         XCTAssertEqual(ScreenshotToolbarComposition.buttonCount, 12)
         XCTAssertEqual(ScreenshotToolbarComposition.dividerCount, 2)
         XCTAssertTrue(ScreenshotToolbarComposition.mainRow.contains(.tool(.pen)))
@@ -102,11 +102,11 @@ final class ScreenshotToolbarCapsuleTests: XCTestCase {
     /// 这两个高度是交给面板窗口的尺寸，必须钉成具体数值：用公式互相验算等于什么也没验
     /// （两边同时改就一起漂），而窗口比内容矮一截会把胶囊顶边切掉。
     func testHeightsHandedToThePanelArePinned() {
-        XCTAssertEqual(ScreenshotToolbarMetrics.mainRowHeight, 64, accuracy: 0.001)
-        XCTAssertEqual(ScreenshotToolbarMetrics.secondaryRowHeight, 40, accuracy: 0.001)
+        XCTAssertEqual(ScreenshotToolbarMetrics.mainRowHeight, 52, accuracy: 0.001)
+        XCTAssertEqual(ScreenshotToolbarMetrics.secondaryRowHeight, 44, accuracy: 0.001)
         XCTAssertEqual(ScreenshotToolbarMetrics.pillSpacing, 6, accuracy: 0.001)
-        XCTAssertEqual(ScreenshotToolbarMetrics.compactHeight, 64, accuracy: 0.001)
-        XCTAssertEqual(ScreenshotToolbarMetrics.expandedHeight, 110, accuracy: 0.001)
+        XCTAssertEqual(ScreenshotToolbarMetrics.compactHeight, 52, accuracy: 0.001)
+        XCTAssertEqual(ScreenshotToolbarMetrics.expandedHeight, 102, accuracy: 0.001)
     }
 
     /// 胶囊铺满窗口：窗口高度必须等于两条胶囊加中间那道缝，否则多出来的部分是

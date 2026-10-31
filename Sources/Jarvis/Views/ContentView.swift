@@ -117,7 +117,7 @@ struct ContentView: View {
     }
 
     private var topNavigationItems: [TopLevelSection] {
-        [.home, .aiConversation] + SkillID.allCases.map(TopLevelSection.skill)
+        [.home, .aiConversation] + SkillID.sidebarCases.map(TopLevelSection.skill)
     }
 
     private var bottomNavigationItems: [TopLevelSection] {
@@ -162,6 +162,7 @@ struct ContentView: View {
         case .entertainment: EntertainmentView()
         case .gamePlaza: GamePlazaView()
         case .skill(.screenshot): ScreenshotView()
+        case .skill(.screenRecording): ScreenRecordingView()
         case .skill(.clipboard): ClipboardView()
         case .skill(.windowLayout): WindowLayoutView()
         case .skill(.resume): ResumeContentView()
