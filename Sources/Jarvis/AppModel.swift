@@ -587,7 +587,9 @@ extension AppModel {
     private func handleEditorStatusAction(_ action: ScreenshotAction) {
         switch action {
         case let .tool(tool):
-            statusMessage = "已选择\(tool.title)，在截图上拖动即可使用"
+            statusMessage = tool == .eyedropper
+                ? "已选择取色，移动鼠标预览色值，点击或按 C 复制"
+                : "已选择\(tool.title)，在截图上拖动即可使用"
         case .undo:
             statusMessage = "已撤销上一步标注"
         case .redo:

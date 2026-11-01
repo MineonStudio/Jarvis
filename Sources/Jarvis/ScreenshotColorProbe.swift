@@ -1,9 +1,18 @@
 import AppKit
 import ImageIO
 
-/// Both a reused selection panel and a new editing panel route hover and C
+/// Both a reused selection panel and a new editing panel route color picking
 /// through the same path, without intercepting events outside screenshot UI.
 class ScreenshotColorProbePanel: NSPanel {
+    var colorProbeCanvas: ScreenshotCanvasHostingView? {
+        (contentView as? ScreenshotEditingSurface)?.canvas as? ScreenshotCanvasHostingView
+            ?? contentView as? ScreenshotCanvasHostingView
+    }
+
+    var isPickingColor: Bool {
+        colorProbeCanvas?.isPickingColor == true
+    }
+
     func isCanvasEvent(_ event: NSEvent) -> Bool {
         guard let surface = contentView as? ScreenshotEditingSurface else { return true }
         let point = event.type == .keyDown ? mouseLocationOutsideOfEventStream : event.locationInWindow
@@ -11,8 +20,7 @@ class ScreenshotColorProbePanel: NSPanel {
     }
 
     override func sendEvent(_ event: NSEvent) {
-        let canvas = (contentView as? ScreenshotEditingSurface)?.canvas as? ScreenshotCanvasHostingView
-            ?? contentView as? ScreenshotCanvasHostingView
+        let canvas = colorProbeCanvas
         if isCanvasEvent(event) {
             if canvas?.handleColorProbeEvent(event) == true {
                 return
@@ -24,91 +32,125 @@ class ScreenshotColorProbePanel: NSPanel {
     }
 }
 
-/// Samples the frozen image in top-left canvas coordinates, independently of
-/// the selection dimming, annotations and the display's Retina scale.
-struct ScreenshotColorSample: Equatable {
-    let red: UInt8
-    let green: UInt8
-    let blue: UInt8
-
-    var hex: String {
-        String(format: "#%02X%02X%02X", red, green, blue)
-    }
-
-    var color: NSColor {
-        NSColor(
-            srgbRed: CGFloat(red) / 255,
-            green: CGFloat(green) / 255,
-            blue: CGFloat(blue) / 255,
-            alpha: 1
-        )
-    }
-}
-
-struct ScreenshotColorSampler {
-    let image: CGImage
-
-    func sample(at point: CGPoint, canvasSize: CGSize) -> ScreenshotColorSample? {
-        guard canvasSize.width > 0, canvasSize.height > 0,
-              point.x.isFinite, point.y.isFinite,
-              CGRect(origin: .zero, size: canvasSize).contains(point)
-        else { return nil }
-        let x = min(image.width - 1, Int(point.x / canvasSize.width * CGFloat(image.width)))
-        let y = min(image.height - 1, Int(point.y / canvasSize.height * CGFloat(image.height)))
-        guard let pixel = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)),
-              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
-        var rgba = [UInt8](repeating: 0, count: 4)
-        let rendered = rgba.withUnsafeMutableBytes { bytes -> Bool in
-            guard let context = CGContext(
-                data: bytes.baseAddress, width: 1, height: 1,
-                bitsPerComponent: 8, bytesPerRow: 4, space: space,
-                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else { return false }
-            context.setFillColor(CGColor(gray: 1, alpha: 1))
-            context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
-            context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-            return true
-        }
-        guard rendered else { return nil }
-        return ScreenshotColorSample(red: rgba[0], green: rgba[1], blue: rgba[2])
-    }
-}
-
 @MainActor
 final class ScreenshotColorProbe {
-    private let sampler: ScreenshotColorSampler?
+    private var sampler: ScreenshotColorSampler?
+    private let preparation: Task<ScreenshotColorSampler?, Never>
+    private let pasteboard: NSPasteboard
+    private var hoverUpdate: Task<Void, Never>?
     private let badge = ScreenshotColorBadge(frame: .zero)
     private var copiedAt: CGPoint?
+    private struct PendingCopy {
+        weak var view: NSView?
+        weak var editor: ScreenshotEditorModel?
+        let point: CGPoint
+        let canvasSize: CGSize
+    }
 
-    init(data: Data) {
-        let source = CGImageSourceCreateWithData(data as CFData, nil)
-        sampler = source.flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }
-            .map { ScreenshotColorSampler(image: $0) }
+    private var pendingCopy: PendingCopy?
+
+    init(data: Data, pasteboard: NSPasteboard = .general, onReady: @escaping @MainActor () -> Void = {}) {
+        self.pasteboard = pasteboard
+        // Large PNG decoding and color conversion must not block mouse events.
+        let preparation = Task.detached(priority: .userInitiated) { () -> ScreenshotColorSampler? in
+            guard !Task.isCancelled,
+                  let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+                  !Task.isCancelled else { return nil }
+            return ScreenshotColorSampler(image: image)
+        }
+        self.preparation = preparation
         badge.isHidden = true
+        Task { [weak self] in
+            let sampler = await preparation.value
+            guard let self, !preparation.isCancelled else { return }
+            self.sampler = sampler
+            if let pending = pendingCopy,
+               pending.view?.window != nil, pending.editor?.selectedTool == .eyedropper,
+               let sample = sampler?.sample(at: pending.point, canvasSize: pending.canvasSize)
+            {
+                copySample(sample, at: pending.point)
+            }
+            pendingCopy = nil
+            onReady()
+        }
+    }
+
+    deinit {
+        preparation.cancel()
+        hoverUpdate?.cancel()
+    }
+
+    func scheduleUpdate(in view: NSView, editor: ScreenshotEditorModel, scale: CGFloat) {
+        guard hoverUpdate == nil else { return }
+        let framesPerSecond = max(60, view.window?.screen?.maximumFramesPerSecond ?? 60)
+        let delay = UInt64(1_000_000_000 / framesPerSecond)
+        // Coalesce high-polling-rate mouse events and sample the latest position
+        // once per display frame instead of queuing stale glass/layout updates.
+        hoverUpdate = Task { [weak self, weak view, weak editor] in
+            do { try await Task.sleep(nanoseconds: delay) } catch { return }
+            guard let self else { return }
+            hoverUpdate = nil
+            guard let view, let editor else { return }
+            update(in: view, editor: editor, scale: scale)
+        }
     }
 
     func hide() {
+        hoverUpdate?.cancel()
+        hoverUpdate = nil
+        pendingCopy = nil
         badge.isHidden = true
     }
 
     @discardableResult
-    func update(in view: NSView, editor: ScreenshotEditorModel, scale: CGFloat, copy: Bool = false) -> Bool {
+    private func copySample(_ sample: ScreenshotColorSample, at point: CGPoint) -> Bool {
+        pasteboard.clearContents()
+        guard pasteboard.setString(sample.hex, forType: .string) else { return false }
+        copiedAt = point
+        return true
+    }
+
+    @discardableResult
+    func update(
+        in view: NSView, editor: ScreenshotEditorModel, scale: CGFloat,
+        copy: Bool = false, locationInWindow: CGPoint? = nil
+    ) -> Bool {
+        hoverUpdate?.cancel()
+        hoverUpdate = nil
         guard let window = view.window, let overlayHost = view.superview,
-              window.contentView !== view, scale > 0, editor.textInputAnchor == nil,
+              window.contentView !== view, scale > 0,
+              editor.selectedTool == .eyedropper, editor.textInputAnchor == nil,
               !(window.firstResponder is NSTextView), let selection = editor.selectionRect
         else { hide(); return false }
-        let local = view.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+        let location = locationInWindow ?? window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let local = view.convert(location, from: nil)
         let point = CGPoint(x: local.x / scale, y: local.y / scale)
-        guard selection.contains(point), view.bounds.contains(local),
-              let sample = sampler?.sample(at: point, canvasSize: editor.canvasSize)
+        guard selection.contains(point), view.bounds.contains(local)
+        else { hide(); return false }
+        guard let sampler else {
+            // A fast click/C during preparation still copies the requested pixel.
+            if copy {
+                pendingCopy = PendingCopy(view: view, editor: editor, point: point, canvasSize: editor.canvasSize)
+            }
+            return copy
+        }
+        guard let sample = sampler.sample(at: point, canvasSize: editor.canvasSize)
         else { hide(); return false }
         if copy {
-            NSPasteboard.general.clearContents()
-            guard NSPasteboard.general.setString(sample.hex, forType: .string) else { return false }
-            copiedAt = point
+            pendingCopy = nil
+            guard copySample(sample, at: point) else { return false }
         } else if copiedAt != point {
             copiedAt = nil
         }
+        presentBadge(sample, at: point, local: local, in: view, overlayHost: overlayHost)
+        return true
+    }
+
+    private func presentBadge(
+        _ sample: ScreenshotColorSample, at point: CGPoint, local: CGPoint,
+        in view: NSView, overlayHost: NSView
+    ) {
         if badge.superview !== overlayHost {
             overlayHost.addSubview(badge, positioned: .above, relativeTo: view)
         }
@@ -123,9 +165,13 @@ final class ScreenshotColorProbe {
         }
         origin.x = max(view.bounds.minX, origin.x)
         origin.y = max(view.bounds.minY, origin.y)
-        badge.frame = overlayHost.convert(CGRect(origin: origin, size: badge.frame.size), from: view)
-        badge.isHidden = false
-        return true
+        let frame = overlayHost.convert(CGRect(origin: origin, size: badge.frame.size), from: view)
+        if badge.frame != frame {
+            badge.frame = frame
+        }
+        if badge.isHidden {
+            badge.isHidden = false
+        }
     }
 }
 
@@ -137,6 +183,7 @@ private final class ScreenshotColorBadge: NSView {
 
     var sample: ScreenshotColorSample? {
         didSet {
+            guard sample != oldValue else { return }
             valueLabel.stringValue = sample?.hex ?? ""
             swatch.layer?.backgroundColor = sample?.color.cgColor
             setAccessibilityLabel(sample.map { "色值 \($0.hex)，按 C 复制" })
@@ -144,7 +191,11 @@ private final class ScreenshotColorBadge: NSView {
     }
 
     var copied = false {
-        didSet { updateHint() }
+        didSet {
+            if copied != oldValue {
+                updateHint()
+            }
+        }
     }
 
     override var isFlipped: Bool {
@@ -153,8 +204,10 @@ private final class ScreenshotColorBadge: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        // Only the swatch has a backing layer. The system glass samples the
-        // screenshot beneath it, without an opaque custom background.
+        // Moving a layer-backed overlay does not invalidate the screenshot
+        // canvas underneath it. Keep native glass backdrop sampling intact.
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
         let panelHeight: CGFloat = 28
         valueLabel.stringValue = "#FFFFFF"
         valueLabel.font = .monospacedSystemFont(ofSize: 12, weight: .medium)

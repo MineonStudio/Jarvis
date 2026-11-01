@@ -18,11 +18,13 @@ final class SelectionOverlayWindow: ScreenshotColorProbePanel {
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, event.keyCode == JarvisKeyCode.escape {
+            colorProbeCanvas?.hideColorProbe()
             onEscape?()
             return
         }
         if event.type == .leftMouseDown,
            event.clickCount == 2,
+           !isPickingColor,
            isCanvasEvent(event),
            let onDoubleClick
         {

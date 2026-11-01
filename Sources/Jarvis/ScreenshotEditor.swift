@@ -468,6 +468,10 @@ extension ScreenshotEditorModel {
     /// - Returns: 这次 Esc 是否已经被消化。
     @discardableResult
     func handleEscape() -> Bool {
+        if selectedTool == .eyedropper {
+            selectTool(nil)
+            return true
+        }
         if isEditingText {
             endTextEditing()
             return true

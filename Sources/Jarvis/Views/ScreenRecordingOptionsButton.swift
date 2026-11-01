@@ -14,10 +14,10 @@ struct ScreenRecordingOptionsButton: NSViewRepresentable {
         button.bezelStyle = .inline
         button.font = .systemFont(ofSize: 13, weight: .medium)
         button.attributedTitle = NSAttributedString(string: button.title, attributes: [
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: NSColor.labelColor,
             .font: NSFont.systemFont(ofSize: 13, weight: .medium)
         ])
-        button.contentTintColor = .secondaryLabelColor
+        button.contentTintColor = .labelColor
         button.image = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 9, weight: .semibold))
         button.imagePosition = .imageRight

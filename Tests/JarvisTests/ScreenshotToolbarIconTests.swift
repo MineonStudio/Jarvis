@@ -16,6 +16,7 @@ final class ScreenshotToolbarIconTests: XCTestCase {
         "arrow.up.right",
         "rectangle",
         "pencil.tip",
+        "eyedropper",
         "translate",
         "arrow.uturn.backward",
         "arrow.uturn.forward",
@@ -60,6 +61,12 @@ final class ScreenshotToolbarIconTests: XCTestCase {
                     weight: .medium
                 )
             )
+    }
+
+    func testDiagonalEyedropperMatchesToolbarInkHeight() throws {
+        let box = try inkBox(of: ScreenshotEyedropperIcon())
+        XCTAssertEqual(box.height, ScreenshotToolbarIconMetrics.targetInkHeight, accuracy: tolerance)
+        XCTAssertEqual(box.width, box.height, accuracy: 2, "斜向吸管的宽高应接近")
     }
 
     func testCustomIconsMatchTheSymbols() throws {

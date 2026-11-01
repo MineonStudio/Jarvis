@@ -30,6 +30,7 @@ final class ScreenshotImagePanel: ScreenshotColorProbePanel {
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, event.keyCode == JarvisKeyCode.escape {
             if onEscapeIntercept?() == true {
+                colorProbeCanvas?.hideColorProbe()
                 return
             }
             onEscape?()
@@ -37,6 +38,7 @@ final class ScreenshotImagePanel: ScreenshotColorProbePanel {
         }
         if event.type == .leftMouseDown,
            event.clickCount == 2,
+           !isPickingColor,
            isCanvasEvent(event),
            let onDoubleClick
         {
@@ -56,7 +58,7 @@ final class ScreenshotImagePanel: ScreenshotColorProbePanel {
 }
 
 final class ScreenshotCanvasHostingView: NSHostingView<ScreenshotCanvasView> {
-    private lazy var colorProbe = ScreenshotColorProbe(data: editor.originalData)
+    private var colorProbe: ScreenshotColorProbe?
     private let editor: ScreenshotEditorModel
     private let allowsSelectionTransform: Bool
     private let allowsWindowDrag: Bool
@@ -139,32 +141,11 @@ final class ScreenshotCanvasHostingView: NSHostingView<ScreenshotCanvasView> {
         rootView.canvasScale = scale
     }
 
-    func hideColorProbe() {
-        colorProbe.hide()
-    }
-
-    /// Window-level routing keeps C available after interacting with SwiftUI
-    /// controls, while leaving text fields and modified shortcuts untouched.
-    func handleColorProbeEvent(_ event: NSEvent) -> Bool {
-        guard rootView.interactive, allowsSelectionTransform else { return false }
-        if event.type == .mouseMoved {
-            colorProbe.update(in: self, editor: editor, scale: rootView.canvasScale)
-        } else if event.type == .keyDown,
-                  event.charactersIgnoringModifiers?.lowercased() == "c",
-                  event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift])
-        {
-            return colorProbe.update(in: self, editor: editor, scale: rootView.canvasScale, copy: true)
-        } else if event.type == .leftMouseDown || event.type == .leftMouseDragged {
-            colorProbe.hide()
-        }
-        return false
-    }
-
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.acceptsMouseMovedEvents = true
-        if window != nil, rootView.interactive, allowsSelectionTransform {
-            colorProbe.update(in: self, editor: editor, scale: rootView.canvasScale)
+        if window != nil, isPickingColor {
+            refreshColorProbe()
         }
     }
 
@@ -387,5 +368,58 @@ final class ScreenshotCanvasHostingView: NSHostingView<ScreenshotCanvasView> {
 
     private func clamp(_ value: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {
         min(max(value, lower), upper)
+    }
+}
+
+extension ScreenshotCanvasHostingView {
+    var isPickingColor: Bool {
+        rootView.interactive && editor.selectedTool == .eyedropper
+    }
+
+    private func activeColorProbe() -> ScreenshotColorProbe {
+        if let colorProbe {
+            return colorProbe
+        }
+        let probe = ScreenshotColorProbe(data: editor.originalData) { [weak self] in
+            self?.refreshColorProbe()
+        }
+        colorProbe = probe
+        return probe
+    }
+
+    private func refreshColorProbe() {
+        guard isPickingColor else { return }
+        activeColorProbe().update(in: self, editor: editor, scale: rootView.canvasScale)
+    }
+
+    func hideColorProbe() {
+        colorProbe?.hide()
+    }
+
+    /// Window-level routing keeps C available after interacting with SwiftUI
+    /// controls, while leaving text fields and modified shortcuts untouched.
+    func handleColorProbeEvent(_ event: NSEvent) -> Bool {
+        guard isPickingColor else {
+            hideColorProbe()
+            return false
+        }
+        let colorProbe = activeColorProbe()
+        if event.type == .mouseMoved || event.type == .leftMouseDragged {
+            colorProbe.scheduleUpdate(in: self, editor: editor, scale: rootView.canvasScale)
+        } else if event.type == .keyDown,
+                  event.charactersIgnoringModifiers?.lowercased() == "c",
+                  event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift])
+        {
+            return colorProbe.update(in: self, editor: editor, scale: rootView.canvasScale, copy: true)
+        } else if event.type == .leftMouseDown {
+            colorProbe.update(
+                in: self, editor: editor, scale: rootView.canvasScale,
+                copy: true, locationInWindow: event.locationInWindow
+            )
+            return true
+        } else if event.type == .leftMouseUp {
+            return true
+        }
+        return event.type == .leftMouseDragged
     }
 }

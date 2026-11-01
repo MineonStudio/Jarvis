@@ -9,9 +9,15 @@ final class ScreenRecordingPanelController {
     var launcherFrame: CGRect? {
         guard let panel else { return savedLauncherFrame }
         if let container = panel.contentView as? ScreenRecordingOptionsContainer {
-            return panel.convertToScreen(container.toolbar.frame)
+            return panel.convertToScreen(container.toolbar.frame).insetBy(
+                dx: ScreenRecordingToolbarLayout.glassOverflow,
+                dy: ScreenRecordingToolbarLayout.glassOverflow
+            )
         }
-        return panel.frame
+        return panel.frame.insetBy(
+            dx: ScreenRecordingToolbarLayout.glassOverflow,
+            dy: ScreenRecordingToolbarLayout.glassOverflow
+        )
     }
 
     private var regionBorder: NSPanel?
@@ -36,11 +42,12 @@ final class ScreenRecordingPanelController {
             return
         }
         let panel = ScreenRecordingLauncherPanel(
-            contentRect: CGRect(x: 0, y: 0, width: ScreenRecordingToolbarLayout.width, height: ScreenRecordingToolbarLayout.height),
+            contentRect: CGRect(origin: .zero, size: ScreenRecordingToolbarLayout.windowSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
+        CaptureToolbarAppearance.shared.register(panel)
         panel.onCancel = { [weak recorder] in recorder?.dismissToolbar() }
         panel.isReleasedWhenClosed = false
         panel.isFloatingPanel = true
@@ -50,16 +57,20 @@ final class ScreenRecordingPanelController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // Liquid Glass already draws its own edge and shadow. An additional
+        // window shadow doubles the dark outline around the capsule.
+        panel.hasShadow = false
         panel.isMovableByWindowBackground = true
         panel.contentView = NSHostingView(rootView: ScreenRecordingToolbar(recorder: recorder))
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
             ?? NSScreen.main
+        let overflow = ScreenRecordingToolbarLayout.glassOverflow
         if let savedLauncherFrame {
-            panel.setFrameOrigin(CGPoint(x: savedLauncherFrame.midX - ScreenRecordingToolbarLayout.width / 2, y: savedLauncherFrame.minY))
+            panel.setFrameOrigin(CGPoint(x: savedLauncherFrame.midX - panel.frame.width / 2, y: savedLauncherFrame.minY - overflow))
         } else if let frame = screen?.visibleFrame {
-            panel.setFrameOrigin(CGPoint(x: frame.midX - ScreenRecordingToolbarLayout.width / 2, y: frame.minY + 32))
+            panel.setFrameOrigin(CGPoint(x: frame.midX - panel.frame.width / 2, y: frame.minY + 32 - overflow))
         }
+        alignToBackingPixels(panel)
         self.panel = panel
         // Nonactivating panels can receive keyboard focus in the current Space
         // without activating the main Jarvis window on another desktop.
@@ -74,12 +85,23 @@ final class ScreenRecordingPanelController {
             view.layoutSubtreeIfNeeded()
             let size = view.fittingSize
             guard size.width.isFinite, size.width > 0 else { return }
+            let width = ceil(size.width)
             let frame = CGRect(
-                x: panel.frame.midX - size.width / 2, y: panel.frame.minY,
-                width: size.width, height: ScreenRecordingToolbarLayout.height
+                x: panel.frame.midX - width / 2, y: panel.frame.minY,
+                width: width, height: ScreenRecordingToolbarLayout.windowSize.height
             )
             panel.setFrame(frame, display: true)
+            self?.alignToBackingPixels(panel)
         }
+    }
+
+    private func alignToBackingPixels(_ panel: NSPanel) {
+        let scale = panel.backingScaleFactor
+        let origin = panel.frame.origin
+        panel.setFrameOrigin(CGPoint(
+            x: (origin.x * scale).rounded() / scale,
+            y: (origin.y * scale).rounded() / scale
+        ))
     }
 
     func showModeHint(_ mode: ScreenRecordingMode?) {
@@ -89,7 +111,7 @@ final class ScreenRecordingPanelController {
         guard let mode else { return }
         modeHintTask = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
-            guard let self, let panel else { return }
+            guard let self, let panel, let launcherFrame else { return }
             let view = NSHostingView(rootView: Text(mode.recordingHint)
                 .font(.system(size: 12, weight: .medium))
                 .padding(.horizontal, 12).padding(.vertical, 6)
@@ -98,11 +120,12 @@ final class ScreenRecordingPanelController {
             let index = ScreenRecordingMode.allCases.firstIndex(of: mode) ?? 0
             let hint = NSPanel(
                 contentRect: CGRect(
-                    x: panel.frame.minX + 34 + CGFloat(index) * (ScreenRecordingToolbarLayout.modeWidth + ScreenRecordingToolbarLayout.spacing) - size.width / 2,
-                    y: panel.frame.maxY + 8, width: size.width, height: size.height
+                    x: launcherFrame.minX + 34 + CGFloat(index) * (ScreenRecordingToolbarLayout.modeWidth + ScreenRecordingToolbarLayout.spacing) - size.width / 2,
+                    y: launcherFrame.maxY + 8, width: size.width, height: size.height
                 ),
                 styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false
             )
+            CaptureToolbarAppearance.shared.register(hint)
             hint.isReleasedWhenClosed = false
             hint.isOpaque = false
             hint.backgroundColor = .clear

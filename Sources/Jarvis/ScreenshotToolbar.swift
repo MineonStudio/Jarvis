@@ -35,6 +35,15 @@ struct MosaicToolIcon: View {
     }
 }
 
+/// 沿用吸管符号的斜向：右上为容器，左下为吸口，并对齐同排墨迹高度。
+struct ScreenshotEyedropperIcon: View {
+    var body: some View {
+        Image(systemName: "eyedropper")
+            .font(.system(size: ScreenshotToolbarIconMetrics.symbolPointSize, weight: .medium))
+            .scaleEffect(0.9)
+    }
+}
+
 /// 二级行里的可选项，与录屏范围按钮共用中性色胶囊选中态。
 struct ScreenshotToolbarOptionButton: View {
     var icon: String?
@@ -58,7 +67,7 @@ struct ScreenshotToolbarOptionButton: View {
                         .font(selected ? JarvisTypography.controlEmphasis : JarvisTypography.control)
                 }
             }
-            .foregroundStyle(Color.jarvisTextSecondary)
+            .foregroundStyle(Color.primary)
             .padding(.horizontal, title == nil ? 0 : 9)
             .frame(width: title == nil ? 28 : nil, height: ScreenshotToolbarMetrics.secondaryControlHeight)
             .captureToolbarSelection(isSelected: selected, isHovered: isHovered)
@@ -107,7 +116,7 @@ private struct TranslationLanguageChip: View {
                     .font(.system(size: 9, weight: .semibold))
                     .accessibilityHidden(true)
             }
-            .foregroundStyle(Color.jarvisTextSecondary)
+            .foregroundStyle(Color.primary)
             .padding(.horizontal, 9)
             .frame(height: ScreenshotToolbarMetrics.secondaryControlHeight)
             .background(Color.primary.opacity(0.06), in: Capsule())
@@ -230,6 +239,7 @@ private struct TranslationLanguageMenuAnchor: NSViewRepresentable {
             let fittingSize = hostingView.fittingSize
             hostingView.frame = NSRect(origin: .zero, size: fittingSize)
             panel.setContentSize(fittingSize)
+            CaptureToolbarAppearance.shared.register(panel)
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = false
@@ -347,7 +357,7 @@ private struct ScreenshotStrokeStageButton: View {
     var body: some View {
         Button(action: action) {
             Capsule()
-                .fill(Color.jarvisTextSecondary)
+                .fill(Color.primary)
                 .frame(width: 14, height: markHeight)
                 .frame(width: 28, height: ScreenshotToolbarMetrics.secondaryControlHeight)
                 .captureToolbarSelection(isSelected: selected, isHovered: isHovered)
@@ -387,7 +397,7 @@ private struct SecondaryCapsuleButton: View {
                 .font(isProminent ? JarvisTypography.controlEmphasis : JarvisTypography.control)
                 .foregroundStyle(
                     isEnabled
-                        ? (isProminent ? Color.white : Color.jarvisTextSecondary)
+                        ? (isProminent ? Color.white : Color.primary)
                         : Color.secondary.opacity(0.5)
                 )
                 .padding(.horizontal, 11)
@@ -559,8 +569,10 @@ extension ScreenshotToolbar {
                         )
                 } else if tool == .mosaic {
                     MosaicToolIcon(
-                        color: Color.jarvisTextSecondary
+                        color: Color.primary
                     )
+                } else if tool == .eyedropper {
+                    ScreenshotEyedropperIcon()
                 } else {
                     Image(systemName: tool.icon)
                         .font(
@@ -571,7 +583,7 @@ extension ScreenshotToolbar {
                         )
                 }
             }
-            .foregroundStyle(Color.jarvisTextSecondary)
+            .foregroundStyle(Color.primary)
             .frame(
                 width: ScreenshotToolbarIconMetrics.box,
                 height: ScreenshotToolbarIconMetrics.box
@@ -620,7 +632,8 @@ extension ScreenshotToolbar {
             } else {
                 ScreenshotTranslationIcon(
                     isSelected: editor.translationMode,
-                    selectedColor: .jarvisTextSecondary
+                    selectedColor: .primary,
+                    unselectedColor: .primary
                 )
             }
         }
@@ -886,7 +899,7 @@ extension ScreenshotToolbar {
                         weight: .medium
                     )
                 )
-                .foregroundStyle(iconColor ?? .jarvisTextSecondary)
+                .foregroundStyle(iconColor ?? .primary)
                 .frame(
                     width: ScreenshotToolbarIconMetrics.box,
                     height: ScreenshotToolbarIconMetrics.box
