@@ -73,6 +73,49 @@ final class ScreenshotToolbarInteractionTests: XCTestCase {
         XCTAssertTrue(editor.secondaryBarVisible)
     }
 
+    func testEyedropperCommitsTextAndLeavesOtherModes() throws {
+        let editor = try makeEditor()
+        editor.selectTool(.text)
+        editor.beginTextEditing(at: CGPoint(x: 100, y: 100))
+        editor.textDraft = "保留文字"
+
+        editor.selectTool(.eyedropper)
+
+        XCTAssertFalse(editor.isEditingText)
+        XCTAssertEqual(editor.annotations.last?.text, "保留文字")
+        XCTAssertNil(editor.selectedAnnotationID)
+        XCTAssertFalse(editor.secondaryBarVisible)
+        XCTAssertTrue(editor.handleEscape())
+        XCTAssertNil(editor.selectedTool)
+        XCTAssertFalse(editor.handleEscape())
+
+        editor.enterTranslationMode()
+        editor.selectTool(.eyedropper)
+        XCTAssertFalse(editor.translationMode)
+        XCTAssertFalse(editor.secondaryBarVisible)
+    }
+
+    func testEyedropperConsumesMouseGesturesOnlyWhileSelected() throws {
+        let editor = try makeEditor()
+        let canvas = ScreenshotCanvasHostingView(
+            rootView: ScreenshotCanvasView(image: NSImage(size: editor.canvasSize), editor: editor, interactive: true),
+            editor: editor,
+            allowsSelectionTransform: false
+        )
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseDragged, .leftMouseUp] {
+            let event = try XCTUnwrap(NSEvent.mouseEvent(
+                with: type, location: CGPoint(x: 100, y: 100), modifierFlags: [],
+                timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0,
+                clickCount: 2, pressure: 1
+            ))
+            editor.selectTool(nil)
+            XCTAssertFalse(canvas.handleColorProbeEvent(event))
+            editor.selectTool(.eyedropper)
+            XCTAssertTrue(canvas.handleColorProbeEvent(event))
+        }
+        XCTAssertTrue(editor.annotations.isEmpty)
+    }
+
     /// 重复退出不应把状态搅乱（按钮回调可能被连续触发）。
     func testExitingTranslationModeTwiceIsHarmless() throws {
         let editor = try makeEditor()

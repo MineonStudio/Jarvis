@@ -341,7 +341,11 @@ extension ScreenshotCaptureController {
             imagePanel = selectionWindow
             selectionWindow.onDoubleClick = quickCopyAndClose
             selectionWindow.onMiddleClick = pasteToScreen
-            selectionWindow.onEscape = cancelEditing
+            selectionWindow.onEscape = { [weak editor = presentation.editor] in
+                if editor?.handleEscape() != true {
+                    cancelEditing()
+                }
+            }
         } else {
             let screenshotPanel = ScreenshotImagePanel(
                 contentRect: presentation.capture.screenFrame,
@@ -362,16 +366,7 @@ extension ScreenshotCaptureController {
             imagePanel = screenshotPanel
         }
 
-        imagePanel.level = .screenSaver
-        imagePanel.backgroundColor = .clear
-        imagePanel.isOpaque = false
-        imagePanel.hasShadow = false
-        imagePanel.isMovableByWindowBackground = false
-        imagePanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        imagePanel.hidesOnDeactivate = false
-        imagePanel.isReleasedWhenClosed = false
-        imagePanel.becomesKeyOnlyIfNeeded = false
-        imagePanel.animationBehavior = .none
+        configureImagePanel(imagePanel)
         let canvasHostingView = ScreenshotCanvasHostingView(
             rootView: ScreenshotCanvasView(
                 image: presentation.image,
@@ -399,6 +394,20 @@ extension ScreenshotCaptureController {
         imagePanel.contentView = canvasHostingView
         imagePanel.makeFirstResponder(canvasHostingView)
         return imagePanel
+    }
+
+    private func configureImagePanel(_ imagePanel: NSPanel) {
+        CaptureToolbarAppearance.shared.register(imagePanel)
+        imagePanel.level = .screenSaver
+        imagePanel.backgroundColor = .clear
+        imagePanel.isOpaque = false
+        imagePanel.hasShadow = false
+        imagePanel.isMovableByWindowBackground = false
+        imagePanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        imagePanel.hidesOnDeactivate = false
+        imagePanel.isReleasedWhenClosed = false
+        imagePanel.becomesKeyOnlyIfNeeded = false
+        imagePanel.animationBehavior = .none
     }
 
     private func makeToolbarView(

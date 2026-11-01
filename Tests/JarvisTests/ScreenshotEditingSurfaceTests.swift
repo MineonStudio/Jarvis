@@ -15,6 +15,7 @@ final class ScreenshotEditingSurfaceTests: XCTestCase {
         image.unlockFocus()
         try controller.showHistoryResult(data: XCTUnwrap(image.tiffRepresentation)) { _ in }
 
+        defer { CaptureToolbarAppearance.shared.update(.system) }
         let window = try XCTUnwrap(controller.resultWindow)
         let surface = try XCTUnwrap(window.contentView as? ScreenshotEditingSurface)
         XCTAssertTrue(surface.canvas.window === window)
@@ -23,6 +24,11 @@ final class ScreenshotEditingSurfaceTests: XCTestCase {
         XCTAssertTrue(window.isKeyWindow, "截图编辑激活后，操作栏所在窗口必须真正成为 key window")
         XCTAssertTrue(window.firstResponder === surface.canvas)
         XCTAssertTrue(window.childWindows?.isEmpty ?? true, "操作栏不应再放在始终失焦的子窗口里")
+        for (theme, name) in [(JarvisTheme.dark, NSAppearance.Name.darkAqua), (.light, .aqua)] {
+            CaptureToolbarAppearance.shared.update(theme)
+            XCTAssertEqual(window.appearance?.name, name)
+            XCTAssertEqual(surface.toolbar.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]), name)
+        }
     }
 
     func testExpandingToolbarPreservesCanvasScreenCoordinates() {

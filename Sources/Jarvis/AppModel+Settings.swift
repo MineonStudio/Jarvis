@@ -23,6 +23,7 @@ extension AppModel {
 
     func updateThemePreference(_ preference: JarvisTheme) {
         themePreference = preference
+        CaptureToolbarAppearance.shared.update(preference)
         UserDefaults.standard.set(preference.rawValue, forKey: themePreferenceKey)
     }
 
@@ -299,6 +300,7 @@ extension AppModel {
     }
 
     func loadThemePreference() {
+        defer { CaptureToolbarAppearance.shared.update(themePreference) }
         guard let rawValue = UserDefaults.standard.string(forKey: themePreferenceKey),
               let preference = JarvisTheme(rawValue: rawValue)
         else {

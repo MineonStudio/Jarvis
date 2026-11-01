@@ -184,6 +184,7 @@ struct ScreenshotCanvasView: View {
     private var canvasGesture: some Gesture {
         DragGesture(minimumDistance: editor.selectedTool == .text ? 0 : 2)
             .onChanged { value in
+                guard editor.selectedTool != .eyedropper else { return }
                 if dragStart == nil {
                     guard let start = editablePoint(value.startLocation) else { return }
                     dragStart = start
@@ -241,6 +242,8 @@ struct ScreenshotCanvasView: View {
                 }
 
                 switch selectedTool {
+                case .eyedropper:
+                    break
                 case .arrow:
                     editor.addArrow(from: start, to: end)
                 case .rectangle:
@@ -312,7 +315,7 @@ struct ScreenshotCanvasView: View {
         guard let start = dragStart, let end = dragCurrent else { return nil }
         guard let selectedTool = editor.selectedTool else { return nil }
         switch selectedTool {
-        case .text:
+        case .text, .eyedropper:
             return nil
         case .arrow:
             return .init(
