@@ -111,8 +111,6 @@ enum JarvisWebPlatformConfiguration {
 }
 
 enum JarvisWebPlatformFullscreenLayout {
-    static let windowedCornerRadius: CGFloat = 16
-
     static func isActive(_ state: WKWebView.FullscreenState) -> Bool {
         switch state {
         case .enteringFullscreen, .inFullscreen:
@@ -162,103 +160,7 @@ enum JarvisWebPlaybackPolicy {
     }
 }
 
-final class JarvisWebPlatformCornerCoverView: NSView {
-    var cornerRadius: CGFloat = JarvisWebPlatformFullscreenLayout.windowedCornerRadius {
-        didSet {
-            if oldValue != cornerRadius {
-                needsDisplay = true
-            }
-        }
-    }
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.masksToBounds = false
-        clipsToBounds = false
-        layerContentsRedrawPolicy = .onSetNeedsDisplay
-        autoresizingMask = [.width, .height]
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override var isOpaque: Bool {
-        false
-    }
-
-    override func hitTest(_: NSPoint) -> NSView? {
-        nil
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        needsDisplay = true
-    }
-
-    override func draw(_: NSRect) {
-        let bounds = self.bounds
-        guard bounds.width > 0, bounds.height > 0 else {
-            return
-        }
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            let rounded = NSBezierPath(
-                roundedRect: bounds,
-                xRadius: cornerRadius,
-                yRadius: cornerRadius
-            )
-            // 圆角矩形**外面**那一圈：网页是方的，方角就落在这里，得盖掉。
-            let path = NSBezierPath(rect: bounds)
-            path.append(rounded)
-            path.windingRule = .evenOdd
-            // Match the SwiftUI floating panel fill so uncovered WKWebView
-            // corners do not show as light-gray squares.
-            NSColor.controlBackgroundColor.setFill()
-            path.fill()
-
-            // 面板自己的阴影也要补进这一圈：它在 `JarvisFloatingPanelModifier` 里
-            // 画在网页视图**底下**，被网页盖住了。别的模块（截图、壁纸、会议……）
-            // 的圆角处能看见这层浅浅的投影，这两个模块要是没有，边角就对不上。
-            //
-            // 画法：在"只留外面那一圈"的裁剪里，把圆角矩形带阴影再填一遍——填充
-            // 落在圆角以内、被裁掉，只剩它投在外圈的阴影。
-            NSGraphicsContext.saveGraphicsState()
-            path.addClip()
-            let shadow = NSShadow()
-            shadow.shadowColor = NSColor.black.withAlphaComponent(0.11)
-            // 与 SwiftUI `.shadow(radius: 16, y: 6)` 对齐的换算见
-            // `JarvisWebPlatformCornerCoverTests`（SwiftUI 的 radius 约是
-            // NSShadow 模糊半径的一半）。
-            shadow.shadowBlurRadius = cornerRadius * 2
-            // 视图不是 flipped，向下投就是负的 y。
-            shadow.shadowOffset = NSSize(width: 0, height: -6)
-            shadow.set()
-            NSColor.controlBackgroundColor.setFill()
-            rounded.fill()
-            NSGraphicsContext.restoreGraphicsState()
-
-            // 再描一圈圆角。填色用的是面板底色，和网页底色同色时（浅色模式下两边
-            // 都是白的）整个圆角就看不出来了，面板看上去是个直角矩形；而面板自己
-            // 那圈描边画在网页视图**底下**，被盖住了。这里补上，和
-            // `JarvisFloatingPanelModifier` 的描边同一口径（`Color.primary` 8%、
-            // 0.75pt，向内描）。
-            let border = NSBezierPath(
-                roundedRect: bounds.insetBy(dx: 0.375, dy: 0.375),
-                xRadius: cornerRadius - 0.375,
-                yRadius: cornerRadius - 0.375
-            )
-            border.lineWidth = 0.75
-            NSColor.labelColor.withAlphaComponent(0.08).setStroke()
-            border.stroke()
-        }
-    }
-}
-
 final class JarvisWebPlatformViewContainer: NSView {
-    private let cornerCover = JarvisWebPlatformCornerCoverView(frame: .zero)
-
     /// 宿主画面是否露出。窗口被完全遮挡、最小化、关闭、切到别的空间，或应用被隐藏
     /// 时都是 false。网页媒体只在可见时播放：窗口躲在后台时视频仍会一直解码，
     /// GPU 和 `HTMLMediaElement playback` 的防休眠断言都不会停。
@@ -435,7 +337,6 @@ final class JarvisWebPlatformViewContainer: NSView {
 
     func embed(_ webView: WKWebView) {
         let isFullscreen = JarvisWebPlatformFullscreenLayout.isActive(webView.fullscreenState)
-        cornerCover.isHidden = isFullscreen
         guard !isFullscreen else {
             return
         }
@@ -443,27 +344,19 @@ final class JarvisWebPlatformViewContainer: NSView {
             addSubview(webView)
             webView.autoresizingMask = [.width, .height]
         }
-        // Keep rounded corners as a sibling overlay. Masking the WKWebView
-        // itself makes hardware video layers flicker.
+        // Keep the web surface unmasked so hardware video layers remain stable.
         wantsLayer = true
         layer?.masksToBounds = false
         clipsToBounds = false
         syncBackgroundColor()
-        if cornerCover.superview !== self {
-            addSubview(cornerCover, positioned: .above, relativeTo: webView)
-        }
         if webView.frame != bounds {
             webView.frame = bounds
-        }
-        if cornerCover.frame != bounds {
-            cornerCover.frame = bounds
         }
     }
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         syncBackgroundColor()
-        cornerCover.needsDisplay = true
     }
 
     private func syncBackgroundColor() {
@@ -474,9 +367,6 @@ final class JarvisWebPlatformViewContainer: NSView {
 
     override func layout() {
         super.layout()
-        if cornerCover.superview === self, cornerCover.frame != bounds {
-            cornerCover.frame = bounds
-        }
         guard let webView = subviews.first(where: { $0 is WKWebView }) as? WKWebView,
               webView.superview === self,
               !JarvisWebPlatformFullscreenLayout.isActive(webView.fullscreenState),

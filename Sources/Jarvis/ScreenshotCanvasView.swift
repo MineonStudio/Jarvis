@@ -152,7 +152,7 @@ struct ScreenshotCanvasView: View {
         .overlay(alignment: .bottom) {
             if interactive, let translationToast {
                 JarvisToast(message: translationToast)
-                    .padding(.bottom, 26)
+                    .padding(.bottom, JarvisSpacing.pageInset)
                     .allowsHitTesting(false)
             }
         }

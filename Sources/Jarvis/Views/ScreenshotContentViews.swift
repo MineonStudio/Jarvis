@@ -6,11 +6,14 @@ struct ScreenshotView: View {
     @State private var selectedTimeFilter: ScreenshotTimeFilter = .threeDays
     @State private var selectedItemID: UUID?
     @State private var gridZoom: HistoryGridZoomLevel = .regular
+    @State private var toolbarAlignment = HistoryToolbarAlignment()
 
     var body: some View {
         JarvisContentArea(
+            horizontalContentPadding: 0,
+            bottomContentPadding: 0,
             leadingToolbar: {
-                ScreenshotTimeFilterBar(selectedFilter: $selectedTimeFilter)
+                ScreenshotTimeFilterBar(selectedFilter: $selectedTimeFilter, alignment: toolbarAlignment)
             },
             trailingToolbar: {
                 ToolbarSpacer(.fixed, placement: .automatic)
@@ -23,6 +26,7 @@ struct ScreenshotView: View {
                         selectedItem: selectedItem,
                         onClearSelection: { selectedItemID = nil }
                     )
+                    .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .trailing))
                 }
             },
             content: {
@@ -32,10 +36,11 @@ struct ScreenshotView: View {
                         selectedItemID: $selectedItemID,
                         gridZoom: gridZoom
                     )
-                    .padding(.horizontal, HistoryGridMetrics.historyPanelInset)
-                    .padding(.vertical, HistoryGridMetrics.historyPanelInset)
+                    .padding(.leading, toolbarAlignment.leadingInset)
+                    .padding(.trailing, toolbarAlignment.trailingInset)
+                    .padding(.bottom, HistoryGridMetrics.historyPanelInset)
                 }
-                .jarvisModulePanel()
+                .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .content))
             }
         )
     }
@@ -53,7 +58,7 @@ struct ScreenshotHistoryActionToolbar: View {
     @State private var showingDeleteConfirmation = false
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: JarvisSpacing.hairline) {
             JarvisToolbarIconButton(
                 systemName: "eye",
                 help: "查看",
@@ -87,7 +92,7 @@ struct ScreenshotHistoryActionToolbar: View {
                 showingDeleteConfirmation = true
             }
         }
-        .padding(4)
+        .padding(.horizontal, JarvisToolbarMetrics.iconClusterPadding)
         .frame(height: HistoryGridMetrics.topControlHeight)
         .confirmationDialog(
             "删除这张截图？",
@@ -173,30 +178,30 @@ struct HistoryGridZoomControl: View {
 }
 
 enum HistoryGridMetrics {
-    static let imageSpacing: CGFloat = 7
-    static let historyPanelInset: CGFloat = 10
-    static let historyFilterToGridSpacing: CGFloat = 10
+    static let imageSpacing = JarvisSpacing.controlGap
+    static let historyPanelInset = JarvisSpacing.gridGap
+    static let historyFilterToGridSpacing = JarvisSpacing.gridGap
 
     // Both history galleries use the same 16:9 landscape panel and controls.
     //
     // 基准宽度（用户定的 200；壁纸模块那边一格约 282×190，这里比它小一档，
     // 一屏能多放一张）。想换大小改这一个数，缩放档位按它成比例走。
     static let historyCardBaseWidth: CGFloat = 200
-    static let historyCardBasePadding: CGFloat = 10
+    static let historyCardBasePadding = JarvisSpacing.rowInset
     static let clipboardCardWidth: CGFloat = historyCardBaseWidth * 1.1
     static let clipboardCardHeight: CGFloat = clipboardCardWidth * 9 / 16
-    static let clipboardCardPadding: CGFloat = historyCardBasePadding * 0.6
+    static let clipboardCardPadding = JarvisSpacing.iconGap
     static let clipboardPreviewHeight: CGFloat = clipboardCardHeight
-    static let clipboardContentSpacing: CGFloat = 4
+    static let clipboardContentSpacing = JarvisSpacing.textGap
     static let clipboardMetadataHeight: CGFloat = 16
     static let clipboardSearchFieldWidth = JarvisToolbarMetrics.searchFieldWidth
     static let clipboardActionButtonSize = JarvisToolbarMetrics.controlSize
     static let clipboardPreviewHoverScale: CGFloat = 1.08
     static let clipboardCornerRadius: CGFloat = 12
-    static let clipboardGridSpacing: CGFloat = 10
+    static let clipboardGridSpacing = JarvisSpacing.gridGap
     static let topControlHeight = JarvisToolbarMetrics.controlSize
     static let clipboardSearchFieldHeight: CGFloat = topControlHeight
-    static let clipboardFilterToGridSpacing: CGFloat = 10
+    static let clipboardFilterToGridSpacing = JarvisSpacing.gridGap
     static let screenshotFilterBarHeight: CGFloat = topControlHeight
 }
 
@@ -379,18 +384,18 @@ struct ScreenshotHistoryCard: View, Equatable {
     }
 
     private var metadataRow: some View {
-        HStack(spacing: 6) {
-            Label("PNG", systemImage: "photo")
+        HStack(spacing: JarvisSpacing.iconGap) {
+            Image(systemName: "photo")
                 .font(JarvisTypography.captionEmphasis)
-                .foregroundStyle(Color.jarvisTextSecondary)
+                .fixedSize()
             Spacer(minLength: 4)
             Text(JarvisHistoryDateFormatting.string(from: item.updatedAt))
                 .font(JarvisTypography.caption)
-                .foregroundStyle(Color.jarvisTextSecondary)
+                .monospacedDigit()
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: HistoryGridMetrics.clipboardMetadataHeight)
+        .historyCardMetadata()
     }
 
     private var copyButton: some View {
@@ -412,7 +417,7 @@ struct ScreenshotHistoryCard: View, Equatable {
                 Spacer(minLength: 0)
                 copyButton
             }
-            .padding(8)
+            .padding(JarvisSpacing.controlGap)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .transition(
                 reduceMotion
@@ -429,6 +434,9 @@ struct ScreenshotHistoryCard: View, Equatable {
             enablesHoverZoom: enablesHoverZoom
         )
         .overlay(alignment: .bottom) {
+            metadataRow
+        }
+        .overlay(alignment: .topTrailing) {
             copyActionOverlay
         }
         .clipShape(
@@ -440,75 +448,72 @@ struct ScreenshotHistoryCard: View, Equatable {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HistoryGridMetrics.clipboardContentSpacing) {
-            cardBody
-            metadataRow
-        }
-        .contentShape(
-            RoundedRectangle(
-                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                style: .continuous
-            )
-        )
-        .onTapGesture(count: 2, perform: onDoubleClick)
-        .onTapGesture(perform: onSelect)
-        .onHover { hovering in
-            guard hovering != isHovered else { return }
-            withAnimation(
-                JarvisMotion.animation(
-                    JarvisMotion.content,
-                    reduceMotion: reduceMotion
+        cardBody
+            .contentShape(
+                RoundedRectangle(
+                    cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
+                    style: .continuous
                 )
-            ) {
-                isHovered = hovering
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("截图，PNG，\(JarvisHistoryDateFormatting.string(from: item.updatedAt))")
-        .accessibilityValue(isSelected ? "已选中" : "未选中")
-        .accessibilityHint("点击选择，双击预览；可以拖到 Finder 或其他应用导出 PNG")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: "复制") {
-            onCopy()
-        }
-        .contextMenu {
-            Button {
-                onPreview()
-            } label: {
-                Label("查看", systemImage: "eye")
-            }
-            Button {
-                onEdit()
-            } label: {
-                Label("编辑", systemImage: "pencil")
-            }
-            Button {
-                onCopy()
-            } label: {
-                Label("复制", systemImage: "doc.on.doc")
-            }
-            Divider()
-            Button(role: .destructive) {
-                showingDeleteConfirmation = true
-            } label: {
-                Label("删除", systemImage: "trash")
-            }
-        }
-        .confirmationDialog(
-            "删除这张截图？",
-            isPresented: $showingDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("删除", role: .destructive) {
-                onDelete()
-                if isSelected {
-                    onClearSelection()
+            )
+            .onTapGesture(count: 2, perform: onDoubleClick)
+            .onTapGesture(perform: onSelect)
+            .onHover { hovering in
+                guard hovering != isHovered else { return }
+                withAnimation(
+                    JarvisMotion.animation(
+                        JarvisMotion.content,
+                        reduceMotion: reduceMotion
+                    )
+                ) {
+                    isHovered = hovering
                 }
             }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("删除后无法恢复。")
-        }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("截图，PNG，\(JarvisHistoryDateFormatting.string(from: item.updatedAt))")
+            .accessibilityValue(isSelected ? "已选中" : "未选中")
+            .accessibilityHint("点击选择，双击预览；可以拖到 Finder 或其他应用导出 PNG")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: "复制") {
+                onCopy()
+            }
+            .contextMenu {
+                Button {
+                    onPreview()
+                } label: {
+                    Label("查看", systemImage: "eye")
+                }
+                Button {
+                    onEdit()
+                } label: {
+                    Label("编辑", systemImage: "pencil")
+                }
+                Button {
+                    onCopy()
+                } label: {
+                    Label("复制", systemImage: "doc.on.doc")
+                }
+                Divider()
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+            }
+            .confirmationDialog(
+                "删除这张截图？",
+                isPresented: $showingDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("删除", role: .destructive) {
+                    onDelete()
+                    if isSelected {
+                        onClearSelection()
+                    }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("删除后无法恢复。")
+            }
     }
 }
 

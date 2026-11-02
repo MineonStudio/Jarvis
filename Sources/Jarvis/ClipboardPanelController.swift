@@ -25,10 +25,12 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate {
         }
 
         guard let panel else { return }
-        if !panel.isVisible {
+        if panel.isMiniaturized {
+            panel.deminiaturize(nil)
+        } else if !panel.isVisible {
             panel.center()
         }
-        // F2 is a transient utility surface. Keep the current app in the
+        // F3 is a transient utility surface. Keep the current app in the
         // foreground while allowing this panel to receive keyboard input.
         panel.orderFrontRegardless()
         panel.makeKey()
@@ -60,8 +62,9 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.becomesKeyOnlyIfNeeded = false
-        panel.animationBehavior = .none
-        panel.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
+        panel.animationBehavior = .default
+        panel.collectionBehavior = [.canJoinAllSpaces]
+        JarvisWindowAppearance.configureStandardControls(for: panel)
         panel.minSize = Self.minimumPanelSize
         panel.delegate = self
         let hostingView = NSHostingView(
@@ -74,8 +77,15 @@ final class ClipboardPanelController: NSObject, NSWindowDelegate {
         self.panel = panel
     }
 
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        sender.orderOut(nil)
-        return false
+    func windowWillEnterFullScreen(_: Notification) {
+        panel?.level = .normal
+    }
+
+    func windowDidExitFullScreen(_: Notification) {
+        panel?.level = .floating
+    }
+
+    func windowDidFailToEnterFullScreen(_ window: NSWindow) {
+        window.level = .floating
     }
 }

@@ -8,6 +8,14 @@ enum JarvisWindowAppearance {
         window.sharingType = .readOnly
     }
 
+    /// Let AppKit provide the standard close, minimize, zoom, full-screen and
+    /// tiling actions; never replace or reposition its window buttons.
+    static func configureStandardControls(for window: NSWindow) {
+        window.styleMask.formUnion([.titled, .closable, .miniaturizable, .resizable])
+        window.collectionBehavior.subtract([.fullScreenNone, .fullScreenAuxiliary, .fullScreenDisallowsTiling])
+        window.collectionBehavior.formUnion([.fullScreenPrimary, .fullScreenAllowsTiling])
+    }
+
     static func configureTransparentTitlebar(for window: NSWindow) {
         configure(for: window)
         window.titleVisibility = .hidden

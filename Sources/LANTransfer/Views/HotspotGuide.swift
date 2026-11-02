@@ -5,19 +5,19 @@ public struct HotspotGuide: View {
 
     @Environment(\.dismiss) private var dismiss
     public var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
             Text("热点连接").font(.title2.bold())
             step(1, "手机开启热点")
             step(2, "Mac 连接热点")
             step(3, "扫描新二维码")
             HStack { Spacer(); Button("完成") { dismiss() }.buttonStyle(.borderedProminent) }
         }
-        .padding(28)
+        .padding(JarvisSpacing.pageInset)
         .frame(width: 360)
     }
 
     private func step(_ number: Int, _ title: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: JarvisSpacing.itemGap) {
             Text("\(number)")
                 .font(.headline)
                 .frame(width: 28, height: 28)

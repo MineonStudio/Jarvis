@@ -14,26 +14,22 @@ private enum WallpaperScrollBehavior {
 }
 
 private enum WallpaperCustomFilterPrompt {
-    case minimumResolution
     case randomSeed
 
     var title: String {
         switch self {
-        case .minimumResolution: "自定义最低分辨率"
         case .randomSeed: "设置随机种子"
         }
     }
 
     var placeholder: String {
         switch self {
-        case .minimumResolution: "宽度x高度，例如 2560x1440"
         case .randomSeed: "6 位英文字母或数字"
         }
     }
 
     var message: String {
         switch self {
-        case .minimumResolution: "按“宽度x高度”填写最低分辨率。"
         case .randomSeed: "使用相同种子可以重复获得相同的随机结果。"
         }
     }
@@ -50,11 +46,10 @@ private struct WallpaperLoadMoreTriggerPreferenceKey: PreferenceKey {
 struct WallpaperView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(WallpaperSourcePreferences.storageKey)
-    private var enabledWallpaperSources = WallpaperSourcePreferences.defaultStorageValue
     @StateObject private var model = WallpaperViewModel()
     @StateObject private var previewController = WallpaperPreviewController()
     @State private var libraryMode: WallpaperLibraryMode = .online
+    @State private var toolbarAlignment = HistoryToolbarAlignment()
     @State private var deleteItem: WallpaperItem?
     @State private var tagInput = ""
     @State private var customFilterPrompt: WallpaperCustomFilterPrompt?
@@ -64,29 +59,24 @@ struct WallpaperView: View {
 
     var body: some View {
         JarvisContentArea(
+            horizontalContentPadding: 0,
+            bottomContentPadding: 0,
             leadingToolbar: {
                 wallpaperLeadingToolbar
             },
             trailingToolbar: {
                 WallpaperLibraryToolbar(libraryMode: $libraryMode)
-                ToolbarItem(id: "wallpaper.system-settings", placement: .primaryAction) {
-                    Button("系统设置…", systemImage: "gearshape") {
-                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
-                    }
-                    .help("在系统设置的“墙纸”中管理所有空间、显示器及锁屏相关选项。")
-                }
                 ToolbarSpacer(.fixed, placement: .primaryAction)
                 ToolbarItem(id: "wallpaper.tag-search", placement: .primaryAction) {
                     ClipboardSearchField(
                         text: $tagInput,
-                        placeholder: model.selectedSource == .qihoo ? "搜索壁纸" : "搜索关键词或语法",
+                        placeholder: "搜索关键词或语法",
                         onSubmit: submitTag,
                         onClear: clearTag,
-                        help: model.selectedSource == .qihoo
-                            ? "按关键词搜索 360 壁纸"
-                            : "输入关键词或 Wallhaven 高级条件：+标签表示必须包含，-标签表示排除，@用户名搜索上传者，type:jpg/png 筛选文件类型，id:数字搜索标签 ID，like:图片 ID 查找相似壁纸。",
-                        accessibilityTitle: model.selectedSource == .qihoo ? "搜索壁纸" : "壁纸搜索"
+                        help: "输入关键词或 Wallhaven 高级条件：+标签表示必须包含，-标签表示排除，@用户名搜索上传者，type:jpg/png 筛选文件类型，id:数字搜索标签 ID，like:图片 ID 查找相似壁纸。",
+                        accessibilityTitle: "壁纸搜索"
                     )
+                    .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .trailing))
                 }
             },
             content: {
@@ -95,7 +85,7 @@ struct WallpaperView: View {
                         galleryScrollView(viewport: viewport, scrollProxy: scrollProxy)
                     }
                 }
-                .jarvisModulePanel()
+                .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .content))
             }
         )
         .confirmationDialog(
@@ -142,19 +132,6 @@ struct WallpaperView: View {
         } message: {
             Text(customFilterPrompt?.message ?? "")
         }
-        .onChange(of: model.selectedSource) { _, _ in
-            tagInput = ""
-            model.selectedTag = ""
-            applyOnlineFilters()
-        }
-        .onChange(of: enabledWallpaperSources) { _, _ in
-            guard !enabledSources.contains(model.selectedSource),
-                  let fallbackSource = enabledSources.first
-            else {
-                return
-            }
-            model.selectedSource = fallbackSource
-        }
         .onDisappear {
             previewController.dismiss()
         }
@@ -163,6 +140,7 @@ struct WallpaperView: View {
     // MARK: - 工具栏
 
     /// 所有壁纸筛选器共用同一种工具栏下拉控件。
+    @ToolbarContentBuilder
     private func filterItem(
         id: String,
         title: String,
@@ -173,54 +151,32 @@ struct WallpaperView: View {
         showsSelectedOption: Bool = false,
         onSelect: @escaping (String) -> Void
     ) -> some ToolbarContent {
-        ToolbarItem(id: id, placement: .automatic) {
-            JarvisDropdownMenu(
-                title: title,
-                options: options,
-                selectionID: selectionID,
-                accessibilityLabel: accessibilityLabel,
-                help: help,
-                showsSelectedOption: showsSelectedOption,
-                onSelect: onSelect
-            )
-            .id(selectionID)
-        }
-    }
+        let control = JarvisDropdownMenu(
+            title: title,
+            options: options,
+            selectionID: selectionID,
+            accessibilityLabel: accessibilityLabel,
+            help: help,
+            showsSelectedOption: showsSelectedOption,
+            onSelect: onSelect
+        )
+        .id(selectionID)
 
-    private var sourceFilterItem: some ToolbarContent {
-        filterItem(
-            id: "wallpaper.filter.source",
-            title: model.selectedSource.title,
-            options: enabledSources.map {
-                JarvisDropdownOption(id: $0.rawValue, title: $0.title)
-            },
-            selectionID: model.selectedSource.rawValue,
-            accessibilityLabel: "壁纸源",
-            help: "选择在线壁纸源"
-        ) { rawValue in
-            guard let source = WallpaperSource(rawValue: rawValue),
-                  enabledSources.contains(source)
-            else {
-                return
+        if id == "wallpaper.filter.purity" {
+            JarvisLeadingToolbarItem(id: id, alignment: toolbarAlignment) {
+                control
             }
-            model.selectedSource = source
+        } else {
+            ToolbarItem(id: id, placement: .automatic) {
+                control
+            }
         }
     }
 
     @ToolbarContentBuilder
     private var wallpaperLeadingToolbar: some ToolbarContent {
-        if enabledSources.count > 1 {
-            sourceFilterItem
-            ToolbarSpacer(.fixed, placement: .automatic)
-        }
-        if model.selectedSource == .qihoo {
-            qihooCategoryFilterItem
-            ToolbarSpacer(.fixed, placement: .automatic)
-            qihooResolutionFilterItem
-        } else {
-            wallhavenCoreFilters
-            wallhavenAppearanceAndSortFilters
-        }
+        wallhavenCoreFilters
+        wallhavenAppearanceAndSortFilters
     }
 
     @ToolbarContentBuilder
@@ -248,10 +204,6 @@ struct WallpaperView: View {
         }
     }
 
-    private var enabledSources: [WallpaperSource] {
-        WallpaperSourcePreferences.enabledSources(from: enabledWallpaperSources)
-    }
-
     private var purityFilterItem: some ToolbarContent {
         filterItem(
             id: "wallpaper.filter.purity",
@@ -269,59 +221,17 @@ struct WallpaperView: View {
         }
     }
 
-    private var qihooCategoryFilterItem: some ToolbarContent {
-        filterItem(
-            id: "wallpaper.filter.qihoo-category",
-            title: model.selectedQihooCategory.title,
-            options: WallpaperQihooCategory.allCases.map {
-                JarvisDropdownOption(id: $0.rawValue, title: $0.title)
-            },
-            selectionID: model.selectedQihooCategory.rawValue,
-            accessibilityLabel: "360 壁纸分类",
-            help: "按 360 壁纸分类筛选"
-        ) { rawValue in
-            guard let category = WallpaperQihooCategory(rawValue: rawValue) else { return }
-            model.selectedQihooCategory = category
-            tagInput = ""
-            model.selectedTag = ""
-            applyOnlineFilters()
-        }
-    }
-
-    private var qihooResolutionFilterItem: some ToolbarContent {
-        filterItem(
-            id: "wallpaper.filter.qihoo-resolution",
-            title: model.selectedQihooResolution.title,
-            options: WallpaperQihooResolution.allCases.map {
-                JarvisDropdownOption(id: $0.rawValue, title: $0.title)
-            },
-            selectionID: model.selectedQihooResolution.rawValue,
-            accessibilityLabel: "360 分辨率",
-            help: "按 360 壁纸的实际像素尺寸筛选"
-        ) { rawValue in
-            guard let resolution = WallpaperQihooResolution(rawValue: rawValue) else { return }
-            model.selectedQihooResolution = resolution
-            applyOnlineFilters()
-        }
-    }
-
     private var resolutionFilterItem: some ToolbarContent {
         filterItem(
             id: "wallpaper.filter.resolution",
             title: model.selectedResolution.title,
-            options: WallpaperResolution.allCases
-                .filter { $0 != .custom }
-                .map { JarvisDropdownOption(id: $0.rawValue, title: $0.title) }
-                + [JarvisDropdownOption(id: "editCustom", title: "自定义尺寸…")],
+            options: WallpaperResolution.galleryCases.map {
+                JarvisDropdownOption(id: $0.rawValue, title: $0.title)
+            },
             selectionID: model.selectedResolution.rawValue,
             accessibilityLabel: "分辨率筛选",
             help: "按最低分辨率筛选"
         ) { rawValue in
-            if rawValue == "editCustom" {
-                customFilterInput = model.customMinimumResolution
-                customFilterPrompt = .minimumResolution
-                return
-            }
             guard let resolution = WallpaperResolution(rawValue: rawValue) else { return }
             model.selectedResolution = resolution
             applyOnlineFilters()
@@ -332,12 +242,12 @@ struct WallpaperView: View {
         filterItem(
             id: "wallpaper.filter.ratio",
             title: model.selectedRatio.title,
-            options: WallpaperRatio.allCases.map {
+            options: WallpaperRatio.galleryCases.map {
                 JarvisDropdownOption(id: $0.rawValue, title: $0.title)
             },
             selectionID: model.selectedRatio.rawValue,
             accessibilityLabel: "比例筛选",
-            help: "按横竖屏或画面比例筛选"
+            help: "按画面比例筛选"
         ) { rawValue in
             guard let ratio = WallpaperRatio(rawValue: rawValue) else { return }
             model.selectedRatio = ratio
@@ -350,7 +260,7 @@ struct WallpaperView: View {
             id: "wallpaper.filter.color",
             title: model.selectedColor?.title ?? "不限颜色",
             options: [JarvisDropdownOption(id: "none", title: "不限颜色")]
-                + WallpaperColor.allCases.map {
+                + WallpaperColor.galleryCases.map {
                     JarvisDropdownOption(id: $0.rawValue, title: $0.title, colorHex: $0.rawValue)
                 },
             selectionID: model.selectedColor?.rawValue ?? "none",
@@ -424,29 +334,16 @@ struct WallpaperView: View {
         viewport: GeometryProxy,
         scrollProxy: ScrollViewProxy
     ) -> some View {
-        // macOS places the vertical scroll indicator over the trailing edge of
-        // a scroll view. Keep a small gutter so the last thumbnail never sits
-        // underneath it or against the module's clipping boundary.
-        let availableWidth = max(
-            1,
-            viewport.size.width
-                - (HistoryGridMetrics.historyPanelInset * 2)
-                - WallpaperGalleryMetrics.trailingSafetyInset
-        )
-
+        let availableWidth = max(1, viewport.size.width - toolbarAlignment.leadingInset - toolbarAlignment.trailingInset)
         return ScrollView {
             VStack(spacing: 0) {
-                Color.clear
-                    .frame(height: 1)
-                    .id(WallpaperScrollTarget.top)
-                    .accessibilityHidden(true)
-
                 galleryList(availableWidth: availableWidth)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, HistoryGridMetrics.historyPanelInset)
-            .padding(.trailing, WallpaperGalleryMetrics.trailingSafetyInset)
-            .padding(.vertical, HistoryGridMetrics.historyPanelInset)
+            .padding(.leading, toolbarAlignment.leadingInset)
+            .padding(.trailing, toolbarAlignment.trailingInset)
+            .padding(.bottom, HistoryGridMetrics.historyPanelInset)
+            .id(WallpaperScrollTarget.top)
         }
         .coordinateSpace(name: WallpaperScrollSpace.name)
         .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -511,8 +408,8 @@ struct WallpaperView: View {
         }
         .buttonStyle(JarvisSecondaryButtonStyle())
         .accessibilityLabel("返回壁纸列表顶部")
-        .padding(.trailing, 18)
-        .padding(.bottom, 18)
+        .padding(.trailing, JarvisSpacing.cardInset)
+        .padding(.bottom, JarvisSpacing.cardInset)
     }
 
     @ViewBuilder
@@ -539,7 +436,6 @@ struct WallpaperView: View {
                         )
                 }
                 .frame(height: 1)
-                .padding(.bottom, 80)
                 .id("wallpaper-load-more-trigger-\(model.items.count)")
                 .accessibilityHidden(true)
 
@@ -648,8 +544,6 @@ struct WallpaperView: View {
         guard let customFilterPrompt else { return false }
         let value = customFilterInput.trimmingCharacters(in: .whitespacesAndNewlines)
         switch customFilterPrompt {
-        case .minimumResolution:
-            return isValidResolution(value)
         case .randomSeed:
             return value.count == 6 && value.utf8.allSatisfy {
                 (48 ... 57).contains($0) || (65 ... 90).contains($0) || (97 ... 122).contains($0)
@@ -657,21 +551,10 @@ struct WallpaperView: View {
         }
     }
 
-    private func isValidResolution(_ value: String) -> Bool {
-        let dimensions = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .split(separator: "x", omittingEmptySubsequences: false)
-        return dimensions.count == 2
-            && dimensions.allSatisfy { Int($0).map { $0 > 0 } ?? false }
-    }
-
     private func applyCustomFilterPrompt() {
         guard let customFilterPrompt, isCustomFilterInputValid else { return }
         let value = customFilterInput.trimmingCharacters(in: .whitespacesAndNewlines)
         switch customFilterPrompt {
-        case .minimumResolution:
-            model.customMinimumResolution = value
-            model.selectedResolution = .custom
         case .randomSeed:
             model.randomSeed = value
         }
@@ -750,9 +633,9 @@ private enum WallpaperGalleryMetrics {
     static let idealRowHeight: CGFloat = 158 * heightScale
     static let minimumRowHeight: CGFloat = 128 * heightScale
     static let maximumRowHeight: CGFloat = 220 * heightScale
-    static let trailingSafetyInset: CGFloat = 14
+    static let trailingSafetyInset = JarvisSpacing.panelInset
     static let cardSpacing = HistoryGridMetrics.clipboardGridSpacing
-    static let actionSpacing: CGFloat = 5
+    static let actionSpacing = JarvisSpacing.iconGap
 }
 
 private struct WallpaperJustifiedRow: Identifiable {
@@ -1057,7 +940,7 @@ private struct WallpaperCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            HStack(spacing: 6) {
+            HStack(spacing: JarvisSpacing.iconGap) {
                 favoriteButton
                 if showsDelete {
                     deleteButton
@@ -1102,7 +985,7 @@ private struct WallpaperCard: View {
         .overlay(alignment: .bottom) {
             if isHovered {
                 hoverActions
-                    .padding(8)
+                    .padding(JarvisSpacing.controlGap)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .transition(
                         reduceMotion
@@ -1168,7 +1051,7 @@ private struct WallpaperErrorState: View {
     let retry: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: JarvisSpacing.itemGap) {
             Image(systemName: "wifi.exclamationmark")
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(Color.orange)

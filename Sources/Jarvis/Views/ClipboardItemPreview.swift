@@ -30,9 +30,9 @@ struct ClipboardItemPreview: View {
                         Image(systemName: "play.fill")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.white)
-                            .padding(6)
+                            .padding(JarvisSpacing.iconGap)
                             .background(.black.opacity(0.55), in: Circle())
-                            .padding(7)
+                            .padding(JarvisSpacing.controlGap)
                     }
             } else {
                 Image(systemName: item.kind.icon)

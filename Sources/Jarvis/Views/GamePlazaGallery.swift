@@ -36,16 +36,19 @@ struct GamePlazaGallery: View {
 
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 250, maximum: 350), spacing: 18)],
+            columns: [GridItem(.adaptive(minimum: 250, maximum: 350), spacing: JarvisSpacing.gridGap)],
             alignment: .leading,
-            spacing: 18
+            spacing: JarvisSpacing.gridGap
         ) {
             ForEach(visibleGames) { game in
-                GamePosterCard(title: game.title) {
-                    switch game {
-                    case .mahjong: onStartMahjong()
+                GamePosterCard(
+                    title: game.title,
+                    onStart: {
+                        switch game {
+                        case .mahjong: onStartMahjong()
+                        }
                     }
-                }
+                )
             }
         }
     }
@@ -54,35 +57,59 @@ struct GamePlazaGallery: View {
 private struct GamePosterCard: View {
     let title: String
     let onStart: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button(action: onStart) {
-                GamePosterArtwork()
-                    .aspectRatio(1.6, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        HistoryCardChrome(preview: cover, isSelected: false)
+            .overlay(alignment: .bottomTrailing) { startActionOverlay }
+            .clipShape(RoundedRectangle(
+                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
+                style: .continuous
+            ))
+            .contentShape(RoundedRectangle(
+                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
+                style: .continuous
+            ))
+            .onTapGesture(count: 2, perform: onStart)
+            .onHover { hovering in
+                guard hovering != isHovered else { return }
+                withAnimation(JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion)) {
+                    isHovered = hovering
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("开始游戏，\(title)")
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(title)
+            .accessibilityHint("双击开始游戏，也可使用右下角悬浮的开始游戏按钮")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: "开始游戏", onStart)
+            .contextMenu {
+                Button(action: onStart) {
+                    Label("开始游戏", systemImage: "play.fill")
+                }
+            }
+    }
 
-            HStack(spacing: 12) {
-                Text(title)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.primary)
+    private var cover: some View {
+        Color.clear
+            .aspectRatio(HistoryGridLayout.aspectRatio, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .overlay { GamePosterArtwork() }
+            .clipped()
+    }
+
+    @ViewBuilder
+    private var startActionOverlay: some View {
+        if isHovered {
+            Button(action: onStart) {
+                Text("开始游戏")
                     .lineLimit(1)
-                    .layoutPriority(1)
-                Spacer(minLength: 0)
-                Button("开始游戏", action: onStart)
-                    .buttonStyle(JarvisPrimaryButtonStyle())
-                    .fixedSize()
+                    .fixedSize(horizontal: true, vertical: false)
             }
-        }
-        .padding(12)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+            .buttonStyle(JarvisCardActionPillButtonStyle())
+            .accessibilityLabel("开始游戏，\(title)")
+            .padding(JarvisSpacing.controlGap)
+            .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 8)))
         }
     }
 }

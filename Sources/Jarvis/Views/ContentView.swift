@@ -26,6 +26,12 @@ struct ContentView: View {
                 footerAction: { isSettingsPresented = true },
                 showsHeader: false
             )
+            // Track the page below the toolbar. A tracker on the entire
+            // NavigationSplitView also covers AppKit's native window buttons.
+            .onContinuousHover(
+                coordinateSpace: .named(Self.homePointerCoordinateSpace),
+                perform: updateHomePointer
+            )
             .background(Color.jarvisBackground)
             .toolbar(removing: .sidebarToggle)
             .navigationSplitViewColumnWidth(
@@ -37,24 +43,14 @@ struct ContentView: View {
             loadedSectionView
                 .id(loadedSection)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onContinuousHover(
+                    coordinateSpace: .named(Self.homePointerCoordinateSpace),
+                    perform: updateHomePointer
+                )
         }
         .jarvisToastOverlay(app.toastMessage)
         .tint(app.accentColorPreference.resolvedColor)
         .coordinateSpace(name: Self.homePointerCoordinateSpace)
-        .onContinuousHover(coordinateSpace: .named(Self.homePointerCoordinateSpace)) { phase in
-            guard loadedSection == .home else {
-                homePointerTracker.location = nil
-                return
-            }
-            if case let .active(location) = phase {
-                if homePointerTracker.location != location {
-                    homePointerTracker.lastPointerMovement = Date()
-                }
-                homePointerTracker.location = location
-            } else {
-                homePointerTracker.location = nil
-            }
-        }
         .onChange(of: loadedSection) { _, section in
             if section != .home {
                 homePointerTracker.location = nil
@@ -95,6 +91,21 @@ struct ContentView: View {
             // The sidebar indicator has settled. Replace the page in one
             // transaction so old and new module hierarchies never overlap.
             loadedSection = nextSection
+        }
+    }
+
+    private func updateHomePointer(_ phase: HoverPhase) {
+        guard loadedSection == .home else {
+            homePointerTracker.location = nil
+            return
+        }
+        if case let .active(location) = phase {
+            if homePointerTracker.location != location {
+                homePointerTracker.lastPointerMovement = Date()
+            }
+            homePointerTracker.location = location
+        } else {
+            homePointerTracker.location = nil
         }
     }
 
@@ -209,7 +220,7 @@ extension View {
     func jarvisToastOverlay(_ message: String?) -> some View {
         overlay(alignment: .bottom) {
             JarvisToastHost(message: message)
-                .padding(.bottom, 26)
+                .padding(.bottom, JarvisSpacing.pageInset)
                 .frame(maxWidth: .infinity)
                 .allowsHitTesting(false)
         }

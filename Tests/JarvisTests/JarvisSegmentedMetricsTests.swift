@@ -48,7 +48,7 @@ final class JarvisSegmentedMetricsTests: XCTestCase {
         XCTAssertEqual(
             JarvisSegmentedMetrics.toolbarGroupPadding,
             JarvisSegmentedMetrics.padding(
-                containerHeight: JarvisToolbarMetrics.controlSize,
+                containerHeight: JarvisToolbarMetrics.nativeSurfaceHeight,
                 itemHeight: JarvisSegmentedMetrics.compactItemHeight
             ),
             accuracy: 0.001

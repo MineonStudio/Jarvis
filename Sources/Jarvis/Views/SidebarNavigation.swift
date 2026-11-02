@@ -54,7 +54,7 @@ struct JarvisSidebarNavigation<
 
         VStack(spacing: 0) {
             if showsHeader {
-                HStack(spacing: 7) {
+                HStack(spacing: JarvisSpacing.controlGap) {
                     if showsHeaderOrb {
                         JarvisOrbMark(diameter: 24)
                     }
@@ -64,8 +64,8 @@ struct JarvisSidebarNavigation<
                         .tracking(showsHeaderOrb ? 2.4 : 0)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, 14)
-                .padding(.bottom, 12)
+                .padding(.top, JarvisSpacing.cardInset)
+                .padding(.bottom, JarvisSpacing.rowInset)
             }
 
             itemGroup(topItems)
@@ -88,7 +88,7 @@ struct JarvisSidebarNavigation<
                         footerAction()
                     }
                 } label: {
-                    HStack(spacing: 7) {
+                    HStack(spacing: JarvisSpacing.controlGap) {
                         Image(systemName: footerIcon)
                             .font(.system(size: 12, weight: .medium))
                             .frame(width: 18, height: 18)
@@ -111,7 +111,7 @@ struct JarvisSidebarNavigation<
                         maxHeight: JarvisMetrics.sidebarRowHeight,
                         alignment: .leading
                     )
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, JarvisSpacing.controlGap)
                     .background {
                         Capsule()
                             .fill(
@@ -134,7 +134,7 @@ struct JarvisSidebarNavigation<
                 )
                 .contentShape(Rectangle())
                 .padding(.horizontal, JarvisMetrics.sidebarContentPadding)
-                .padding(.top, 4)
+                .padding(.top, JarvisSpacing.textGap)
                 .padding(.bottom, JarvisMetrics.sidebarContentPadding)
                 .onHover { isHovering in
                     withAnimation(
@@ -181,7 +181,7 @@ struct JarvisSidebarNavigation<
                 selection = item
             }
         } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 Image(systemName: icon(item))
                     .font(.system(size: 12, weight: .medium))
                     .frame(width: 18, height: 18)
@@ -204,7 +204,7 @@ struct JarvisSidebarNavigation<
                 maxHeight: JarvisMetrics.sidebarRowHeight,
                 alignment: .leading
             )
-            .padding(.horizontal, 8)
+            .padding(.horizontal, JarvisSpacing.controlGap)
             .background {
                 Capsule()
                     .fill(

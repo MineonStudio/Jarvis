@@ -86,8 +86,10 @@ struct AIConversationView: View {
 
     var body: some View {
         JarvisContentArea(
+            horizontalContentPadding: 0,
+            bottomContentPadding: 0,
             leadingToolbar: {
-                JarvisToolbarSurface(id: "ai.provider", placement: .navigation) {
+                JarvisLeadingToolbarSurface(id: "ai.provider") {
                     JarvisToolbarGroupedPicker(
                         items: AIConversationProvider.allCases,
                         selection: selectedProvider,

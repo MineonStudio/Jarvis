@@ -36,9 +36,7 @@ struct JarvisHomeView: View {
     var body: some View {
         JarvisContentArea(
             leadingToolbar: {
-                ToolbarItem(placement: .navigation) {
-                    EmptyView()
-                }
+                JarvisToolbarPlaceholder(id: "home.placeholder")
             },
             trailingToolbar: {
                 ToolbarItem(placement: .automatic) {
@@ -66,7 +64,7 @@ struct JarvisHomeView: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .padding(40)
+                .padding(JarvisSpacing.heroInset)
             }
         )
     }

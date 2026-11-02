@@ -4,7 +4,7 @@ struct MahjongAudioControls: View {
     @Bindable var settings: MahjongAudioSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
             HStack {
                 Text("音量")
                     .font(.system(size: 20, weight: .semibold))
@@ -17,13 +17,13 @@ struct MahjongAudioControls: View {
             volume("背景音乐", value: $settings.musicVolume)
             volume("游戏音效", value: $settings.effectsVolume)
             volume("语音播报", value: $settings.voiceVolume)
-            HStack(spacing: 12) {
+            HStack(spacing: JarvisSpacing.itemGap) {
                 Button("试听音效") { MahjongAudioPlayer.shared.previewEffects() }
                     .buttonStyle(MahjongGameButtonStyle())
                 Button("恢复默认") { settings.restoreDefaults() }
                     .buttonStyle(MahjongGameButtonStyle())
             }
-            .mahjongGlassGroup(spacing: 12)
+            .mahjongGlassGroup(spacing: JarvisSpacing.itemGap)
             Text("大厅与牌桌共用欢快配乐，切换时连续播放；语音播报时音乐会自动降低。设置保存在本机。")
                 .font(.system(size: 13))
                 .foregroundStyle(MahjongVisualTheme.muted)
@@ -33,7 +33,7 @@ struct MahjongAudioControls: View {
     }
 
     private func volume(_ title: String, value: Binding<Double>) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: JarvisSpacing.groupGap) {
             Text(title)
                 .frame(width: 76, alignment: .leading)
             Slider(value: value, in: 0 ... 1)

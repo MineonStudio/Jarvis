@@ -4,13 +4,13 @@ struct MahjongLANRulesetPicker: View {
     @Binding var selection: MahjongRuleset?
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: JarvisSpacing.itemGap) {
             ForEach(MahjongRuleset.allCases) { ruleset in
                 let selected = selection == ruleset
                 Button {
                     selection = ruleset
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: JarvisSpacing.controlGap) {
                         Text(ruleset.title)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -39,8 +39,8 @@ struct MahjongRoomCodeInput: View {
             .foregroundStyle(MahjongVisualTheme.ivory)
             .tint(MahjongVisualTheme.accent)
             .focused($focused)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
+            .padding(.horizontal, JarvisSpacing.cardInset)
+            .padding(.vertical, JarvisSpacing.rowInset)
             .frame(maxWidth: 320)
             .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 14))
             .overlay {

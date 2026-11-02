@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.9.2</string>
+	<string>1.9.3</string>
 	<key>CFBundleVersion</key>
-	<string>385</string>
+	<string>386</string>
 	<key>JarvisInstallSource</key>
 	<string>direct-download</string>
 	<key>JarvisUpdatePublicKey</key>

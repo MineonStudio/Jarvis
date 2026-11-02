@@ -58,7 +58,7 @@ struct MahjongSettingsView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("关闭设置")
             }
-            .padding(.bottom, 18)
+            .padding(.bottom, JarvisSpacing.cardInset)
 
             ScrollView {
                 Group {
@@ -71,32 +71,32 @@ struct MahjongSettingsView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .padding(.top, 8)
-                .padding(.bottom, 24)
+                .padding(.top, JarvisSpacing.controlGap)
+                .padding(.bottom, JarvisSpacing.pageInset)
             }
             .scrollIndicators(.hidden)
         }
-        .padding(.horizontal, 26)
-        .padding(.top, 25)
-        .padding(.bottom, 16)
+        .padding(.horizontal, JarvisSpacing.pageInset)
+        .padding(.top, JarvisSpacing.pageInset)
+        .padding(.bottom, JarvisSpacing.cardInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     var profileContent: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack(alignment: .center, spacing: 20) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.pageInset) {
+            HStack(alignment: .center, spacing: JarvisSpacing.sectionGap) {
                 MahjongArchiveAvatar(profile: archive.player, size: 86)
-                    .padding(6)
+                    .padding(JarvisSpacing.iconGap)
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(MahjongSettingsPalette.accent.opacity(0.8), lineWidth: 2))
 
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.groupGap) {
                     caption("玩家昵称")
-                    HStack(spacing: 12) {
+                    HStack(spacing: JarvisSpacing.itemGap) {
                         TextField("输入昵称", text: $nicknameDraft)
                             .textFieldStyle(.plain)
                             .font(.system(size: 19, weight: .medium))
                             .foregroundStyle(MahjongSettingsPalette.ivory)
-                            .padding(.horizontal, 15)
+                            .padding(.horizontal, JarvisSpacing.cardInset)
                             .frame(height: 45)
                             .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(MahjongSettingsPalette.accent.opacity(0.35), lineWidth: 1))
@@ -111,7 +111,7 @@ struct MahjongSettingsView: View {
             }
 
             caption("选择头像")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100, maximum: 125), spacing: 12)], alignment: .leading, spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100, maximum: 125), spacing: JarvisSpacing.itemGap)], alignment: .leading, spacing: JarvisSpacing.itemGap) {
                 ForEach(MahjongArchiveAvatarStyle.playerChoices, id: \.self) { style in
                     avatarChoice(style)
                 }
@@ -127,7 +127,7 @@ struct MahjongSettingsView: View {
         return Button {
             archive.updatePlayerProfile(avatarStyle: style)
         } label: {
-            VStack(spacing: 7) {
+            VStack(spacing: JarvisSpacing.controlGap) {
                 MahjongArchiveAvatar(profile: preview, size: 54)
                     .accessibilityHidden(true)
                 Text(style.displayName)

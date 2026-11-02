@@ -151,7 +151,7 @@ private struct JarvisRootView: View {
             }
             .overlay(alignment: .bottom) {
                 JarvisToastHost(message: appModel.toastMessage)
-                    .padding(.bottom, 26)
+                    .padding(.bottom, JarvisSpacing.pageInset)
                     .allowsHitTesting(false)
             }
             .animation(.easeInOut(duration: 0.2), value: appModel.taskPermissionPrompt)

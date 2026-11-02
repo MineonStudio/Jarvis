@@ -76,14 +76,20 @@ enum ScreenshotTimeFilterLogic {
 /// 到容器四边等距」。`JarvisToolbarSurface` 关掉系统给每个 item 铺的那层底。
 struct ScreenshotTimeFilterBar: ToolbarContent {
     @Binding var selectedFilter: ScreenshotTimeFilter
+    var alignment: HistoryToolbarAlignment?
 
     var body: some ToolbarContent {
-        JarvisToolbarSurface(id: "screenshot.time-filter", placement: .navigation) {
+        JarvisLeadingToolbarSurface(id: "screenshot.time-filter") {
             JarvisToolbarGroupedPicker(
                 items: ScreenshotTimeFilter.displayCases,
                 selection: $selectedFilter,
                 title: \.title
             )
+            .background {
+                if let alignment {
+                    HistoryToolbarFrameProbe(alignment: alignment, edge: .leading)
+                }
+            }
         }
     }
 }

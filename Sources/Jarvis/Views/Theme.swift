@@ -199,10 +199,10 @@ extension Color {
 }
 
 enum JarvisMetrics {
-    static let pageInset: CGFloat = 30
-    static let shellHorizontalPadding: CGFloat = 10
+    static let pageInset = JarvisSpacing.pageInset
+    static let shellHorizontalPadding = JarvisToolbarMetrics.leadingInset
     static let shellVerticalPadding: CGFloat = 10
-    // The native toolbar already provides the same 10-point gap as the sidebar.
+    // The native toolbar owns the vertical gap above module content.
     static let shellContentSpacing: CGFloat = 0
     static let cardRadius: CGFloat = 14
     /// 模块外壳的圆角，比内部卡片略大一圈。
@@ -241,11 +241,10 @@ enum JarvisSegmentedMetrics {
     /// 紧凑档选项：截图工具栏二级行、网页模块的分组选择器。
     static let compactItemHeight: CGFloat = 26
 
-    /// 窗口工具栏里的成组控件：容器就是工具栏那一行（`JarvisToolbarMetrics.controlSize`），
-    /// 装的是紧凑档选项。
+    /// 自绘分组的外框对齐系统工具栏玻璃表面，选项四边留等宽内边距。
     static var toolbarGroupPadding: CGFloat {
         padding(
-            containerHeight: JarvisToolbarMetrics.controlSize,
+            containerHeight: JarvisToolbarMetrics.nativeSurfaceHeight,
             itemHeight: compactItemHeight
         )
     }
@@ -253,10 +252,18 @@ enum JarvisSegmentedMetrics {
 
 /// Metrics shared by every control rendered in the native window toolbar.
 ///
-/// The chat toolbar is the reference implementation: controls occupy one
-/// 32-point row, use an 8-point rhythm, and do not draw a parent surface.
+/// Button content keeps a 32-point hit target. Custom glass and AppKit's
+/// shared toolbar glass use the same 36-point outer height.
 enum JarvisToolbarMetrics {
+    /// Match the native toolbar's 8pt vertical clearance at the split divider.
+    static let leadingInset: CGFloat = 8
+    /// The navigation slot already contributes 5pt; add only the difference.
+    static let nativeLeadingInset: CGFloat = 5
+    static let leadingAdjustment = leadingInset - nativeLeadingInset
     static let controlSize: CGFloat = 32
+    /// AppKit adds its shared glass around the 32-point toolbar content.
+    /// Custom glass must match that outer surface rather than its content.
+    static let nativeSurfaceHeight: CGFloat = 36
     static let iconSize: CGFloat = 13
     static let searchFieldWidth: CGFloat = 240
     /// 图标簇（网页模块那组前进/后退/刷新）自己的留白。里面装的是 32 高的图标按钮，
@@ -307,7 +314,7 @@ struct JarvisToolbarSearchField: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: JarvisSpacing.iconGap) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: JarvisToolbarMetrics.iconSize, weight: .medium))
                 .foregroundStyle(Color.jarvisTextSecondary)
@@ -345,7 +352,7 @@ struct JarvisToolbarSearchField: View {
                 .foregroundStyle(Color.jarvisTextSecondary)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, JarvisSpacing.rowInset)
         .frame(width: JarvisToolbarMetrics.searchFieldWidth)
         .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
@@ -372,12 +379,18 @@ struct JarvisContentArea<LeadingToolbar: ToolbarContent, TrailingToolbar: Toolba
     private let leadingToolbar: LeadingToolbar
     private let trailingToolbar: TrailingToolbar
     private let content: Content
+    private let horizontalContentPadding: CGFloat
+    private let bottomContentPadding: CGFloat
 
     init(
+        horizontalContentPadding: CGFloat = JarvisMetrics.shellHorizontalPadding,
+        bottomContentPadding: CGFloat = JarvisMetrics.shellVerticalPadding,
         @ToolbarContentBuilder leadingToolbar: () -> LeadingToolbar,
         @ToolbarContentBuilder trailingToolbar: () -> TrailingToolbar,
         @ViewBuilder content: () -> Content
     ) {
+        self.horizontalContentPadding = horizontalContentPadding
+        self.bottomContentPadding = bottomContentPadding
         self.leadingToolbar = leadingToolbar()
         self.trailingToolbar = trailingToolbar()
         self.content = content()
@@ -387,8 +400,8 @@ struct JarvisContentArea<LeadingToolbar: ToolbarContent, TrailingToolbar: Toolba
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, JarvisMetrics.shellContentSpacing)
-            .padding(.horizontal, JarvisMetrics.shellHorizontalPadding)
-            .padding(.bottom, JarvisMetrics.shellVerticalPadding)
+            .padding(.horizontal, horizontalContentPadding)
+            .padding(.bottom, bottomContentPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.jarvisBackground)
             .toolbar {
@@ -404,7 +417,7 @@ struct JarvisCard<Content: View>: View {
 
     var body: some View {
         content
-            .padding(18)
+            .padding(JarvisSpacing.cardInset)
             .frame(maxWidth: .infinity, alignment: .leading)
             .jarvisContentSurface(cornerRadius: JarvisMetrics.cardRadius)
     }
@@ -416,7 +429,7 @@ struct JarvisEmptyState: View {
     let message: String
 
     var body: some View {
-        VStack(spacing: 11) {
+        VStack(spacing: JarvisSpacing.itemGap) {
             Image(systemName: icon)
                 .font(.system(size: 30, weight: .medium))
                 .foregroundStyle(Color.jarvisAccent)
@@ -437,6 +450,7 @@ struct JarvisEmptyState: View {
                 .foregroundStyle(Color.jarvisTextSecondary)
                 .multilineTextAlignment(.center)
         }
+        .padding(JarvisSpacing.pageInset)
         .frame(maxWidth: .infinity, minHeight: 190)
         .jarvisContentSurface(cornerRadius: JarvisMetrics.cardRadius)
     }
@@ -466,7 +480,7 @@ struct JarvisContentSurfaceModifier: ViewModifier {
 
 struct JarvisInlineLoadingState: View {
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: JarvisSpacing.controlGap) {
             ProgressView()
                 .controlSize(.small)
             Text("正在加载")
@@ -548,9 +562,7 @@ struct JarvisGlassShapeModifier<GlassShape: Shape>: ViewModifier {
 extension View {
     /// 模块外壳：先裁圆角再铺面板底色。
     ///
-    /// 这段组合原本在六处逐字重复，圆角值 16 也散在各处。网页模块是**例外**，
-    /// 它不能裁剪（见 `JarvisWebPlatformViews` 的说明），所以只取
-    /// `JarvisMetrics.panelRadius` 而不用这个 modifier。
+    /// 网页模块使用无圆角的正文区域，不使用这个 modifier。
     func jarvisModulePanel() -> some View {
         clipShape(RoundedRectangle(cornerRadius: JarvisMetrics.panelRadius, style: .continuous))
             .jarvisFloatingPanel(cornerRadius: JarvisMetrics.panelRadius)
@@ -718,8 +730,8 @@ struct JarvisPrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(JarvisTypography.controlEmphasis)
             .foregroundStyle(isEnabled ? Color.white : Color.secondary)
-            .padding(.horizontal, 15)
-            .padding(.vertical, 8)
+            .padding(.horizontal, JarvisSpacing.buttonHorizontalInset)
+            .padding(.vertical, JarvisSpacing.buttonVerticalInset)
             .opacity(configuration.isPressed ? 0.78 : (isEnabled ? 1 : 0.78))
             .jarvisGlass(
                 tint: isEnabled ? Color.jarvisAccent : Color.primary.opacity(0.12),
@@ -744,8 +756,8 @@ struct JarvisCardActionPillButtonStyle: ButtonStyle {
         configuration.label
             .font(JarvisTypography.control)
             .foregroundStyle(.primary)
-            .padding(.horizontal, 15)
-            .padding(.vertical, 8)
+            .padding(.horizontal, JarvisSpacing.buttonHorizontalInset)
+            .padding(.vertical, JarvisSpacing.buttonVerticalInset)
             .opacity(configuration.isPressed ? 0.68 : 1)
             .jarvisGlass(in: Capsule())
             .contentShape(Capsule())
@@ -930,8 +942,8 @@ struct JarvisSecondaryButtonStyle: ButtonStyle {
         configuration.label
             .font(JarvisTypography.control)
             .foregroundStyle(tint ?? .primary)
-            .padding(.horizontal, 15)
-            .padding(.vertical, 8)
+            .padding(.horizontal, JarvisSpacing.buttonHorizontalInset)
+            .padding(.vertical, JarvisSpacing.buttonVerticalInset)
             .opacity(configuration.isPressed ? 0.68 : 1)
             .jarvisGlass(cornerRadius: JarvisMetrics.controlRadius)
             .contentShape(RoundedRectangle(cornerRadius: JarvisMetrics.controlRadius, style: .continuous))

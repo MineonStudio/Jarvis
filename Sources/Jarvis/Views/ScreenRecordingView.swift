@@ -6,6 +6,7 @@ struct ScreenRecordingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedRecordID: UUID?
     @State private var gridZoom: HistoryGridZoomLevel = .regular
+    @State private var toolbarAlignment = HistoryToolbarAlignment()
     @State private var selectedTimeFilter: ScreenshotTimeFilter = .threeDays
     @State private var pendingDelete: ScreenRecordingRecord?
     @State private var pendingRename: ScreenRecordingRecord?
@@ -27,8 +28,10 @@ struct ScreenRecordingView: View {
 
     var body: some View {
         JarvisContentArea(
+            horizontalContentPadding: 0,
+            bottomContentPadding: 0,
             leadingToolbar: {
-                ScreenshotTimeFilterBar(selectedFilter: $selectedTimeFilter)
+                ScreenshotTimeFilterBar(selectedFilter: $selectedTimeFilter, alignment: toolbarAlignment)
             },
             trailingToolbar: {
                 ToolbarSpacer(.fixed, placement: .automatic)
@@ -38,9 +41,13 @@ struct ScreenRecordingView: View {
                 ToolbarSpacer(.fixed, placement: .automatic)
                 ToolbarItem(id: "screen-recording.actions", placement: .automatic) {
                     actionToolbar
+                        .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .trailing))
                 }
             },
-            content: { content.jarvisModulePanel() }
+            content: {
+                content
+                    .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .content))
+            }
         )
         .onChange(of: selectedTimeFilter) { _, _ in selectedRecordID = nil }
         .onChange(of: filteredRecords.map(\.id)) { _, ids in
@@ -75,7 +82,7 @@ struct ScreenRecordingView: View {
     }
 
     private var actionToolbar: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: JarvisSpacing.hairline) {
             JarvisToolbarIconButton(
                 systemName: "eye",
                 help: "查看",
@@ -104,22 +111,26 @@ struct ScreenRecordingView: View {
             }
             .accessibilityLabel("删除")
         }
-        .padding(4)
+        .padding(.horizontal, JarvisToolbarMetrics.iconClusterPadding)
         .frame(height: HistoryGridMetrics.topControlHeight)
     }
 
     private var content: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: JarvisSpacing.itemGap) {
             if let message = recorder.message {
                 HStack(alignment: .top) {
                     Image(systemName: "info.circle")
                     Text(message).font(.callout).textSelection(.enabled)
                     Spacer()
                     Button { recorder.message = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
-                }.padding(12).background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 10)).padding(.horizontal, 12)
+                }.padding(JarvisSpacing.rowInset).background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 10))
+                    .padding(.leading, toolbarAlignment.leadingInset)
+                    .padding(.trailing, toolbarAlignment.trailingInset)
             }
             if !recorder.recoverableRecords.isEmpty {
-                recoverySection.padding(.horizontal, 12)
+                recoverySection
+                    .padding(.leading, toolbarAlignment.leadingInset)
+                    .padding(.trailing, toolbarAlignment.trailingInset)
             }
             if filteredRecords.isEmpty {
                 ContentUnavailableView {
@@ -165,13 +176,15 @@ struct ScreenRecordingView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(HistoryGridMetrics.historyPanelInset)
+            .padding(.leading, toolbarAlignment.leadingInset)
+            .padding(.trailing, toolbarAlignment.trailingInset)
+            .padding(.bottom, HistoryGridMetrics.historyPanelInset)
         }
         .animation(JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion), value: gridZoom)
     }
 
     private var recoverySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
             Label("未完成的录制 · 已保留临时片段", systemImage: "arrow.counterclockwise.circle").font(.headline)
             ForEach(recorder.recoverableRecords) { record in
                 HStack {
@@ -185,7 +198,7 @@ struct ScreenRecordingView: View {
                     Button(role: .destructive) { pendingDelete = record } label: { Image(systemName: "trash") }
                 }.disabled(recorder.isActive)
             }
-        }.padding(12).background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 12))
+        }.padding(JarvisSpacing.rowInset).background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder

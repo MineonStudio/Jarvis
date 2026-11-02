@@ -2,8 +2,8 @@ import SwiftUI
 
 extension MahjongSettingsView {
     var recordContent: some View {
-        VStack(alignment: .leading, spacing: 30) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.spacious) {
+            HStack(spacing: JarvisSpacing.itemGap) {
                 ForEach(RecordTab.allCases, id: \.self) { tab in
                     Button {
                         withAnimation(.easeInOut(duration: 0.18)) { recordTab = tab }
@@ -11,7 +11,7 @@ extension MahjongSettingsView {
                         Text(tab.rawValue)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(recordTab == tab ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
-                            .padding(.horizontal, 20)
+                            .padding(.horizontal, JarvisSpacing.pageInset)
                             .frame(height: 42)
                             .background(
                                 recordTab == tab ? MahjongSettingsPalette.accent.opacity(0.13) : .black.opacity(0.15),
@@ -34,14 +34,14 @@ extension MahjongSettingsView {
     }
 
     var aiStatisticsContent: some View {
-        VStack(alignment: .leading, spacing: 26) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.pageInset) {
             ScrollView(.horizontal) {
-                HStack(spacing: 14) {
+                HStack(spacing: JarvisSpacing.groupGap) {
                     ForEach(archive.aiProfiles) { profile in
                         let selected = selectedAIProfileID == profile.id
                             || (selectedAIProfileID == nil && archive.aiProfiles.first?.id == profile.id)
                         Button { selectedAIProfileID = profile.id } label: {
-                            VStack(spacing: 7) {
+                            VStack(spacing: JarvisSpacing.controlGap) {
                                 MahjongArchiveAvatar(profile: profile, size: 54)
                                 Text(profile.nickname)
                                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
@@ -69,15 +69,15 @@ extension MahjongSettingsView {
     }
 
     func statisticsContent(for profile: MahjongPlayerArchive, isAI: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 30) {
-            HStack(spacing: 36) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.spacious) {
+            HStack(spacing: JarvisSpacing.spacious) {
                 ZStack {
                     Circle().stroke(MahjongSettingsPalette.accent.opacity(0.18), lineWidth: 10)
                     Circle()
                         .trim(from: 0, to: CGFloat(profile.winRate) / 100)
                         .stroke(MahjongSettingsPalette.accent, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                    VStack(spacing: 2) {
+                    VStack(spacing: JarvisSpacing.hairline) {
                         Text("\(profile.winRate)%")
                             .font(.system(size: 39, weight: .bold, design: .rounded))
                             .foregroundStyle(MahjongSettingsPalette.accent)
@@ -86,7 +86,7 @@ extension MahjongSettingsView {
                 }
                 .frame(width: 160, height: 160)
 
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
                     if isAI {
                         Text(profile.nickname)
                             .font(.system(size: 21, weight: .semibold, design: .serif))
@@ -95,7 +95,7 @@ extension MahjongSettingsView {
                     Text("累计对局 \(max(profile.wins + profile.losses, archive.history(for: profile.id).count)) 场")
                         .font(.system(size: 19, weight: .medium))
                         .foregroundStyle(MahjongSettingsPalette.ivory)
-                    HStack(spacing: 40) {
+                    HStack(spacing: JarvisSpacing.heroInset) {
                         recordNumber("胜局", profile.wins, color: MahjongSettingsPalette.accent)
                         recordNumber("负局", profile.losses, color: MahjongSettingsPalette.ivory)
                     }
@@ -109,15 +109,15 @@ extension MahjongSettingsView {
             Text("历史对局")
                 .font(.system(size: 22, weight: .semibold, design: .serif))
                 .foregroundStyle(MahjongSettingsPalette.ivory)
-                .padding(.top, 6)
+                .padding(.top, JarvisSpacing.iconGap)
             let history = archive.history(for: profile.id)
             if history.isEmpty {
                 Text("暂无历史对局")
                     .font(.system(size: 16))
                     .foregroundStyle(MahjongSettingsPalette.muted)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, JarvisSpacing.cardInset)
             } else {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: JarvisSpacing.itemGap) {
                     ForEach(history) { match in
                         matchRow(match)
                     }
@@ -127,12 +127,12 @@ extension MahjongSettingsView {
     }
 
     func matchRow(_ match: MahjongMatchRecord) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: JarvisSpacing.groupGap) {
             Text(match.outcome.title)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(match.outcome == .win ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
                 .frame(width: 52, alignment: .leading)
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                 Text("\(match.ruleset.title) · 第 \(match.roundNumber) 局")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(MahjongSettingsPalette.ivory)
@@ -145,7 +145,7 @@ extension MahjongSettingsView {
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                 .foregroundStyle(match.balanceChange > 0 ? MahjongSettingsPalette.accent : MahjongSettingsPalette.ivory)
         }
-        .padding(16)
+        .padding(JarvisSpacing.cardInset)
         .background(.black.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
     }
 }

@@ -29,8 +29,8 @@ struct ContentView: View {
 
     private var activeContent: some View {
         GeometryReader { geometry in
-            let padding: CGFloat = 16
-            let spacing: CGFloat = 16
+            let padding = JarvisSpacing.panelInset
+            let spacing = JarvisSpacing.columnGap
             let innerWidth = max(0, geometry.size.width - padding * 2)
             let innerHeight = max(0, geometry.size.height - padding * 2)
             let availableWidth = max(0, innerWidth - spacing)
@@ -45,7 +45,7 @@ struct ContentView: View {
     }
 
     private var waitingContent: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: JarvisSpacing.itemGap) {
             Image(systemName: "wifi")
                 .font(.system(size: 32, weight: .light))
                 .foregroundStyle(.tint)
@@ -62,16 +62,17 @@ struct ContentView: View {
                     .frame(maxWidth: 360)
             }
         }
+        .padding(JarvisSpacing.panelInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var connectionPanel: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: JarvisSpacing.sectionGap) {
             qrCode
-            VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.groupGap) {
                 Label("连接设备", systemImage: "iphone.gen3.radiowaves.left.and.right")
                     .font(.system(size: 17, weight: .semibold))
-                HStack(spacing: 10) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     Text(store.address)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -88,7 +89,7 @@ struct ContentView: View {
                     .buttonStyle(.bordered)
                     .fixedSize()
                 }
-                HStack(spacing: 8) {
+                HStack(spacing: JarvisSpacing.controlGap) {
                     metric("已连接", value: "\(store.pairedDevices)", icon: "laptopcomputer.and.iphone")
                     metric("运行", value: uptime, icon: "clock")
                 }
@@ -96,21 +97,20 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .onChange(of: store.address) { _, _ in copied = false }
     }
 
     private func metric(_ title: String, value: String, icon: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: JarvisSpacing.iconGap) {
             Image(systemName: icon)
             Text(title)
             Text(value).foregroundStyle(.primary)
         }
         .font(.system(size: 11, weight: .medium))
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
+        .padding(.horizontal, JarvisSpacing.controlGap)
+        .padding(.vertical, JarvisSpacing.iconGap)
         .background(Color.primary.opacity(0.055), in: Capsule())
     }
 
@@ -129,9 +129,9 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             ScrollView(.horizontal) {
-                HStack(spacing: 12) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     ForEach(Array(store.connectedDevices.enumerated()), id: \.element.id) { index, device in
-                        HStack(spacing: 5) {
+                        HStack(spacing: JarvisSpacing.iconGap) {
                             Circle()
                                 .fill(Color(hue: device.colorHue, saturation: 0.68, brightness: 0.82))
                                 .frame(width: 7, height: 7)
@@ -158,15 +158,15 @@ struct ContentView: View {
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxHeight: .infinity)
                 .layoutPriority(1)
-                .padding(8)
+                .padding(JarvisSpacing.controlGap)
                 .background(.white, in: RoundedRectangle(cornerRadius: 14))
                 .accessibilityLabel("连接二维码")
         }
     }
 
     private var sendPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
+            HStack(spacing: JarvisSpacing.textGap) {
                 Image(systemName: "square.and.arrow.up")
                     .foregroundStyle(Color.accentColor)
                     .frame(width: 22, height: 22)
@@ -193,7 +193,7 @@ struct ContentView: View {
             if let task = store.transfers.first(where: { $0.direction == .download && $0.isInProgress }) {
                 transferAnimation(task, tint: .accentColor)
             } else if store.isImporting {
-                HStack(spacing: 8) {
+                HStack(spacing: JarvisSpacing.controlGap) {
                     ProgressView().controlSize(.small)
                     Text("正在准备")
                         .font(.system(size: 13, weight: .medium))
@@ -201,7 +201,7 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(spacing: 10) {
+                VStack(spacing: JarvisSpacing.itemGap) {
                     textComposer
                         .frame(height: 32)
                     uploadDropZone
@@ -216,13 +216,12 @@ struct ContentView: View {
                     .lineLimit(2)
             }
         }
-        .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func transferAnimation(_ task: Transfer, tint: Color) -> some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(spacing: JarvisSpacing.controlGap) {
+            HStack(spacing: JarvisSpacing.iconGap) {
                 Image(systemName: task.direction == .download ? "square.and.arrow.up" : "square.and.arrow.down")
                     .font(.system(size: 16, weight: .light))
                     .foregroundStyle(tint)
@@ -274,14 +273,14 @@ struct ContentView: View {
     }
 
     private var textComposer: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: JarvisSpacing.controlGap) {
             TextField("消息", text: $textDraft)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .focused($isTextComposerFocused)
                 .onSubmit(sendDraft)
                 .disabled(!store.canStartTask)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, JarvisSpacing.rowInset)
                 .frame(maxWidth: .infinity)
                 .frame(height: 32)
                 .background(.regularMaterial, in: Capsule())

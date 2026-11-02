@@ -21,12 +21,12 @@ struct ResumeInspector: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
                 ForEach(ResumeSection.allCases) { section in
                     accordionSection(section)
                 }
             }
-            .padding(16)
+            .padding(JarvisSpacing.cardInset)
         }
         .simultaneousGesture(
             TapGesture().onEnded {
@@ -82,7 +82,7 @@ struct ResumeInspector: View {
                     expandedSection = nextSection
                 }
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     Image(systemName: section.icon)
                         .font(.system(size: 13, weight: .medium))
                         .frame(width: 20)
@@ -100,7 +100,7 @@ struct ResumeInspector: View {
                         .font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundStyle(expandedSection == section ? Color.jarvisAccent : Color.primary)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, JarvisSpacing.rowInset)
                 .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                 .contentShape(Rectangle())
             }
@@ -109,7 +109,7 @@ struct ResumeInspector: View {
 
             if expandedSection == section {
                 sectionEditor(for: section)
-                    .padding(12)
+                    .padding(JarvisSpacing.rowInset)
                     .id(section)
                     .transition(.opacity)
             }
@@ -308,7 +308,7 @@ private struct ResumeProjectGenerationSheet: View {
     let onGenerate: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.groupGap) {
             Text("生成项目经历")
                 .font(JarvisTypography.cardTitle)
 
@@ -316,7 +316,7 @@ private struct ResumeProjectGenerationSheet: View {
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(onGenerate)
 
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 Spacer(minLength: 0)
                 Button("取消", action: onCancel)
                     .buttonStyle(ResumeAddButtonStyle())
@@ -325,7 +325,7 @@ private struct ResumeProjectGenerationSheet: View {
                     .disabled(domain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(20)
+        .padding(JarvisSpacing.pageInset)
         .frame(width: 360)
     }
 }
@@ -334,12 +334,12 @@ private struct ResumeBasicInfoEditor: View {
     @Binding var draft: ResumeDocument
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
             ResumeTextField(title: "姓名", placeholder: "请输入姓名", text: $draft.basicInfo.name)
             ResumeTextField(title: "职位标题", placeholder: "请输入职位标题", text: $draft.basicInfo.headline)
             ResumeTextField(title: "所在地", placeholder: "请输入所在地", text: $draft.basicInfo.location)
             ResumeTextField(title: "联系方式", placeholder: "请输入联系方式", text: $draft.basicInfo.email)
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 ResumeTextField(title: "岗位状态", placeholder: "请输入岗位状态", text: $draft.basicInfo.jobStatus)
                 ResumeTextField(title: "工作年限", placeholder: "请输入工作年限", text: $draft.basicInfo.workYears)
             }
@@ -355,22 +355,22 @@ private struct ResumeEducationEditor: View {
     let onGenerate: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
             ForEach($draft.education) { $item in
-                VStack(alignment: .leading, spacing: 9) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
                     ResumeItemHeader(title: "教育经历", onDelete: { deleteEducation(id: item.id) })
                     ResumeTextField(title: "学校", placeholder: "请输入学校", text: $item.school)
-                    HStack(spacing: 8) {
+                    HStack(spacing: JarvisSpacing.controlGap) {
                         ResumeTextField(title: "学历", placeholder: "请输入学历", text: $item.degree)
                         ResumeTextField(title: "专业", placeholder: "请输入专业", text: $item.major)
                     }
                     ResumeTextField(title: "时间", placeholder: "请输入时间", text: $item.period)
                 }
-                .padding(11)
+                .padding(JarvisSpacing.rowInset)
                 .jarvisGlass(cornerRadius: 11, interactive: false)
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 Button {
                     draft.education.append(.blank)
                 } label: {
@@ -402,21 +402,21 @@ private struct ResumeExperienceEditor: View {
     let onGenerate: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
             ForEach($draft.experience) { $item in
-                VStack(alignment: .leading, spacing: 9) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
                     ResumeItemHeader(title: "工作经历", onDelete: { deleteExperience(id: item.id) })
-                    HStack(spacing: 8) {
+                    HStack(spacing: JarvisSpacing.controlGap) {
                         ResumeTextField(title: "公司", placeholder: "请输入公司", text: $item.company)
                         ResumeTextField(title: "职位", placeholder: "请输入职位", text: $item.role)
                     }
                     ResumeTextField(title: "时间", placeholder: "请输入时间", text: $item.period)
                 }
-                .padding(11)
+                .padding(JarvisSpacing.rowInset)
                 .jarvisGlass(cornerRadius: 11, interactive: false)
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 Button {
                     draft.experience.append(.blank)
                 } label: {
@@ -448,9 +448,9 @@ private struct ResumeSkillsEditor: View {
     let onGenerate: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
             ForEach(draft.skills.indices, id: \.self) { index in
-                HStack(spacing: 8) {
+                HStack(spacing: JarvisSpacing.controlGap) {
                     ResumeTextField(title: "技能", placeholder: "请输入技能", text: skillBinding(index: index))
                     Button {
                         guard draft.skills.indices.contains(index) else { return }
@@ -461,11 +461,11 @@ private struct ResumeSkillsEditor: View {
                             .foregroundStyle(.red.opacity(0.78))
                     }
                     .buttonStyle(.plain)
-                    .padding(.top, 18)
+                    .padding(.top, JarvisSpacing.cardInset)
                 }
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 Button {
                     draft.skills.append("")
                 } label: {
@@ -504,22 +504,22 @@ private struct ResumeProjectsEditor: View {
     let onGenerate: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
             ForEach($draft.projects) { $project in
-                VStack(alignment: .leading, spacing: 9) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
                     ResumeItemHeader(title: "项目经历", onDelete: { deleteProject(id: project.id) })
-                    HStack(spacing: 8) {
+                    HStack(spacing: JarvisSpacing.controlGap) {
                         ResumeTextField(title: "真实项目名称", placeholder: "请输入真实项目名称", text: $project.name)
                         ResumeTextField(title: "时间", placeholder: "请输入时间", text: $project.period)
                     }
                     ResumeTextEditor(title: "项目简介", placeholder: "请输入项目简介，约80字", text: $project.summary)
                     ResumeBulletEditor(title: "项目要点", bullets: $project.bullets)
                 }
-                .padding(11)
+                .padding(JarvisSpacing.rowInset)
                 .jarvisGlass(cornerRadius: 11, interactive: false)
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 Button {
                     draft.projects.append(.blank)
                 } label: {
@@ -548,13 +548,13 @@ private struct ResumeBulletEditor: View {
     @Binding var bullets: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             Text(title)
                 .font(JarvisTypography.captionEmphasis)
                 .foregroundStyle(Color.jarvisTextSecondary)
 
             ForEach(bullets.indices, id: \.self) { index in
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: JarvisSpacing.controlGap) {
                     ResumeTextField(
                         title: "要点 \(index + 1)",
                         placeholder: "请输入\(title)",
@@ -568,7 +568,7 @@ private struct ResumeBulletEditor: View {
                             .foregroundStyle(.red.opacity(0.70))
                     }
                     .buttonStyle(.plain)
-                    .padding(.top, 18)
+                    .padding(.top, JarvisSpacing.cardInset)
                 }
             }
 
@@ -599,7 +599,7 @@ private struct ResumeItemHeader: View {
     let onDelete: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: JarvisSpacing.controlGap) {
             Text(title)
                 .font(JarvisTypography.controlEmphasis)
                 .lineLimit(1)
@@ -619,7 +619,7 @@ private struct ResumeTextField: View {
     @Binding var text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
             Text(title)
                 .font(JarvisTypography.captionEmphasis)
                 .foregroundStyle(Color.jarvisTextSecondary)
@@ -637,7 +637,7 @@ private struct ResumeTextEditor: View {
     @Binding var text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
             Text(title)
                 .font(JarvisTypography.captionEmphasis)
                 .foregroundStyle(Color.jarvisTextSecondary)

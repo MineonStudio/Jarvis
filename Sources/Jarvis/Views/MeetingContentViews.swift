@@ -25,7 +25,7 @@ struct MeetingView: View {
     var body: some View {
         JarvisContentArea(
             leadingToolbar: {
-                ToolbarItem(id: "meeting.recording", placement: .navigation) {
+                JarvisLeadingToolbarItem(id: "meeting.recording") {
                     recordingToolbarButton
                 }
             },
@@ -46,14 +46,13 @@ struct MeetingView: View {
                 }
             },
             content: {
-                VStack(spacing: 0) {
+                VStack(spacing: JarvisSpacing.columnGap) {
                     if let storageError = app.meetingStorageError {
                         MeetingStorageErrorBanner(message: storageError)
                     }
                     if !app.meetingRecords.isEmpty, !app.meetingModelsReady {
                         MeetingModelDownloadPrompt()
                             .frame(maxWidth: .infinity)
-                            .padding(.bottom, 12)
                     }
 
                     Group {
@@ -62,7 +61,7 @@ struct MeetingView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .jarvisModulePanel()
                         } else {
-                            HStack(alignment: .top, spacing: 12) {
+                            HStack(alignment: .top, spacing: JarvisSpacing.itemGap) {
                                 MeetingHistoryList(
                                     searchText: searchText,
                                     matchedRecordIDs: searchMatchedRecordIDs
@@ -209,7 +208,7 @@ struct MeetingView: View {
         Button {
             app.toggleMeetingRecording()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: JarvisSpacing.iconGap) {
                 Group {
                     if isRecording {
                         RoundedRectangle(cornerRadius: 1.5)
@@ -245,7 +244,7 @@ private struct MeetingEmptyState: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: JarvisSpacing.sectionGap) {
             Image(systemName: "waveform.and.person.filled")
                 .font(.system(size: 42, weight: .medium))
                 .foregroundStyle(Color.jarvisAccent)
@@ -269,7 +268,7 @@ private struct MeetingEmptyState: View {
             .disabled(!app.meetingModelsReady)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(40)
+        .padding(JarvisSpacing.heroInset)
     }
 }
 
@@ -278,8 +277,8 @@ private struct MeetingModelDownloadPrompt: View {
 
     var body: some View {
         JarvisCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
+                HStack(spacing: JarvisSpacing.controlGap) {
                     Image(systemName: "arrow.down.circle")
                         .foregroundStyle(Color.jarvisAccent)
                     Text("开始前需要准备识别资源")
@@ -290,7 +289,7 @@ private struct MeetingModelDownloadPrompt: View {
                     .foregroundStyle(Color.jarvisTextSecondary)
 
                 if case let .downloading(stage, progress) = app.meetingModelState {
-                    HStack(spacing: 8) {
+                    HStack(spacing: JarvisSpacing.controlGap) {
                         ProgressView(value: progress)
                             .tint(Color.jarvisAccent)
                         Text("\(stage.title) \(Int(progress * 100))%")
@@ -302,7 +301,7 @@ private struct MeetingModelDownloadPrompt: View {
                             .font(JarvisTypography.caption)
                             .foregroundStyle(Color.jarvisTextSecondary)
                     }
-                    HStack(spacing: 8) {
+                    HStack(spacing: JarvisSpacing.controlGap) {
                         Button("取消下载") {
                             app.cancelMeetingModelPreparation()
                         }
@@ -313,7 +312,7 @@ private struct MeetingModelDownloadPrompt: View {
                         .buttonStyle(JarvisSecondaryButtonStyle())
                     }
                 } else {
-                    HStack(spacing: 8) {
+                    HStack(spacing: JarvisSpacing.controlGap) {
                         Button("下载识别模型") {
                             app.prepareMeetingModels()
                         }
@@ -347,7 +346,7 @@ private struct MeetingStorageErrorBanner: View {
     let message: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: JarvisSpacing.controlGap) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             Text(message)
@@ -356,10 +355,8 @@ private struct MeetingStorageErrorBanner: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(JarvisSpacing.rowInset)
         .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .padding(.top, 12)
-        .padding(.bottom, 12)
     }
 }
 
@@ -378,7 +375,7 @@ private struct MeetingSpeakerSection: View {
 
     var body: some View {
         if !record.speakers.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
                 HStack {
                     MeetingSectionHeader(title: "说话人", systemImage: "person.2.wave.2")
                     Spacer()
@@ -405,7 +402,7 @@ private struct MeetingSpeakerSection: View {
                         .foregroundStyle(Color.jarvisTextSecondary)
                 }
                 JarvisCard {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
                         if isMergePanelExpanded {
                             mergePanel
                         }
@@ -465,8 +462,8 @@ private struct MeetingSpeakerSection: View {
     }
 
     private var mergePanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                 Text("合并误判的说话人")
                     .font(JarvisTypography.bodyEmphasis)
                 Text("左侧选择误判对象，右侧选择保留身份。左侧说话人会移除，转写和纪要内容归入右侧。")
@@ -474,7 +471,7 @@ private struct MeetingSpeakerSection: View {
                     .foregroundStyle(Color.jarvisTextSecondary)
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: JarvisSpacing.itemGap) {
                 mergeSpeakerPicker(
                     title: "并入的说话人",
                     selectedSpeaker: mergeSourceSpeaker,
@@ -519,7 +516,7 @@ private struct MeetingSpeakerSection: View {
                 .disabled(mergeSourceSpeaker == nil || mergeTargetSpeaker == nil)
             }
         }
-        .padding(12)
+        .padding(JarvisSpacing.rowInset)
         .background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
@@ -531,11 +528,11 @@ private struct MeetingSpeakerSection: View {
         @ViewBuilder options: () -> some View
     ) -> some View {
         Menu(content: options) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                 Text(title)
                     .font(JarvisTypography.caption)
                     .foregroundStyle(Color.jarvisTextSecondary)
-                HStack(spacing: 6) {
+                HStack(spacing: JarvisSpacing.iconGap) {
                     Text(selectedSpeaker?.name ?? placeholder)
                         .font(JarvisTypography.controlEmphasis)
                         .lineLimit(1)
@@ -546,8 +543,8 @@ private struct MeetingSpeakerSection: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, JarvisSpacing.rowInset)
+            .padding(.vertical, JarvisSpacing.controlGap)
             .background(Color.jarvisPanel, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -586,7 +583,7 @@ private struct MeetingSpeakerSection: View {
 
     private func speakerRow(_ speaker: MeetingSpeaker) -> some View {
         let first = firstUtterance(of: speaker)
-        return HStack(spacing: 10) {
+        return HStack(spacing: JarvisSpacing.itemGap) {
             Circle()
                 .fill(speakerColor(speaker.colorIndex))
                 .frame(width: 8, height: 8)
@@ -774,7 +771,7 @@ private struct MeetingCopyToolbar: View {
         .buttonStyle(JarvisToolbarIconButtonStyle())
         .disabled(!canCopy)
         .accessibilityLabel("复制会议内容")
-        .padding(4)
+        .padding(JarvisSpacing.textGap)
         .frame(height: JarvisToolbarMetrics.controlSize)
     }
 }
@@ -804,7 +801,7 @@ private struct MeetingExportToolbar: View {
         .buttonStyle(JarvisToolbarIconButtonStyle())
         .disabled(record == nil)
         .accessibilityLabel("导出会议内容")
-        .padding(4)
+        .padding(JarvisSpacing.textGap)
         .frame(height: JarvisToolbarMetrics.controlSize)
     }
 }
@@ -838,7 +835,7 @@ private struct MeetingHistoryList: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 4) {
+            LazyVStack(spacing: JarvisSpacing.textGap) {
                 HStack {
                     Text("会议记录")
                         .font(JarvisTypography.bodyEmphasis)
@@ -847,8 +844,8 @@ private struct MeetingHistoryList: View {
                         .font(JarvisTypography.captionEmphasis)
                         .foregroundStyle(Color.jarvisTextSecondary)
                 }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 8)
+                .padding(.horizontal, JarvisSpacing.rowInset)
+                .padding(.bottom, JarvisSpacing.controlGap)
 
                 if filteredRecords.isEmpty {
                     Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -857,8 +854,8 @@ private struct MeetingHistoryList: View {
                         .font(JarvisTypography.caption)
                         .foregroundStyle(Color.jarvisTextSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 10)
-                        .padding(.top, 8)
+                        .padding(.horizontal, JarvisSpacing.rowInset)
+                        .padding(.top, JarvisSpacing.controlGap)
                 }
 
                 ForEach(filteredRecords) { record in
@@ -883,7 +880,7 @@ private struct MeetingHistoryList: View {
                     }
                 }
             }
-            .padding(10)
+            .padding(JarvisSpacing.rowInset)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(.automatic)
@@ -927,7 +924,7 @@ private struct MeetingHistoryRow: View {
                 // selected background outside the native Button hit region.
                 Color.clear
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                     Text(record.title)
                         .font(JarvisTypography.controlEmphasis)
                         .lineLimit(1)
@@ -947,8 +944,8 @@ private struct MeetingHistoryRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(.horizontal, JarvisSpacing.rowInset)
+            .padding(.vertical, JarvisSpacing.controlGap)
             .background(
                 isSelected ? Color.jarvisAccent.opacity(0.14) : Color.clear,
                 in: RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -976,7 +973,7 @@ private struct MeetingDetailPane: View {
         Group {
             if let record {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
                         meetingHeader(record)
 
                         MeetingAudioSection(
@@ -1061,7 +1058,7 @@ private struct MeetingDetailPane: View {
     private func meetingHeader(_ record: MeetingRecord) -> some View {
         let displayTitle = draftTitle.isEmpty ? MeetingRecord.defaultTitle : draftTitle
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             ZStack(alignment: .leading) {
                 Text(displayTitle)
                     .font(MeetingDetailTypography.h1)
@@ -1102,7 +1099,7 @@ private struct MeetingDetailPane: View {
                 }
             )
 
-            HStack(spacing: 12) {
+            HStack(spacing: JarvisSpacing.itemGap) {
                 Label(formatMeetingDateTime(record.createdAt), systemImage: "calendar")
                 Label(formatMeetingDuration(record.duration), systemImage: "clock")
                 Text(record.status.title)
@@ -1139,8 +1136,8 @@ private struct MeetingDetailPane: View {
 }
 
 private enum MeetingTitleMetrics {
-    static let horizontalPadding: CGFloat = 10
-    static let verticalPadding: CGFloat = 7
+    static let horizontalPadding = JarvisSpacing.rowInset
+    static let verticalPadding = JarvisSpacing.controlGap
 }
 
 private struct MeetingTitleOutsideClickMonitor: NSViewRepresentable {
@@ -1223,7 +1220,7 @@ private struct MeetingAudioSection: View {
     @Binding var citedPlayback: CitedAudioPlayback
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
             MeetingSectionHeader(title: "原始录音", systemImage: "waveform")
             let isRecording = app.meetingCurrentRecordingID == record.id
 
@@ -1239,7 +1236,7 @@ private struct MeetingAudioSection: View {
             }
 
             if !record.audioEvents.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                     ForEach(record.audioEvents) { event in
                         Text(event.message)
                             .font(JarvisTypography.caption)
@@ -1385,14 +1382,14 @@ private struct MeetingRecordingCard: View {
 
     var body: some View {
         JarvisCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     Image(systemName: app.meetingRecordingPaused ? "pause.fill" : "speaker.wave.2.fill")
                         .foregroundStyle(.red)
                         .frame(width: 28, height: 28)
                         .background(Color.red.opacity(0.12), in: Circle())
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                         Text(app.meetingRecordingPaused ? "录音已暂停" : "正在录音")
                             .font(JarvisTypography.bodyEmphasis)
                         Text(statusLine)
@@ -1414,7 +1411,7 @@ private struct MeetingRecordingCard: View {
                     .buttonStyle(JarvisSecondaryButtonStyle())
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                     MeetingAudioLevelBars(
                         levels: app.meetingLevelHistory,
                         isPaused: app.meetingRecordingPaused
@@ -1450,7 +1447,7 @@ private struct MeetingAudioPlayer: View {
     var body: some View {
         JarvisCard {
             if controller.isAvailable {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                     playbackControls
                     waveformBar
                     HStack {
@@ -1462,10 +1459,10 @@ private struct MeetingAudioPlayer: View {
                     .foregroundStyle(Color.jarvisTextSecondary)
                 }
             } else if controller.isChecking {
-                HStack(spacing: 10) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     ProgressView()
                         .controlSize(.small)
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                         Text("正在保存录音")
                             .font(JarvisTypography.bodyEmphasis)
                         Text("音频文件正在完成写入，请稍候")
@@ -1474,10 +1471,10 @@ private struct MeetingAudioPlayer: View {
                     }
                 }
             } else {
-                HStack(spacing: 10) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                         Text("录音暂不可用")
                             .font(JarvisTypography.bodyEmphasis)
                         Text("未找到本机录音文件，会议文字内容仍会保留")
@@ -1540,7 +1537,7 @@ private struct MeetingAudioPlayer: View {
     }
 
     private var playbackControls: some View {
-        HStack(spacing: 28) {
+        HStack(spacing: JarvisSpacing.spacious) {
             Button {
                 seek(by: -15)
             } label: {
@@ -1615,8 +1612,8 @@ private struct MeetingProcessingCard: View {
 
     var body: some View {
         JarvisCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     ProgressView()
                         .controlSize(.small)
                     Text(state.title)
@@ -1658,10 +1655,10 @@ private struct MeetingFailureCard: View {
 
     var body: some View {
         JarvisCard {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: JarvisSpacing.itemGap) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                     Text(failureTitle)
                         .font(JarvisTypography.bodyEmphasis)
                     Text(message)
@@ -1705,10 +1702,10 @@ private struct MeetingNeedsSummaryCard: View {
 
     var body: some View {
         JarvisCard {
-            HStack(spacing: 12) {
+            HStack(spacing: JarvisSpacing.itemGap) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(Color.jarvisAccent)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                     Text("转写已完成")
                         .font(JarvisTypography.bodyEmphasis)
                     Text("现在可以生成一份以结论和待办为中心的会议总结。")
@@ -1735,7 +1732,7 @@ private struct MeetingMinutesSection: View {
     let summary: MeetingSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
             HStack {
                 MeetingSectionHeader(title: "会议纪要", systemImage: "sparkles")
                 Spacer()
@@ -1763,12 +1760,12 @@ private struct MeetingMinutesSection: View {
                     .accessibilityLabel("会议纪要概要")
             }
             if !record.minutesVersions.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                     Text("较早的纪要")
                         .font(JarvisTypography.captionEmphasis)
                         .foregroundStyle(Color.jarvisTextSecondary)
                     ForEach(record.minutesVersions) { version in
-                        HStack(spacing: 8) {
+                        HStack(spacing: JarvisSpacing.controlGap) {
                             Text(version.savedAt.formatted(date: .abbreviated, time: .shortened))
                                 .font(JarvisTypography.caption)
                                 .foregroundStyle(Color.jarvisTextSecondary)
@@ -1827,7 +1824,7 @@ private struct MeetingDiscussionPointsSection: View {
 
     var body: some View {
         if !summary.points.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
                 HStack {
                     MeetingSectionHeader(title: "讨论要点", systemImage: "list.bullet")
                     Spacer()
@@ -1836,7 +1833,7 @@ private struct MeetingDiscussionPointsSection: View {
                         .foregroundStyle(Color.jarvisTextSecondary)
                 }
                 JarvisCard {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: JarvisSpacing.groupGap) {
                         ForEach(summary.points) { point in
                             pointRow(point)
                         }
@@ -1848,11 +1845,11 @@ private struct MeetingDiscussionPointsSection: View {
 
     private func pointRow(_ point: MeetingDiscussionPoint) -> some View {
         let target = meetingEvidenceTarget(evidence: point.evidence, record: record)
-        return HStack(alignment: .top, spacing: 8) {
+        return HStack(alignment: .top, spacing: JarvisSpacing.controlGap) {
             Circle()
                 .fill(Color.jarvisAccent)
                 .frame(width: 5, height: 5)
-                .padding(.top, 8)
+                .padding(.top, JarvisSpacing.controlGap)
             MeetingCitedSentence(
                 text: point.title,
                 secondaryText: point.detail,
@@ -1873,7 +1870,7 @@ private struct MeetingActionItemsPanel: View {
     let onToggleCitation: (TimeInterval, UUID?) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             HStack {
                 Text("待办")
                     .font(JarvisTypography.bodyEmphasis)
@@ -1882,7 +1879,7 @@ private struct MeetingActionItemsPanel: View {
                     .font(JarvisTypography.captionEmphasis)
                     .foregroundStyle(Color.jarvisTextSecondary)
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, JarvisSpacing.rowInset)
             .accessibilityAddTraits(.isHeader)
 
             if actionItems.isEmpty {
@@ -1890,7 +1887,7 @@ private struct MeetingActionItemsPanel: View {
                     .font(JarvisTypography.caption)
                     .foregroundStyle(Color.jarvisTextSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, JarvisSpacing.rowInset)
             } else if let record, let summary = app.displayedMeetingSummary(for: record) {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -1901,12 +1898,12 @@ private struct MeetingActionItemsPanel: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, JarvisSpacing.rowInset)
+                    .padding(.bottom, JarvisSpacing.rowInset)
                 }
             }
         }
-        .padding(.top, 10)
+        .padding(.top, JarvisSpacing.rowInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -1925,7 +1922,7 @@ private struct MeetingActionItemsPanel: View {
         record: MeetingRecord,
         summary _: MeetingSummary
     ) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: JarvisSpacing.controlGap) {
             Button {
                 app.setMeetingActionItemCompleted(
                     recordID: record.id,
@@ -1940,7 +1937,7 @@ private struct MeetingActionItemsPanel: View {
             .buttonStyle(.plain)
             .accessibilityLabel(item.isCompleted ? "标记待办为未完成" : "标记待办为已完成：\(item.task)")
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                 let target = meetingActionTarget(item: item, record: record)
                 MeetingCitedSentence(
                     text: item.task,
@@ -1951,7 +1948,7 @@ private struct MeetingActionItemsPanel: View {
                         onToggleCitation(time, target?.segmentID)
                     }
                 )
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.hairline) {
                     Text("负责人：\(item.ownerLabel)")
                     Text("期限：\(item.dueLabel)")
                 }
@@ -1959,7 +1956,7 @@ private struct MeetingActionItemsPanel: View {
                 .foregroundStyle(Color.jarvisTextSecondary)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, JarvisSpacing.controlGap)
     }
 }
 

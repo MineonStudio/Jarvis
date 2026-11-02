@@ -13,14 +13,14 @@ struct JarvisTaskPermissionOverlay: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
 
-            VStack(spacing: 18) {
+            VStack(spacing: JarvisSpacing.sectionGap) {
                 Image(systemName: prompt.permission.systemImage)
                     .font(.system(size: 40, weight: .medium))
                     .foregroundStyle(Color.jarvisAccent)
                     .frame(width: 108, height: 84)
                     .background(Color.jarvisAccent.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
 
-                VStack(spacing: 8) {
+                VStack(spacing: JarvisSpacing.controlGap) {
                     Text(prompt.title)
                         .font(JarvisTypography.pageTitle)
                         .multilineTextAlignment(.center)
@@ -31,7 +31,7 @@ struct JarvisTaskPermissionOverlay: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                HStack(spacing: 10) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     Button("获取权限") {
                         app.handleTaskPermissionPromptAction()
                     }
@@ -45,7 +45,7 @@ struct JarvisTaskPermissionOverlay: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            .padding(28)
+            .padding(JarvisSpacing.pageInset)
             .frame(width: 440)
             .jarvisGlass(cornerRadius: 24, interactive: false)
             .shadow(color: Color.black.opacity(0.16), radius: 32, y: 14)
@@ -117,10 +117,10 @@ struct JarvisPermissionGateView: View {
     }
 
     var body: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: JarvisSpacing.pageInset) {
             JarvisOrbMark(diameter: 58)
 
-            VStack(spacing: 7) {
+            VStack(spacing: JarvisSpacing.controlGap) {
                 Text("先让我帮得上忙")
                     .font(JarvisTypography.pageTitle)
                     .multilineTextAlignment(.center)
@@ -136,9 +136,9 @@ struct JarvisPermissionGateView: View {
 
             JarvisPermissionList()
         }
-        .padding(.horizontal, 28)
-        .padding(.top, 30)
-        .padding(.bottom, 26)
+        .padding(.horizontal, JarvisSpacing.pageInset)
+        .padding(.top, JarvisSpacing.pageInset)
+        .padding(.bottom, JarvisSpacing.pageInset)
         .frame(width: 400)
         .jarvisGlass(cornerRadius: 24, interactive: false)
         .shadow(color: Color.black.opacity(0.16), radius: 32, y: 14)
@@ -160,8 +160,8 @@ struct JarvisPermissionList: View {
         if mode == .settings {
             // 卡片变窄后，四个等分胶囊会把「屏幕录制」挤成省略号。按内容宽度换行，文字保持完整。
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 136), spacing: 10)],
-                spacing: 10
+                columns: [GridItem(.adaptive(minimum: 136), spacing: JarvisSpacing.itemGap)],
+                spacing: JarvisSpacing.itemGap
             ) {
                 ForEach(JarvisRequiredPermission.allCases) { permission in
                     JarvisPermissionStatusCapsule(permission: permission)
@@ -192,7 +192,7 @@ private struct JarvisPermissionStatusCapsule: View {
 
     var body: some View {
         let isGranted = app.isRequiredPermissionGranted(permission)
-        return HStack(spacing: 8) {
+        return HStack(spacing: JarvisSpacing.controlGap) {
             Image(systemName: permission.systemImage)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Color.jarvisTextSecondary)
@@ -210,7 +210,7 @@ private struct JarvisPermissionStatusCapsule: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, JarvisSpacing.rowInset)
         .frame(maxWidth: .infinity, minHeight: SettingsFormMetrics.controlHeight, alignment: .leading)
         .background(Color.jarvisPanel.opacity(0.55), in: Capsule())
         .overlay {
@@ -229,7 +229,7 @@ private struct JarvisPermissionRow: View {
 
     var body: some View {
         let isGranted = app.isRequiredPermissionGranted(permission)
-        return HStack(spacing: 12) {
+        return HStack(spacing: JarvisSpacing.itemGap) {
             Image(systemName: permission.systemImage)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(isGranted ? Color.green : Color.jarvisAccent)
@@ -259,8 +259,8 @@ private struct JarvisPermissionRow: View {
                 .accessibilityLabel("允许\(permission.title)")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, JarvisSpacing.cardInset)
+        .padding(.vertical, JarvisSpacing.rowInset)
         .animation(JarvisMotion.selection, value: isGranted)
     }
 }

@@ -11,8 +11,8 @@ struct TransferTaskPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.groupGap) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 Text("传输列表")
                     .font(.system(size: 17, weight: .semibold))
                 Spacer(minLength: 8)
@@ -26,7 +26,7 @@ struct TransferTaskPanel: View {
             } else {
                 GeometryReader { geometry in
                     ScrollView {
-                        LazyVGrid(columns: columns(for: geometry.size.width), spacing: 10) {
+                        LazyVGrid(columns: columns(for: geometry.size.width), spacing: JarvisSpacing.itemGap) {
                             ForEach(filteredTransfers) { transfer in
                                 TransferRow(
                                     transfer: transfer,
@@ -39,13 +39,13 @@ struct TransferTaskPanel: View {
                                 )
                             }
                         }
-                        .padding(.bottom, 4)
+                        .padding(.bottom, JarvisSpacing.textGap)
                     }
                     .scrollIndicators(.hidden)
                 }
             }
         }
-        .padding(18)
+        .padding(JarvisSpacing.panelInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .confirmationDialog(
             "删除这条传输任务？",
@@ -74,7 +74,7 @@ struct TransferTaskPanel: View {
     }
 
     private func emptyState(_ title: String) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: JarvisSpacing.itemGap) {
             Image(systemName: "tray")
                 .font(.system(size: 28, weight: .light))
                 .foregroundStyle(.secondary)
@@ -87,7 +87,7 @@ struct TransferTaskPanel: View {
 
     private func columns(for width: CGFloat) -> [GridItem] {
         let count = width >= 960 ? 3 : (width >= 620 ? 2 : 1)
-        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
+        return Array(repeating: GridItem(.flexible(), spacing: JarvisSpacing.itemGap), count: count)
     }
 }
 
@@ -96,7 +96,7 @@ private struct TransferTaskFilterBar: View {
     @State private var hovered: TransferTaskFilter?
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: JarvisSpacing.hairline) {
             ForEach(TransferTaskFilter.allCases) { item in
                 let isSelected = selection == item
                 Button {
@@ -105,7 +105,7 @@ private struct TransferTaskFilterBar: View {
                     Text(item.title)
                         .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
                         .foregroundStyle(isSelected ? Color.white : Color.secondary)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, JarvisSpacing.controlGap)
                         .frame(height: 26)
                         .background {
                             Capsule().fill(
@@ -130,7 +130,7 @@ private struct TransferTaskFilterBar: View {
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
-        .padding(3)
+        .padding(JarvisSpacing.textGap)
         .frame(height: 32)
         .glassEffect(.regular.interactive(false), in: Capsule())
         .accessibilityElement(children: .contain)

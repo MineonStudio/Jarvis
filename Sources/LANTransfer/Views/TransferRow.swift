@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 
 enum TransferCardMetrics {
     static let height: CGFloat = 112
-    static let padding: CGFloat = 10
+    static let padding = JarvisSpacing.rowInset
     static var thumb: CGFloat {
         height - padding * 2
     }
@@ -91,17 +91,17 @@ public struct TransferRow: View {
     }
 
     public var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: JarvisSpacing.itemGap) {
             TransferFilePreview(url: resourceMissing ? nil : transfer.resourceURL, name: transfer.name, isText: transfer.isText)
                 .frame(width: TransferCardMetrics.thumb, height: TransferCardMetrics.thumb)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                 Text(transfer.name)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 0)
-                HStack(spacing: 10) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     Text(transfer.isText ? (transfer.textContent ?? "").replacingOccurrences(of: "\n", with: " ") : sizeText)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -113,7 +113,7 @@ public struct TransferRow: View {
                             .fixedSize()
                     }
                 }
-                HStack(spacing: 10) {
+                HStack(spacing: JarvisSpacing.itemGap) {
                     progressBar
                     Text("\(Int(transfer.fraction * 100))%")
                         .monospacedDigit()
@@ -187,7 +187,7 @@ public struct TransferRow: View {
     @ViewBuilder
     private var actionOverlay: some View {
         if isHovered {
-            HStack(spacing: 6) {
+            HStack(spacing: JarvisSpacing.iconGap) {
                 Spacer(minLength: 0)
                 pill("打开", enabled: hasFile, action: onOpen)
                 pill(copied ? "已复制" : "复制", enabled: canCopy, action: copyFile)
@@ -198,7 +198,7 @@ public struct TransferRow: View {
                 }
                 pill("删除", destructive: true, action: onDelete)
             }
-            .padding(8)
+            .padding(JarvisSpacing.controlGap)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 8)))
         }
@@ -252,8 +252,8 @@ private struct TransferCardActionPillButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(destructive ? Color.red : Color.primary)
-            .padding(.horizontal, 15)
-            .padding(.vertical, 8)
+            .padding(.horizontal, JarvisSpacing.cardInset)
+            .padding(.vertical, JarvisSpacing.controlGap)
             .opacity(configuration.isPressed ? 0.68 : (isEnabled ? 1 : 0.45))
             .glassEffect(.regular.interactive(true), in: Capsule())
             .contentShape(Capsule())

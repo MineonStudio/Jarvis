@@ -5,7 +5,7 @@ struct MahjongTableStylePicker: View {
     @Bindable private var settings = MahjongTableSettings.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
             HStack(alignment: .firstTextBaseline) {
                 Text("选择牌桌主题")
                     .font(.system(size: 20, weight: .semibold))
@@ -14,7 +14,7 @@ struct MahjongTableStylePicker: View {
                     .font(.system(size: 13))
                     .foregroundStyle(MahjongVisualTheme.accent)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 18)], spacing: 18) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: JarvisSpacing.gridGap)], spacing: JarvisSpacing.gridGap) {
                 ForEach(MahjongTableStyle.allCases) { style in
                     styleButton(style)
                 }
@@ -41,11 +41,11 @@ struct MahjongTableStylePicker: View {
                                 .font(.system(size: 23))
                                 .symbolRenderingMode(.palette)
                                 .foregroundStyle(MahjongVisualTheme.ink, MahjongVisualTheme.accent)
-                                .padding(12)
+                                .padding(JarvisSpacing.rowInset)
                                 .shadow(color: .black.opacity(0.25), radius: 4)
                         }
                     }
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                     Text(style.title)
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(selected ? MahjongVisualTheme.accent : MahjongVisualTheme.ivory)
@@ -53,7 +53,7 @@ struct MahjongTableStylePicker: View {
                         .font(.system(size: 12))
                         .foregroundStyle(MahjongVisualTheme.muted)
                 }
-                .padding(14)
+                .padding(JarvisSpacing.cardInset)
             }
             .background(.black.opacity(0.23))
             .clipShape(RoundedRectangle(cornerRadius: 13))
