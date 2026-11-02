@@ -282,9 +282,9 @@ struct JarvisDropdownPillMenuList: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: JarvisSpacing.controlGap) {
             if showsSearch {
-                HStack(spacing: 6) {
+                HStack(spacing: JarvisSpacing.iconGap) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
                     TextField("搜索模型", text: $searchText)
@@ -299,7 +299,7 @@ struct JarvisDropdownPillMenuList: View {
                         .accessibilityLabel("清除搜索")
                     }
                 }
-                .padding(8)
+                .padding(JarvisSpacing.controlGap)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                 Text("\(visibleOptions.count) / \(options.count) 个模型")
                     .font(JarvisTypography.caption)
@@ -367,7 +367,7 @@ struct JarvisDropdownPillMenuList: View {
             Button {
                 onSelect(option.id)
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: JarvisSpacing.controlGap) {
                     if let colorHex = option.colorHex,
                        let color = Self.color(fromHex: colorHex)
                     {

@@ -17,8 +17,9 @@ struct GamePlazaView: View {
 
     var body: some View {
         JarvisContentArea(
+            bottomContentPadding: 0,
             leadingToolbar: {
-                JarvisToolbarSurface(id: "games.category", placement: .navigation) {
+                JarvisLeadingToolbarSurface(id: "games.category") {
                     JarvisToolbarGroupedPicker(
                         items: GamePlazaCategory.allCases,
                         selection: $selectedCategory,
@@ -33,11 +34,10 @@ struct GamePlazaView: View {
                 ScrollView {
                     GamePlazaGallery(category: selectedCategory, onStartMahjong: presentGameWindow)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(24)
+                        .padding(.bottom, HistoryGridMetrics.historyPanelInset)
                 }
                 .scrollIndicators(.hidden)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .jarvisModulePanel()
             }
         )
         .onChange(of: game.phase) { _, phase in

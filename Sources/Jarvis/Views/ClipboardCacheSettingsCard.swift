@@ -25,7 +25,7 @@ struct ClipboardPrivacySettingsCard: View {
     }
 
     private func preferenceRow(title: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: JarvisSpacing.groupGap) {
             Text(title).font(SettingsTypography.itemTitle)
             Spacer(minLength: 8)
             Toggle(title, isOn: isOn)
@@ -62,8 +62,8 @@ struct ClipboardCacheSettingsCard: View {
     }
 
     private var folderRow: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .top, spacing: JarvisSpacing.itemGap) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                 Text("缓存文件夹")
                     .font(SettingsTypography.itemTitle)
                 Text(app.clipboardCacheDirectoryURL.path)
@@ -81,7 +81,7 @@ struct ClipboardCacheSettingsCard: View {
     }
 
     private var capacitySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             HStack {
                 Text("缓存空间上限")
                     .font(SettingsTypography.itemTitle)
@@ -121,7 +121,7 @@ struct ClipboardCacheSettingsCard: View {
     }
 
     private var usageSection: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             HStack {
                 Text("当前占用")
                     .font(SettingsTypography.itemTitle)
@@ -160,8 +160,8 @@ struct ClipboardCacheSettingsCard: View {
     }
 
     private var cleanupSection: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: JarvisSpacing.groupGap) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                 Text("自动清理")
                     .font(SettingsTypography.itemTitle)
             }

@@ -2,13 +2,13 @@ import SwiftUI
 
 enum WindowLayoutDisplayMetrics {
     static let diagramWidth: CGFloat = 44
-    static let cardContentSpacing: CGFloat = 12
-    static let cardHorizontalPadding: CGFloat = 28
+    static let cardContentSpacing = JarvisSpacing.itemGap
+    static let cardHorizontalPadding = JarvisSpacing.cardInset * 2
     static let minimumTitleWidth: CGFloat = 52
     static let shortcutPartWidth: CGFloat = 13
     static let shortcutPartSpacing: CGFloat = 4
     static let maximumShortcutPartCount = 3
-    static let gridSpacing: CGFloat = 12
+    static let gridSpacing = JarvisSpacing.gridGap
 
     static var shortcutWidth: CGFloat {
         (shortcutPartWidth * CGFloat(maximumShortcutPartCount))
@@ -20,6 +20,7 @@ enum WindowLayoutDisplayMetrics {
             + diagramWidth
             + cardContentSpacing
             + minimumTitleWidth
+            + cardContentSpacing
             + shortcutWidth
     }
 
@@ -43,9 +44,7 @@ struct WindowLayoutView: View {
     var body: some View {
         JarvisContentArea(
             leadingToolbar: {
-                ToolbarItem(placement: .navigation) {
-                    EmptyView()
-                }
+                JarvisToolbarPlaceholder(id: "window-layout.placeholder")
             },
             trailingToolbar: {
                 ToolbarItem(placement: .automatic) {
@@ -54,12 +53,12 @@ struct WindowLayoutView: View {
             },
             content: {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: JarvisSpacing.pageInset) {
                         layoutGrid
                     }
                     .frame(maxWidth: 980, alignment: .leading)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(JarvisMetrics.pageInset)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, JarvisMetrics.pageInset)
                 }
             }
         )
@@ -94,15 +93,15 @@ private struct WindowLayoutDisplayCard: View {
     let shortcut: ScreenshotShortcut
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: JarvisSpacing.itemGap) {
             WindowLayoutDiagram(layout: layout)
             Text(layout.title)
                 .font(JarvisTypography.bodyEmphasis)
-            Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
             WindowLayoutShortcutLabel(shortcut: shortcut)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, JarvisSpacing.cardInset)
+        .padding(.vertical, JarvisSpacing.rowInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .jarvisContentSurface(cornerRadius: 13)
         .accessibilityElement(children: .combine)
@@ -113,7 +112,7 @@ private struct WindowLayoutShortcutLabel: View {
     let shortcut: ScreenshotShortcut
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: JarvisSpacing.textGap) {
             ForEach(Array(shortcut.displayString.map(String.init)), id: \.self) { part in
                 Text(part)
                     .font(JarvisTypography.monospaced)

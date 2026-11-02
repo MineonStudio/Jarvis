@@ -16,6 +16,8 @@ struct ResumeContentView: View {
 
     var body: some View {
         JarvisContentArea(
+            horizontalContentPadding: workspace.needsTemplateSelection ? 0 : JarvisMetrics.shellHorizontalPadding,
+            bottomContentPadding: workspace.needsTemplateSelection ? 0 : JarvisMetrics.shellVerticalPadding,
             leadingToolbar: {
                 if workspace.needsTemplateSelection {
                     ResumeTemplateCategorySelector(selection: $selectedTemplateCategory)
@@ -82,7 +84,7 @@ struct ResumeTemplateCategorySelector: ToolbarContent {
     @Binding var selection: ResumeTemplateCategory
 
     var body: some ToolbarContent {
-        JarvisToolbarSurface(id: "resume.category", placement: .navigation) {
+        JarvisLeadingToolbarSurface(id: "resume.category") {
             JarvisToolbarGroupedPicker(
                 items: ResumeTemplateCategory.allCases,
                 selection: $selection,
@@ -104,7 +106,7 @@ struct ResumeAddButtonStyle: ButtonStyle {
         configuration.label
             .font(JarvisTypography.control)
             .foregroundStyle(tint ?? Color.primary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, JarvisSpacing.rowInset)
             .frame(minHeight: 34)
             .contentShape(Capsule())
             .shadow(
@@ -157,7 +159,7 @@ private extension ResumeContentView {
 
     @ToolbarContentBuilder
     var resumeLeadingToolbar: some ToolbarContent {
-        ToolbarItem(id: "resume.new", placement: .automatic) {
+        JarvisLeadingToolbarItem(id: "resume.new") {
             Button {
                 requestNewResume()
             } label: {
@@ -229,10 +231,10 @@ private extension ResumeContentView {
     }
 
     var resumeEditorHeader: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: JarvisSpacing.itemGap) {
             resumeFilenameEditor
 
-            HStack(spacing: 5) {
+            HStack(spacing: JarvisSpacing.iconGap) {
                 Image(systemName: workspace.isSaved ? "checkmark.circle.fill" : "circle.dashed")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(workspace.isSaved ? .green : Color.jarvisTextSecondary)
@@ -245,9 +247,9 @@ private extension ResumeContentView {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, JarvisSpacing.cardInset)
+        .padding(.top, JarvisSpacing.cardInset)
+        .padding(.bottom, JarvisSpacing.rowInset)
     }
 
     var resumeFilenameEditor: some View {
@@ -291,7 +293,7 @@ private extension ResumeContentView {
             + ResumePageLayout.pageSpacing * CGFloat(max(pageCount - 1, 0))
 
         return ScrollView([.vertical, .horizontal]) {
-            VStack(spacing: 16) {
+            VStack(spacing: JarvisSpacing.groupGap) {
                 ResumePagedView(
                     document: workspace.document,
                     selectedProjectID: selectedProjectID,
@@ -318,8 +320,8 @@ private extension ResumeContentView {
                 .clipShape(Rectangle())
                 .shadow(color: .black.opacity(0.10), radius: 20, y: 8)
             }
-            .padding(.top, 72)
-            .padding(.horizontal, 28)
+            .padding(.vertical, JarvisSpacing.panelInset)
+            .padding(.horizontal, JarvisSpacing.pageInset)
             .frame(maxWidth: .infinity)
         }
         .simultaneousGesture(
@@ -441,7 +443,7 @@ private extension ResumeContentView {
 }
 
 private enum ResumeFilenameMetrics {
-    static let horizontalPadding: CGFloat = 10
+    static let horizontalPadding = JarvisSpacing.rowInset
 }
 
 private struct ResumeFilenameOutsideClickMonitor: NSViewRepresentable {

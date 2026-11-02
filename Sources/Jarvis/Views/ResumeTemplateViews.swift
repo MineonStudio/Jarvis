@@ -8,7 +8,11 @@ struct ResumeTemplateSelectionView: View {
         GeometryReader { proxy in
             ScrollView {
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 232), spacing: HistoryGridMetrics.clipboardGridSpacing)],
+                    columns: [GridItem(
+                        .adaptive(minimum: ResumeTemplateThumbnail.size.width, maximum: ResumeTemplateThumbnail.size.width),
+                        spacing: HistoryGridMetrics.clipboardGridSpacing,
+                        alignment: .leading
+                    )],
                     alignment: .leading,
                     spacing: HistoryGridMetrics.clipboardGridSpacing
                 ) {
@@ -17,10 +21,10 @@ struct ResumeTemplateSelectionView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(HistoryGridMetrics.historyPanelInset)
+                .padding(.horizontal, JarvisMetrics.shellHorizontalPadding)
+                .padding(.bottom, HistoryGridMetrics.historyPanelInset)
                 .frame(minHeight: max(proxy.size.height, 430), alignment: .topLeading)
             }
-            .jarvisModulePanel()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.jarvisBackground)
@@ -30,77 +34,104 @@ struct ResumeTemplateSelectionView: View {
 private struct ResumeTemplateCard: View {
     let template: ResumeTemplate
     let onSelect: (ResumeTemplate) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
 
+    private var styleTitle: String {
+        ResumeTemplateCategory.allCases.first {
+            $0 != .all && $0.templates.contains(template)
+        }?.title ?? ResumeTemplateCategory.all.title
+    }
+
     var body: some View {
-        Button {
-            onSelect(template)
-        } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: template.icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.jarvisAccent)
-                        .frame(width: 32, height: 32)
-                        .background(Color.jarvisAccent.opacity(0.12), in: Circle())
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(template.title)
-                                .font(JarvisTypography.cardTitle)
-                            if template == .defaultTemplate {
-                                Text("默认")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(Color.jarvisAccent)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(Color.jarvisAccent.opacity(0.11), in: Capsule())
-                            }
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.jarvisTextSecondary)
-                        .opacity(isHovered ? 1 : 0.55)
-                }
-
-                ResumeTemplateThumbnail(template: template)
-                    .frame(maxWidth: .infinity)
+        HistoryCardChrome(
+            preview: cover,
+            width: ResumeTemplateThumbnail.size.width,
+            height: ResumeTemplateThumbnail.size.height,
+            isSelected: false
+        )
+        .overlay(alignment: .bottom) { metadataRow }
+        .overlay(alignment: .topTrailing) { useActionOverlay }
+        .clipShape(RoundedRectangle(
+            cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
+            style: .continuous
+        ))
+        .contentShape(RoundedRectangle(
+            cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
+            style: .continuous
+        ))
+        .onTapGesture(count: 2) { onSelect(template) }
+        .onHover { hovering in
+            guard hovering != isHovered else { return }
+            withAnimation(JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion)) {
+                isHovered = hovering
             }
-            .padding(15)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                isHovered
-                    ? Color.primary.opacity(0.10)
-                    : Color.jarvisPanel.opacity(0.42),
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(
-                        Color.primary.opacity(0.09),
-                        lineWidth: 0.75
-                    )
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .accessibilityLabel("选择\(template.title)模板")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(styleTitle)，\(template.title)模板")
+        .accessibilityHint("双击或点击悬浮的使用按钮来使用模板")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onSelect(template) }
+        .contextMenu {
+            Button("使用") { onSelect(template) }
+        }
+    }
+
+    private var cover: some View {
+        Color.clear
+            .aspectRatio(ResumeTemplateThumbnail.size.width / ResumeTemplateThumbnail.size.height, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .overlay {
+                GeometryReader { geometry in
+                    ResumeTemplateThumbnail(template: template)
+                        .scaleEffect(geometry.size.width / ResumeTemplateThumbnail.size.width, anchor: .topLeading)
+                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+                }
+            }
+            .clipped()
+    }
+
+    private var metadataRow: some View {
+        HStack(spacing: JarvisSpacing.iconGap) {
+            Image(systemName: template.icon)
+                .font(JarvisTypography.captionEmphasis)
+                .fixedSize()
+            Text(styleTitle)
+                .font(JarvisTypography.caption)
+                .lineLimit(1)
+            Spacer(minLength: JarvisSpacing.textGap)
+            Text(template.title)
+                .font(JarvisTypography.caption)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .historyCardMetadata()
+    }
+
+    @ViewBuilder
+    private var useActionOverlay: some View {
+        if isHovered {
+            Button { onSelect(template) } label: {
+                Text("使用")
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .buttonStyle(JarvisCardActionPillButtonStyle())
+            .accessibilityLabel("使用\(template.title)模板")
+            .padding(JarvisSpacing.controlGap)
+            .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 8)))
+        }
     }
 }
 
 private struct ResumeTemplateThumbnail: View {
+    static let size = CGSize(width: 168, height: 237)
     let template: ResumeTemplate
 
     var body: some View {
         page
-            .frame(width: 168, height: 237, alignment: .topLeading)
+            .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
             .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-            .shadow(color: .black.opacity(0.13), radius: 8, y: 3)
             .allowsHitTesting(false)
     }
 

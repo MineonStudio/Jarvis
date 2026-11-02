@@ -87,13 +87,13 @@ struct AIAPISettingsCard: View {
 
     private var fieldsSection: some View {
         VStack(alignment: .leading, spacing: SettingsFormMetrics.sectionSpacing) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
                 Text("提供商")
                     .font(SettingsTypography.itemTitle)
 
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 200), spacing: 10)],
-                    spacing: 10
+                    columns: [GridItem(.adaptive(minimum: 200), spacing: JarvisSpacing.itemGap)],
+                    spacing: JarvisSpacing.itemGap
                 ) {
                     ForEach(AIAPIProvider.allCases) { option in
                         AIAPIProviderCapsule(
@@ -190,7 +190,7 @@ struct AIAPISettingsCard: View {
     }
 
     private var actionsRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: JarvisSpacing.itemGap) {
             Spacer()
 
             if isLocked {
@@ -308,7 +308,7 @@ struct AIAPISettingsCard: View {
     ) -> some View {
         content()
             .frame(maxWidth: .infinity, minHeight: SettingsFormMetrics.controlHeight, alignment: .leading)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, JarvisSpacing.rowInset)
             .background(
                 Color.jarvisPanel.opacity(0.72),
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -380,7 +380,7 @@ private struct AIAPIProviderCapsule: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 providerIcon
 
                 Text(provider.title)
@@ -397,7 +397,7 @@ private struct AIAPIProviderCapsule: View {
                         .foregroundStyle(Color.jarvisAccent)
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, JarvisSpacing.rowInset)
             .frame(maxWidth: .infinity, minHeight: SettingsFormMetrics.controlHeight)
             .background(
                 isSelected ? Color.jarvisAccent.opacity(0.12) : Color.jarvisPanel.opacity(0.55),

@@ -2,7 +2,7 @@ import SwiftUI
 
 extension MahjongSettingsView {
     var dailyContent: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.pageInset) {
             HStack(alignment: .firstTextBaseline) {
                 Text(archive.canClaimDailyReward ? "今日签到待领取" : "今日已签到")
                     .font(.system(size: 27, weight: .semibold, design: .serif))
@@ -20,23 +20,23 @@ extension MahjongSettingsView {
                 Label("今日奖励已领取", systemImage: "checkmark.circle.fill")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(MahjongSettingsPalette.accent)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, JarvisSpacing.pageInset)
                     .frame(height: 45)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(MahjongSettingsPalette.accent.opacity(0.7), lineWidth: 1))
             }
-            HStack(spacing: 28) {
+            HStack(spacing: JarvisSpacing.spacious) {
                 signInStatistic("累计签到", archive.checkInDays.count)
                 signInStatistic("本月签到", monthCheckInCount)
                 signInStatistic("连续签到", archive.currentCheckInStreak)
             }
-            .padding(.vertical, 9)
+            .padding(.vertical, JarvisSpacing.controlGap)
             calendarView
         }
         .frame(maxWidth: .infinity)
     }
 
     func signInStatistic(_ title: String, _ count: Int) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
             Text("\(count) 天")
                 .font(.system(size: 25, weight: .bold, design: .rounded))
                 .foregroundStyle(MahjongSettingsPalette.accent)
@@ -64,7 +64,7 @@ extension MahjongSettingsView {
         let first = calendar.dateInterval(of: .month, for: displayedMonth)?.start ?? displayedMonth
         let weekdayOffset = (calendar.component(.weekday, from: first) - calendar.firstWeekday + 7) % 7
         let daysInMonth = calendar.range(of: .day, in: .month, for: first)?.count ?? 30
-        return VStack(spacing: 15) {
+        return VStack(spacing: JarvisSpacing.groupGap) {
             HStack {
                 Button { shiftMonth(-1) } label: { Image(systemName: "chevron.left") }
                     .buttonStyle(.plain)
@@ -79,20 +79,20 @@ extension MahjongSettingsView {
             }
             .foregroundStyle(MahjongSettingsPalette.ivory)
             let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 ForEach(0 ..< 7, id: \.self) { index in
                     Text(weekdays[(index + calendar.firstWeekday - 1) % 7])
                         .frame(maxWidth: .infinity)
                         .foregroundStyle(MahjongSettingsPalette.muted)
                 }
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: JarvisSpacing.controlGap), count: 7), spacing: JarvisSpacing.controlGap) {
                 ForEach(0 ..< 42, id: \.self) { cell in
                     let day = cell - weekdayOffset + 1
                     if (1 ... daysInMonth).contains(day), let date = calendar.date(byAdding: .day, value: day - 1, to: first) {
                         let checked = archive.hasCheckedIn(on: date)
                         let today = calendar.isDateInToday(date)
-                        VStack(spacing: 3) {
+                        VStack(spacing: JarvisSpacing.textGap) {
                             Text("\(day)")
                                 .font(.system(size: 15, weight: checked || today ? .semibold : .regular))
                             Text(checked ? "✓" : " ")
@@ -109,9 +109,9 @@ extension MahjongSettingsView {
                     }
                 }
             }
-            .mahjongGlassGroup(spacing: 8)
+            .mahjongGlassGroup(spacing: JarvisSpacing.controlGap)
         }
-        .padding(22)
+        .padding(JarvisSpacing.pageInset)
         .background(.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
     }
 
@@ -122,12 +122,12 @@ extension MahjongSettingsView {
     }
 
     var voiceContent: some View {
-        VStack(alignment: .leading, spacing: 26) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.pageInset) {
             MahjongAudioControls(settings: MahjongAudioPlayer.shared.settings)
             Text("报牌音色")
                 .font(.system(size: 16))
                 .foregroundStyle(MahjongSettingsPalette.muted)
-            HStack(spacing: 20) {
+            HStack(spacing: JarvisSpacing.sectionGap) {
                 ForEach(MahjongVoiceGender.allCases) { gender in
                     voiceChoice(gender)
                 }
@@ -144,7 +144,7 @@ extension MahjongSettingsView {
             Button {
                 archive.updatePlayerProfile(voiceGender: gender)
             } label: {
-                VStack(spacing: 16) {
+                VStack(spacing: JarvisSpacing.groupGap) {
                     Image(systemName: gender == .male ? "person.fill" : "person.fill")
                         .font(.system(size: 48, weight: .ultraLight))
                     Text(gender.displayName)
@@ -183,7 +183,7 @@ extension MahjongSettingsView {
     }
 
     func recordNumber(_ title: String, _ count: Int, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
             Text(count.formatted())
                 .font(.system(size: 36, weight: .bold, design: .rounded))
                 .foregroundStyle(color)

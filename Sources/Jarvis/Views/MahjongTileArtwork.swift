@@ -406,9 +406,9 @@ struct MahjongLANRoomView: View {
     @State private var roomCode = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
             HStack {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                     Text("欢乐麻将联机")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                     Text("与同一 Wi‑Fi 下的朋友一起玩")
@@ -424,7 +424,7 @@ struct MahjongLANRoomView: View {
                 .buttonStyle(.plain)
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: JarvisSpacing.itemGap) {
                 TextField("输入六位匹配码", text: $roomCode)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 220)
@@ -444,8 +444,8 @@ struct MahjongLANRoomView: View {
             }
 
             if service.isHosting, let code = service.roomCode {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: JarvisSpacing.itemGap) {
+                    VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                         Text("房间已创建 · 匹配码")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
@@ -457,7 +457,7 @@ struct MahjongLANRoomView: View {
                     Button("进入牌桌") { onStart(service) }
                         .buttonStyle(JarvisSecondaryButtonStyle())
                 }
-                .padding(16)
+                .padding(JarvisSpacing.cardInset)
                 .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16))
             }
 
@@ -471,11 +471,11 @@ struct MahjongLANRoomView: View {
                     .lineLimit(1)
             }
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: JarvisSpacing.controlGap) {
                     if service.rooms.isEmpty {
                         ContentUnavailableView("还没有发现房间", systemImage: "wifi", description: Text("创建房间后会自动出现在同一局域网的列表中，也可以输入匹配码加入。"))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 28)
+                            .padding(.vertical, JarvisSpacing.pageInset)
                     } else {
                         ForEach(service.rooms) { room in
                             Button {
@@ -483,7 +483,7 @@ struct MahjongLANRoomView: View {
                                 service.joinRoom(code: room.code, profile: localProfile)
                             } label: {
                                 HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
+                                    VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                                         Text(room.displayName)
                                             .font(.system(size: 14, weight: .semibold))
                                         Text("匹配码：\(room.code)")
@@ -495,7 +495,7 @@ struct MahjongLANRoomView: View {
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundStyle(Color.jarvisAccent)
                                 }
-                                .padding(13)
+                                .padding(JarvisSpacing.cardInset)
                                 .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 13))
                             }
                             .buttonStyle(.plain)
@@ -506,7 +506,7 @@ struct MahjongLANRoomView: View {
             .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity)
         }
-        .padding(26)
+        .padding(JarvisSpacing.pageInset)
         .onAppear {
             service.startBrowsing()
         }

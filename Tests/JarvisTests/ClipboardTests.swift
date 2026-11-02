@@ -310,7 +310,7 @@ final class ClipboardTests: XCTestCase {
         XCTAssertEqual(HistoryGridMetrics.clipboardActionButtonSize, 32)
         XCTAssertEqual(HistoryGridMetrics.clipboardPreviewHoverScale, 1.08)
         XCTAssertEqual(HistoryGridMetrics.clipboardCornerRadius, 12)
-        XCTAssertEqual(HistoryGridMetrics.clipboardGridSpacing, 10)
+        XCTAssertEqual(HistoryGridMetrics.clipboardGridSpacing, 12)
     }
 
     func testHistoryGridZoomLevelsAdjustCardSizeAndKeepAspectRatio() {

@@ -7,8 +7,10 @@ struct EntertainmentView: View {
 
     var body: some View {
         JarvisContentArea(
+            horizontalContentPadding: 0,
+            bottomContentPadding: 0,
             leadingToolbar: {
-                JarvisToolbarSurface(id: "entertainment.platform", placement: .navigation) {
+                JarvisLeadingToolbarSurface(id: "entertainment.platform") {
                     JarvisToolbarGroupedPicker(
                         items: EntertainmentPlatform.allCases,
                         selection: selectedPlatform,

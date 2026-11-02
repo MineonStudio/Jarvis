@@ -24,8 +24,8 @@ struct EntertainmentVideoDownloadView: View {
                     .font(JarvisTypography.caption)
                     .foregroundStyle(Color.red)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, JarvisSpacing.cardInset)
+                    .padding(.bottom, JarvisSpacing.controlGap)
             }
             if let probe {
                 probeSection(probe)
@@ -64,25 +64,25 @@ struct EntertainmentVideoDownloadView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: JarvisSpacing.controlGap) {
             Image(systemName: "arrow.down.circle.fill")
                 .foregroundStyle(Color.jarvisAccent)
             Text("视频下载")
                 .font(JarvisTypography.cardTitle)
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 12)
+        .padding(.horizontal, JarvisSpacing.cardInset)
+        .padding(.top, JarvisSpacing.cardInset)
+        .padding(.bottom, JarvisSpacing.rowInset)
     }
 
     private var inputSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 TextField("粘贴视频链接", text: $urlText)
                     .textFieldStyle(.plain)
                     .font(JarvisTypography.control)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, JarvisSpacing.rowInset)
                     .frame(height: JarvisToolbarMetrics.controlSize)
                     .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Button("粘贴") {
@@ -102,16 +102,16 @@ struct EntertainmentVideoDownloadView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, JarvisSpacing.cardInset)
+        .padding(.bottom, JarvisSpacing.rowInset)
     }
 
     private func probeSection(_ probe: EntertainmentVideoProbe) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             Text(probe.title)
                 .font(JarvisTypography.bodyEmphasis)
                 .lineLimit(2)
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 JarvisDropdownMenu(
                     title: selectedQuality(from: probe)?.title ?? "选择画质",
                     options: probe.qualities.map {
@@ -133,15 +133,15 @@ struct EntertainmentVideoDownloadView: View {
                 .disabled(selectedQuality(from: probe) == nil)
             }
         }
-        .padding(10)
+        .padding(JarvisSpacing.rowInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, JarvisSpacing.cardInset)
+        .padding(.bottom, JarvisSpacing.rowInset)
     }
 
     private var activeSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
             Text("正在下载")
                 .font(JarvisTypography.captionEmphasis)
                 .foregroundStyle(Color.secondary)
@@ -149,12 +149,12 @@ struct EntertainmentVideoDownloadView: View {
                 EntertainmentVideoDownloadRow(item: item, manager: manager)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, JarvisSpacing.cardInset)
+        .padding(.bottom, JarvisSpacing.rowInset)
     }
 
     private var historySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             HStack {
                 Text("下载历史")
                     .font(JarvisTypography.captionEmphasis)
@@ -169,7 +169,7 @@ struct EntertainmentVideoDownloadView: View {
                     .foregroundStyle(Color.jarvisAccent)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, JarvisSpacing.cardInset)
 
             if manager.history.isEmpty {
                 Text("暂无下载历史")
@@ -178,13 +178,13 @@ struct EntertainmentVideoDownloadView: View {
                     .frame(maxWidth: .infinity, minHeight: 88, alignment: .center)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: JarvisSpacing.hairline) {
                         ForEach(manager.history) { record in
                             EntertainmentVideoHistoryRow(record: record, manager: manager)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 4)
+                    .padding(.horizontal, JarvisSpacing.cardInset)
+                    .padding(.bottom, JarvisSpacing.textGap)
                 }
                 .frame(minHeight: 120, maxHeight: 220)
             }
@@ -204,8 +204,8 @@ struct EntertainmentVideoDownloadView: View {
             .buttonStyle(JarvisPressButtonStyle(pressedScale: 0.97, pressedOpacity: 0.84))
             .foregroundStyle(Color.jarvisAccent)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, JarvisSpacing.cardInset)
+            .padding(.vertical, JarvisSpacing.rowInset)
         }
     }
 
@@ -304,11 +304,11 @@ private struct EntertainmentVideoDownloadRow: View {
     @State private var didCopy = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: JarvisSpacing.controlGap) {
             Image(systemName: item.state.icon)
                 .foregroundStyle(stateColor)
                 .frame(width: 14)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.hairline) {
                 Text(item.title)
                     .font(JarvisTypography.captionEmphasis)
                     .lineLimit(1)
@@ -361,11 +361,11 @@ private struct EntertainmentVideoHistoryRow: View {
     @State private var didCopy = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: JarvisSpacing.controlGap) {
             Image(systemName: historyIcon)
                 .foregroundStyle(historyColor)
                 .frame(width: 14)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.hairline) {
                 Text(record.title)
                     .font(JarvisTypography.captionEmphasis)
                     .lineLimit(1)
@@ -392,7 +392,7 @@ private struct EntertainmentVideoHistoryRow: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.secondary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, JarvisSpacing.textGap)
         .contextMenu {
             if record.canOpenFile {
                 Button("复制文件") {

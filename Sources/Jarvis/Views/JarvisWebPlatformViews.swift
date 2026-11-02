@@ -26,7 +26,7 @@ struct JarvisToolbarGroupedPicker<Item: Identifiable & Hashable, Icon: View>: Vi
     var toolbarContainer: some View {
         selectionRow
             .padding(JarvisSegmentedMetrics.toolbarGroupPadding)
-            .frame(height: JarvisToolbarMetrics.controlSize)
+            .frame(height: JarvisToolbarMetrics.nativeSurfaceHeight)
     }
 
     private var selectionRow: some View {
@@ -36,14 +36,14 @@ struct JarvisToolbarGroupedPicker<Item: Identifiable & Hashable, Icon: View>: Vi
                 Button {
                     selection = item
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: JarvisSpacing.iconGap) {
                         icon(item, isSelected)
                             .frame(width: 16, height: 16)
                         Text(title(item))
                             .font(isSelected ? JarvisTypography.controlEmphasis : JarvisTypography.control)
                             .foregroundStyle(isSelected ? Color.white : Color.secondary)
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, JarvisSpacing.controlGap)
                     .frame(height: JarvisSegmentedMetrics.compactItemHeight)
                     .jarvisSelectionPill(isSelected: isSelected)
                     .overlay {
@@ -80,7 +80,7 @@ struct JarvisWebPlatformActionCluster<DownloadPopover: View>: View {
     @ViewBuilder var downloadPopover: () -> DownloadPopover
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: JarvisSpacing.hairline) {
             JarvisToolbarIconButton(
                 systemName: "house",
                 help: "主页",
@@ -114,7 +114,7 @@ struct JarvisWebPlatformActionCluster<DownloadPopover: View>: View {
                 popover: downloadPopover
             )
         }
-        .padding(JarvisToolbarMetrics.iconClusterPadding)
+        .padding(.horizontal, JarvisToolbarMetrics.iconClusterPadding)
         .frame(height: JarvisToolbarMetrics.controlSize)
         // The enclosing ToolbarItem supplies the native toolbar group surface.
         // Do not add a second custom glass capsule inside it.
@@ -169,7 +169,7 @@ struct JarvisWebPlatformDownloadManagerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: JarvisSpacing.itemGap) {
                 Image(systemName: "arrow.down.circle.fill")
                     .foregroundStyle(Color.jarvisAccent)
                 Text("下载管理")
@@ -184,10 +184,10 @@ struct JarvisWebPlatformDownloadManagerView: View {
                     .font(JarvisTypography.control)
                 }
             }
-            .padding(.bottom, 12)
+            .padding(.bottom, JarvisSpacing.rowInset)
 
             if manager.items.isEmpty {
-                VStack(spacing: 10) {
+                VStack(spacing: JarvisSpacing.itemGap) {
                     Image(systemName: "tray")
                         .font(.system(size: 28, weight: .medium))
                         .foregroundStyle(Color.secondary)
@@ -203,7 +203,7 @@ struct JarvisWebPlatformDownloadManagerView: View {
                 .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: JarvisSpacing.controlGap) {
                         ForEach(manager.items) { item in
                             JarvisWebPlatformDownloadRow(item: item, manager: manager)
                                 .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
@@ -219,7 +219,7 @@ struct JarvisWebPlatformDownloadManagerView: View {
             }
 
             Divider()
-                .padding(.top, 12)
+                .padding(.top, JarvisSpacing.rowInset)
 
             Button {
                 manager.openDownloadsFolder()
@@ -229,9 +229,9 @@ struct JarvisWebPlatformDownloadManagerView: View {
             }
             .buttonStyle(JarvisPressButtonStyle(pressedScale: 0.97, pressedOpacity: 0.84))
             .foregroundStyle(Color.jarvisAccent)
-            .padding(.top, 10)
+            .padding(.top, JarvisSpacing.rowInset)
         }
-        .padding(16)
+        .padding(JarvisSpacing.cardInset)
         .animation(
             JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion),
             value: manager.items.count
@@ -244,18 +244,18 @@ private struct JarvisWebPlatformDownloadRow: View {
     @ObservedObject var manager: AIConversationDownloadManager
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: JarvisSpacing.itemGap) {
             Image(systemName: item.state.icon)
                 .foregroundStyle(stateColor)
                 .frame(width: 18, height: 18)
                 .padding(.top, 1)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
                 Text(item.filename)
                     .font(JarvisTypography.body)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                HStack(spacing: 6) {
+                HStack(spacing: JarvisSpacing.iconGap) {
                     Text("\(item.platformTitle) · \(item.state.title)")
                     if let errorMessage = item.errorMessage {
                         Text(errorMessage)
@@ -296,7 +296,7 @@ private struct JarvisWebPlatformDownloadRow: View {
                 .menuStyle(.borderlessButton)
             }
         }
-        .padding(10)
+        .padding(JarvisSpacing.rowInset)
         .background(Color.jarvisPanel.opacity(0.72), in: RoundedRectangle(cornerRadius: 10))
     }
 
@@ -324,14 +324,8 @@ struct JarvisWebPlatformBrowserPage: View {
             JarvisWebPlatformPageStatusOverlay(controller: controller)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Do not clip or mask this view. Rounded corners already come from
-        // `JarvisWebPlatformCornerCoverView`, which draws them above the web
-        // view; a SwiftUI clip makes every frame — including each keystroke —
-        // composite the whole page through a mask, which is what made typing
-        // in these two modules stutter. `JarvisFloatingPanelModifier` supplies
-        // the panel fill, so no separate background is needed either. Do not
-        // switch this to `jarvisModulePanel()`: that would clip again.
-        .jarvisFloatingPanel(cornerRadius: JarvisMetrics.panelRadius)
+        // Keep the page unmasked to avoid compositing every keystroke and video frame.
+        .background(Color.jarvisPanel)
     }
 }
 
@@ -348,7 +342,7 @@ private struct JarvisWebPlatformPageStatusOverlay: View {
             }
 
             if case let .failed(loadError) = controller.loadState {
-                VStack(spacing: 12) {
+                VStack(spacing: JarvisSpacing.itemGap) {
                     Image(systemName: "wifi.exclamationmark")
                         .font(.system(size: 28, weight: .medium))
                         .foregroundStyle(Color.jarvisAccent)
@@ -364,7 +358,7 @@ private struct JarvisWebPlatformPageStatusOverlay: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
-                .padding(28)
+                .padding(JarvisSpacing.pageInset)
                 .frame(maxWidth: 420)
                 .jarvisContentSurface(cornerRadius: JarvisMetrics.cardRadius)
                 .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))

@@ -18,14 +18,14 @@ struct ScreenRecordingOptionsPopover: View {
     }
 
     var content: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
             heading("计时器")
             ForEach(ScreenRecordingSettings.countdownOptions, id: \.self) { seconds in
                 option(seconds == 0 ? "无" : "\(seconds) 秒", selected: recorder.settings.countdown == seconds) {
                     recorder.settings.countdown = seconds
                 }
             }
-            Divider().padding(.vertical, 5)
+            Divider().padding(.vertical, JarvisSpacing.iconGap)
             heading("麦克风")
             option("无", selected: !recorder.settings.microphone) {
                 recorder.settings.microphone = false
@@ -41,9 +41,9 @@ struct ScreenRecordingOptionsPopover: View {
                     recorder.settings.microphoneID = device.uniqueID
                 }
             }
-            Divider().padding(.vertical, 5)
+            Divider().padding(.vertical, JarvisSpacing.iconGap)
             heading("录制格式")
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
                 Picker("编码", selection: $recorder.settings.useHEVC) {
                     Text("H.264").tag(false)
                     Text("HEVC").tag(true)
@@ -58,21 +58,21 @@ struct ScreenRecordingOptionsPopover: View {
             }
             .controlSize(.small)
             .font(.system(size: 13))
-            .padding(.horizontal, 8).padding(.vertical, 6)
+            .padding(.horizontal, JarvisSpacing.controlGap).padding(.vertical, JarvisSpacing.iconGap)
             option("显示鼠标", selected: recorder.settings.showsCursor) { recorder.settings.showsCursor.toggle() }
             option("显示鼠标点按", selected: recorder.settings.showsMouseClicks == true) {
                 recorder.settings.showsMouseClicks = !(recorder.settings.showsMouseClicks == true)
             }
             option("包括系统音频", selected: recorder.settings.systemAudio) { recorder.settings.systemAudio.toggle() }
             if let message = recorder.message {
-                Text(message).font(.caption).foregroundStyle(.secondary).padding(8)
+                Text(message).font(.caption).foregroundStyle(.secondary).padding(JarvisSpacing.controlGap)
             }
-        }.padding(8)
+        }.padding(JarvisSpacing.controlGap)
     }
 
     private func heading(_ title: String) -> some View {
         Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            .padding(.horizontal, 8).padding(.top, 5).padding(.bottom, 2)
+            .padding(.horizontal, JarvisSpacing.controlGap).padding(.top, JarvisSpacing.iconGap).padding(.bottom, JarvisSpacing.hairline)
     }
 
     private func option(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -88,13 +88,13 @@ private struct ScreenRecordingOptionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold))
                     .frame(width: 14).opacity(selected ? 1 : 0)
                 Text(title).font(.system(size: 13)).lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8).frame(height: 27)
+            .padding(.horizontal, JarvisSpacing.controlGap).frame(height: 27)
             .background(hovered ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 5))
             .contentShape(Rectangle())
         }

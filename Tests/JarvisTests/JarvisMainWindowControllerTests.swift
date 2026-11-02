@@ -18,8 +18,10 @@ final class JarvisMainWindowControllerTests: XCTestCase {
         controller.attach(to: window)
         XCTAssertEqual(window.level, .normal)
         for frame in [
-            NSRect(x: area.minX, y: area.minY, width: area.width / 2, height: area.height / 2),
-            NSRect(x: area.midX, y: area.minY, width: area.width / 2, height: area.height)
+            // AppKit rounds window frames to whole points. Odd-sized screens
+            // can yield half-point test targets before the controller runs.
+            NSRect(x: area.minX, y: area.minY, width: area.width / 2, height: area.height / 2).integral,
+            NSRect(x: area.midX, y: area.minY, width: area.width / 2, height: area.height).integral
         ] {
             XCTAssertTrue(JarvisMainWindowController.applyWindowLayoutFrame(frame, to: window))
             XCTAssertEqual(window.level, .normal)
@@ -177,53 +179,57 @@ final class JarvisMainWindowControllerTests: XCTestCase {
         XCTAssertFalse(window.animatedFrameChanges.contains(true))
     }
 
-    func testPinnedFrameFollowsAMoveAndStillBlocksAShrink() {
-        let pinned = NSRect(x: 562, y: 319, width: 1677, height: 987)
-        let moved = NSRect(x: 796, y: 280, width: 1677, height: 987)
-        let shrunk = NSRect(x: 562, y: 843, width: 645, height: 463)
+    func testAttachedWindowAllowsSystemFrameChanges() async throws {
+        let defaultsKey = "Jarvis.MainWindow.frame"
+        let previousFrame = UserDefaults.standard.object(forKey: defaultsKey)
+        defer { UserDefaults.standard.set(previousFrame, forKey: defaultsKey) }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1400, height: 800),
+            styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: true
+        )
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let controller = JarvisMainWindowController()
+        controller.attach(to: window)
+        let area = try XCTUnwrap(NSScreen.main).visibleFrame.insetBy(dx: 20, dy: 20)
+        let target = NSRect(
+            origin: area.origin,
+            size: JarvisMainWindowController.minimumWindowSize
+        ).integral
 
-        XCTAssertNil(
-            JarvisMainWindowController.pinnedFrame(
-                insteadOf: moved,
-                pinned: pinned,
-                isLiveResizing: false,
-                isUserMoving: true
+        // Native zoom and tiling use programmatic frame changes, rather than
+        // a live-resize mouse gesture. They must survive subsequent run loops.
+        window.setFrame(target, display: false)
+        try await Task.sleep(for: .milliseconds(250))
+
+        XCTAssertEqual(window.frame, target)
+        XCTAssertEqual(JarvisWindowFrameStore().load(), target)
+        XCTAssertEqual(window.animationBehavior, .default)
+    }
+
+    func testStandardControlsEnableNativeWindowAndPanelActions() throws {
+        for window in [
+            NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: true),
+            NSPanel(
+                contentRect: .zero, styleMask: [.titled, .nonactivatingPanel],
+                backing: .buffered, defer: true
             )
-        )
-        XCTAssertEqual(
-            JarvisMainWindowController.pinnedFrame(
-                insteadOf: moved,
-                pinned: pinned,
-                isLiveResizing: false,
-                isUserMoving: false
-            ),
-            pinned
-        )
-        XCTAssertEqual(
-            JarvisMainWindowController.pinnedFrame(
-                insteadOf: shrunk,
-                pinned: pinned,
-                isLiveResizing: false,
-                isUserMoving: true
-            ),
-            pinned
-        )
-        XCTAssertNil(
-            JarvisMainWindowController.pinnedFrame(
-                insteadOf: shrunk,
-                pinned: pinned,
-                isLiveResizing: true,
-                isUserMoving: false
-            )
-        )
-        XCTAssertNil(
-            JarvisMainWindowController.pinnedFrame(
-                insteadOf: pinned,
-                pinned: pinned,
-                isLiveResizing: false,
-                isUserMoving: false
-            )
-        )
+        ] {
+            window.isReleasedWhenClosed = false
+            window.collectionBehavior = [.fullScreenAuxiliary, .fullScreenDisallowsTiling]
+
+            JarvisWindowAppearance.configureStandardControls(for: window)
+
+            XCTAssertTrue(window.styleMask.contains([.titled, .closable, .miniaturizable, .resizable]))
+            XCTAssertTrue(window.collectionBehavior.contains([.fullScreenPrimary, .fullScreenAllowsTiling]))
+            XCTAssertFalse(window.collectionBehavior.contains(.fullScreenAuxiliary))
+            XCTAssertFalse(window.collectionBehavior.contains(.fullScreenDisallowsTiling))
+            for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+                let button = try XCTUnwrap(window.standardWindowButton(kind))
+                XCTAssertTrue(button.isEnabled)
+            }
+            window.close()
+        }
     }
 
     func testClipboardPanelMinimumWidthUsesTheSameGridMetrics() {

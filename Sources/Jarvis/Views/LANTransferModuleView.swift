@@ -8,7 +8,7 @@ struct LANTransferModuleView: View {
     var body: some View {
         JarvisContentArea(
             leadingToolbar: {
-                ToolbarItem(id: "lan-transfer.sharing", placement: .navigation) {
+                JarvisLeadingToolbarItem(id: "lan-transfer.sharing") {
                     Button {
                         if store.running {
                             store.stop()
@@ -16,7 +16,7 @@ struct LANTransferModuleView: View {
                             store.start()
                         }
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: JarvisSpacing.iconGap) {
                             Image(systemName: store.running ? "stop.fill" : "wifi")
                             Text(store.running ? "停止共享" : "启动共享")
                         }
@@ -32,7 +32,7 @@ struct LANTransferModuleView: View {
             },
             content: {
                 GeometryReader { geometry in
-                    let spacing: CGFloat = 12
+                    let spacing = JarvisSpacing.columnGap
                     let availableHeight = max(0, geometry.size.height - spacing)
                     VStack(spacing: spacing) {
                         LANTransferView()

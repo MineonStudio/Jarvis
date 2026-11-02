@@ -13,8 +13,10 @@ let package = Package(
         .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.12.4")
     ],
     targets: [
+        .target(name: "JarvisDesignSystem"),
         .target(
             name: "LANTransfer",
+            dependencies: ["JarvisDesignSystem"],
             path: "Sources/LANTransfer",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
@@ -22,7 +24,8 @@ let package = Package(
             name: "Jarvis",
             dependencies: [
                 .product(name: "FluidAudio", package: "FluidAudio"),
-                "LANTransfer"
+                "LANTransfer",
+                "JarvisDesignSystem"
             ],
             path: "Sources/Jarvis",
             swiftSettings: [.swiftLanguageMode(.v6)]

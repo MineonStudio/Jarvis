@@ -4,12 +4,12 @@ import SwiftUI
 struct MahjongArchiveDashboardView: View {
     let archive: MahjongArchiveStore
 
-    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    private let columns = [GridItem(.flexible(), spacing: JarvisSpacing.itemGap), GridItem(.flexible(), spacing: JarvisSpacing.itemGap)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
             HStack {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                     Text("欢乐麻将档案").font(.system(size: 24, weight: .bold, design: .rounded))
                     Text("玩家战绩、毛格子余额与 AI 对手档案")
                         .font(.system(size: 13)).foregroundStyle(.secondary)
@@ -17,12 +17,12 @@ struct MahjongArchiveDashboardView: View {
                 Spacer()
                 Text("今日 AI 淘汰  \(archive.eliminatedAICount) / \(archive.totalAICount)")
                     .font(.system(size: 12, weight: .semibold))
-                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .padding(.horizontal, JarvisSpacing.rowInset).padding(.vertical, JarvisSpacing.controlGap)
                     .background(Color.primary.opacity(0.06), in: Capsule())
             }
-            HStack(spacing: 14) {
+            HStack(spacing: JarvisSpacing.groupGap) {
                 MahjongArchiveAvatar(profile: archive.player, size: 72)
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
                     Text(archive.player.nickname).font(.system(size: 17, weight: .semibold))
                     Text("\(archive.player.balance.formatted()) 毛格子")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -36,7 +36,7 @@ struct MahjongArchiveDashboardView: View {
                 .buttonStyle(JarvisSecondaryButtonStyle())
                 .disabled(!archive.canClaimDailyReward)
             }
-            .padding(14)
+            .padding(JarvisSpacing.cardInset)
             .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             HStack {
@@ -46,7 +46,7 @@ struct MahjongArchiveDashboardView: View {
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 12) {
+                LazyVGrid(columns: columns, spacing: JarvisSpacing.itemGap) {
                     ForEach(archive.aiProfiles) { profile in
                         MahjongArchiveProfileCard(
                             profile: profile,
@@ -60,10 +60,10 @@ struct MahjongArchiveDashboardView: View {
                         )
                     }
                 }
-                .padding(.bottom, 8)
+                .padding(.bottom, JarvisSpacing.controlGap)
             }
             .scrollIndicators(.hidden)
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
                 Text("简化竞赛赔付 · 1 分 = 20 毛格子")
                     .font(.system(size: 12, weight: .semibold))
                 ForEach(MahjongWinningHandType.allCases, id: \.rawValue) { handType in
@@ -89,10 +89,10 @@ struct MahjongArchiveDashboardView: View {
                 Text("普通牌门清：点炮者 \(concealedDiscarder.formatted())，自摸三家各 \(concealedSelfDraw.formatted())。余额不足时按实际余额支付。")
                     .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            .padding(12)
+            .padding(JarvisSpacing.rowInset)
             .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .padding(22)
+        .padding(JarvisSpacing.pageInset)
     }
 }
 
@@ -102,10 +102,10 @@ struct MahjongArchiveProfileCard: View {
     let onToggleVoiceGender: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: JarvisSpacing.itemGap) {
             MahjongArchiveAvatar(profile: profile, size: 58)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
+                HStack(spacing: JarvisSpacing.iconGap) {
                     Text(profile.nickname).font(.system(size: 14, weight: .semibold))
                     if isEliminated {
                         Text("今日淘汰").font(.system(size: 9, weight: .bold)).foregroundStyle(.red)
@@ -113,7 +113,7 @@ struct MahjongArchiveProfileCard: View {
                 }
                 Text("\(profile.balance.formatted()) 毛格子")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                HStack(spacing: 7) {
+                HStack(spacing: JarvisSpacing.controlGap) {
                     Text("胜率 \(profile.winRate)%  ·  胜 \(profile.wins) / 负 \(profile.losses) / 逃跑 \(profile.escapes)")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                     Button(profile.voiceGender.displayName, action: onToggleVoiceGender)
@@ -124,7 +124,7 @@ struct MahjongArchiveProfileCard: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(11)
+        .padding(JarvisSpacing.rowInset)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

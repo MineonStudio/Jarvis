@@ -112,7 +112,7 @@ final class EntertainmentPlatformTests: XCTestCase {
         )
     }
 
-    func testWebViewContainerKeepsRoundedCornersWithoutClippingTheWebView() {
+    func testWebViewContainerFillsBoundsWithoutCornerOverlaysOrClipping() {
         let container = JarvisWebPlatformViewContainer(
             frame: NSRect(x: 0, y: 0, width: 320, height: 180)
         )
@@ -123,10 +123,12 @@ final class EntertainmentPlatformTests: XCTestCase {
         XCTAssertFalse(container.clipsToBounds)
         XCTAssertEqual(container.layer?.masksToBounds, false)
         XCTAssertFalse(webView.clipsToBounds)
-        let cover = container.subviews.compactMap { $0 as? JarvisWebPlatformCornerCoverView }.first
-        XCTAssertNotNil(cover)
-        XCTAssertTrue(cover?.superview === container)
-        XCTAssertEqual(cover?.hitTest(NSPoint(x: 8, y: 8)), nil)
+        XCTAssertEqual(container.subviews.count, 1)
+        XCTAssertEqual(webView.frame, container.bounds)
+
+        container.setFrameSize(NSSize(width: 640, height: 360))
+        container.layoutSubtreeIfNeeded()
+        XCTAssertEqual(webView.frame, container.bounds)
     }
 
     func testEmbeddedWebViewsAllowElementFullscreen() {

@@ -133,14 +133,20 @@ enum ClipboardFilterLogic {
 /// 时间筛选：与截图模块同一枚分组容器（见 `ScreenshotTimeFilterBar`）。
 struct ClipboardTimeFilterSelector: ToolbarContent {
     @Binding var selection: ClipboardTimeFilter
+    var alignment: HistoryToolbarAlignment?
 
     var body: some ToolbarContent {
-        JarvisToolbarSurface(id: "clipboard.time-filter", placement: .navigation) {
+        JarvisLeadingToolbarSurface(id: "clipboard.time-filter") {
             JarvisToolbarGroupedPicker(
                 items: ClipboardTimeFilter.allCases,
                 selection: $selection,
                 title: \.title
             )
+            .background {
+                if let alignment {
+                    HistoryToolbarFrameProbe(alignment: alignment, edge: .leading)
+                }
+            }
         }
     }
 }
@@ -170,6 +176,12 @@ struct ClipboardCategoryFilterSelector: View {
 }
 
 struct ClipboardView: View {
+    private let alignsContentToToolbar: Bool
+
+    init(alignsContentToToolbar: Bool = true) {
+        self.alignsContentToToolbar = alignsContentToToolbar
+    }
+
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var searchText = ""
@@ -177,6 +189,7 @@ struct ClipboardView: View {
     @State private var selectedCategory: ClipboardViewFilter = .all
     @State private var selectedItemID: UUID?
     @State private var gridZoom: HistoryGridZoomLevel = .regular
+    @State private var toolbarAlignment = HistoryToolbarAlignment()
 
     private var filteredItems: [ClipboardItem] {
         ClipboardFilterLogic.filteredItems(
@@ -194,8 +207,10 @@ struct ClipboardView: View {
 
     var body: some View {
         JarvisContentArea(
+            horizontalContentPadding: 0,
+            bottomContentPadding: 0,
             leadingToolbar: {
-                ClipboardTimeFilterSelector(selection: $selectedTimeFilter)
+                ClipboardTimeFilterSelector(selection: $selectedTimeFilter, alignment: toolbarAlignment)
             },
             trailingToolbar: {
                 ToolbarItem(id: "clipboard.category", placement: .automatic) {
@@ -219,6 +234,7 @@ struct ClipboardView: View {
                         placeholder: "搜索文本、文件名…",
                         focusesOnAppear: false
                     )
+                    .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .trailing))
                 }
             },
             content: {
@@ -250,10 +266,11 @@ struct ClipboardView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, HistoryGridMetrics.historyPanelInset)
-                    .padding(.vertical, HistoryGridMetrics.historyPanelInset)
+                    .padding(.leading, alignsContentToToolbar ? toolbarAlignment.leadingInset : JarvisMetrics.shellHorizontalPadding)
+                    .padding(.trailing, alignsContentToToolbar ? toolbarAlignment.trailingInset : JarvisMetrics.shellHorizontalPadding)
+                    .padding(.bottom, HistoryGridMetrics.historyPanelInset)
                 }
-                .jarvisModulePanel()
+                .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .content))
             }
         )
         .onChange(of: app.clipboardItems.count) { _, _ in
@@ -279,7 +296,7 @@ struct ClipboardHistoryActionToolbar: View {
     }
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: JarvisSpacing.hairline) {
             JarvisToolbarIconButton(
                 systemName: "eye",
                 help: "查看",
@@ -322,7 +339,7 @@ struct ClipboardHistoryActionToolbar: View {
                 showingDeleteConfirmation = true
             }
         }
-        .padding(4)
+        .padding(.horizontal, JarvisToolbarMetrics.iconClusterPadding)
         .frame(height: HistoryGridMetrics.topControlHeight)
         // The enclosing ToolbarItem supplies the native toolbar group surface.
         // Do not add a second custom glass capsule inside it.
@@ -451,7 +468,7 @@ struct ClipboardCard: View, Equatable {
     private var previewLayer: some View {
         ZStack {
             if item.kind == .text {
-                VStack(spacing: 8) {
+                VStack(spacing: JarvisSpacing.controlGap) {
                     if let presentation = item.sensitivePresentation(
                         revealed: isSensitiveRevealed || !app.hideSensitiveClipboardContent
                     ) {
@@ -513,9 +530,10 @@ struct ClipboardCard: View, Equatable {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .padding(.bottom, HistoryGridMetrics.clipboardMetadataHeight + 12)
                 .padding(HistoryGridMetrics.clipboardCardPadding)
             } else if item.kind == .file {
-                VStack(spacing: 10) {
+                VStack(spacing: JarvisSpacing.itemGap) {
                     Image(systemName: item.kind.icon)
                         .font(.system(size: 38, weight: .medium))
                         .foregroundStyle(Color.jarvisAccent)
@@ -526,6 +544,7 @@ struct ClipboardCard: View, Equatable {
                         .padding(.horizontal, HistoryGridMetrics.clipboardCardPadding)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .padding(.bottom, HistoryGridMetrics.clipboardMetadataHeight + 12)
             } else {
                 ClipboardItemPreview(item: item, maxPixelSize: maxPixelSize)
             }
@@ -593,7 +612,7 @@ struct ClipboardCard: View, Equatable {
                 Spacer(minLength: 0)
                 copyButton
             }
-            .padding(8)
+            .padding(JarvisSpacing.controlGap)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .transition(
                 reduceMotion
@@ -610,15 +629,15 @@ struct ClipboardCard: View, Equatable {
     /// to type-check this expression in reasonable time`，1.3.6 的发布就是这么红的。
     private var selectionDescription: String {
         let selection = isSelected ? "已选中" : "未选中"
-        return "\(item.shortTimestamp)，\(selection)"
+        let favorite = item.isPinned ? "，已收藏" : ""
+        return "\(item.shortTimestamp)，\(selection)\(favorite)"
     }
 
     private var metadataRow: some View {
-        HStack(spacing: 6) {
-            Label(item.kind.title, systemImage: item.kind.icon)
+        HStack(spacing: JarvisSpacing.iconGap) {
+            Image(systemName: item.kind.icon)
                 .font(JarvisTypography.captionEmphasis)
-                .foregroundStyle(Color.jarvisTextSecondary)
-                .lineLimit(1)
+                .fixedSize()
             Spacer(minLength: 4)
             if item.isPinned {
                 Image(systemName: "star.fill")
@@ -626,13 +645,13 @@ struct ClipboardCard: View, Equatable {
                     .foregroundStyle(.yellow)
                     .accessibilityLabel("已收藏")
             }
-            Text(item.shortTimestamp)
+            Text(JarvisHistoryDateFormatting.string(from: item.createdAt))
                 .font(JarvisTypography.caption)
-                .foregroundStyle(Color.jarvisTextSecondary)
+                .monospacedDigit()
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: HistoryGridMetrics.clipboardMetadataHeight)
+        .historyCardMetadata()
     }
 
     private var cardBody: some View {
@@ -643,6 +662,9 @@ struct ClipboardCard: View, Equatable {
             enablesHoverZoom: enablesHoverZoom
         )
         .overlay(alignment: .bottom) {
+            metadataRow
+        }
+        .overlay(alignment: .topTrailing) {
             copyActionOverlay
         }
         .clipShape(
@@ -654,122 +676,119 @@ struct ClipboardCard: View, Equatable {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HistoryGridMetrics.clipboardContentSpacing) {
-            cardBody
-            metadataRow
-        }
-        .contentShape(
-            RoundedRectangle(
-                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                style: .continuous
-            )
-        )
-        .onTapGesture(count: 2) {
-            if item.isSensitive, !isSensitiveRevealed {
-                isSensitiveRevealed = true
-            } else {
-                onDoubleClick()
-            }
-        }
-        .onTapGesture(perform: onSelect)
-        .onHover { hovering in
-            guard hovering != isHovered else { return }
-            withAnimation(
-                JarvisMotion.animation(
-                    JarvisMotion.content,
-                    reduceMotion: reduceMotion
+        cardBody
+            .contentShape(
+                RoundedRectangle(
+                    cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
+                    style: .continuous
                 )
-            ) {
-                isHovered = hovering
-            }
-        }
-        .onChange(of: item.id) { _, _ in
-            isSensitiveRevealed = false
-            isTextExpanded = false
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            item.isSensitive
-                ? "\(item.kind.title)，敏感内容"
-                : "\(item.kind.title)，剪贴板内容"
-        )
-        .accessibilityValue(selectionDescription)
-        .accessibilityHint("点击选择，双击打开预览；悬停后可复制")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: "复制") {
-            copyContent()
-        }
-        .contextMenu {
-            Button {
-                if item.isSensitive {
-                    showingSensitivePreviewConfirmation = true
+            )
+            .onTapGesture(count: 2) {
+                if item.isSensitive, !isSensitiveRevealed {
+                    isSensitiveRevealed = true
                 } else {
+                    onDoubleClick()
+                }
+            }
+            .onTapGesture(perform: onSelect)
+            .onHover { hovering in
+                guard hovering != isHovered else { return }
+                withAnimation(
+                    JarvisMotion.animation(
+                        JarvisMotion.content,
+                        reduceMotion: reduceMotion
+                    )
+                ) {
+                    isHovered = hovering
+                }
+            }
+            .onChange(of: item.id) { _, _ in
+                isSensitiveRevealed = false
+                isTextExpanded = false
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(
+                item.isSensitive
+                    ? "\(item.kind.title)，敏感内容"
+                    : "\(item.kind.title)，剪贴板内容"
+            )
+            .accessibilityValue(selectionDescription)
+            .accessibilityHint("点击选择，双击打开预览；悬停后可复制")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: "复制") {
+                copyContent()
+            }
+            .contextMenu {
+                Button {
+                    if item.isSensitive {
+                        showingSensitivePreviewConfirmation = true
+                    } else {
+                        onPreview()
+                    }
+                } label: {
+                    Label("查看", systemImage: "eye")
+                }
+                .disabled(!item.canFullscreenPreview)
+
+                Button {
+                    copyContent()
+                } label: {
+                    Label("复制", systemImage: "doc.on.doc")
+                }
+
+                Button {
+                    onPin()
+                } label: {
+                    Label(
+                        item.isPinned ? "取消收藏" : "收藏",
+                        systemImage: item.isPinned ? "star.slash" : "star"
+                    )
+                }
+
+                Divider()
+
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+            }
+            .confirmationDialog(
+                "删除这条剪贴板记录？",
+                isPresented: $showingDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("删除", role: .destructive) {
+                    onDelete()
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("删除后无法恢复。")
+            }
+            .confirmationDialog(
+                "这段内容疑似包含敏感信息",
+                isPresented: $showingSensitiveCopyConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("显示并复制") {
+                    onCopy()
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("只有在你主动确认后，才会显示并复制原始内容。")
+            }
+            .confirmationDialog(
+                "这段内容疑似包含敏感信息",
+                isPresented: $showingSensitivePreviewConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("显示并查看") {
                     onPreview()
                 }
-            } label: {
-                Label("查看", systemImage: "eye")
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("只有在你主动确认后，才会打开原始内容预览。")
             }
-            .disabled(!item.canFullscreenPreview)
-
-            Button {
-                copyContent()
-            } label: {
-                Label("复制", systemImage: "doc.on.doc")
-            }
-
-            Button {
-                onPin()
-            } label: {
-                Label(
-                    item.isPinned ? "取消收藏" : "收藏",
-                    systemImage: item.isPinned ? "star.slash" : "star"
-                )
-            }
-
-            Divider()
-
-            Button(role: .destructive) {
-                showingDeleteConfirmation = true
-            } label: {
-                Label("删除", systemImage: "trash")
-            }
-        }
-        .confirmationDialog(
-            "删除这条剪贴板记录？",
-            isPresented: $showingDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("删除", role: .destructive) {
-                onDelete()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("删除后无法恢复。")
-        }
-        .confirmationDialog(
-            "这段内容疑似包含敏感信息",
-            isPresented: $showingSensitiveCopyConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("显示并复制") {
-                onCopy()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("只有在你主动确认后，才会显示并复制原始内容。")
-        }
-        .confirmationDialog(
-            "这段内容疑似包含敏感信息",
-            isPresented: $showingSensitivePreviewConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("显示并查看") {
-                onPreview()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("只有在你主动确认后，才会打开原始内容预览。")
-        }
     }
 }
 
@@ -845,9 +864,9 @@ struct ClipboardPanelView: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        ClipboardView()
-            .padding(.horizontal, JarvisMetrics.shellHorizontalPadding)
-            .padding(.vertical, JarvisMetrics.shellVerticalPadding)
+        // Window buttons occupy the leading toolbar slot in a standalone panel.
+        // Keep their reserved width out of the gallery's content inset.
+        ClipboardView(alignsContentToToolbar: false)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.jarvisBackground)
             .jarvisTheme(
@@ -855,5 +874,7 @@ struct ClipboardPanelView: View {
                 systemColorScheme: app.systemColorScheme
             )
             .jarvisToastOverlay(app.toastMessage)
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            .toolbar(removing: .title)
     }
 }

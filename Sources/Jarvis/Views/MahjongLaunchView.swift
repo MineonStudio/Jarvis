@@ -120,7 +120,7 @@ struct MahjongLaunchView: View {
     }
 
     private var mainMenu: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             menuButton("单人模式") { page = .solo }
             menuButton("局域网对战") { page = .lan }
             menuButton("设置") {
@@ -132,7 +132,7 @@ struct MahjongLaunchView: View {
     }
 
     private var soloMenu: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             ForEach(MahjongRuleset.allCases) { ruleset in
                 menuButton(ruleset.title) { model.onStartSolo(ruleset) }
             }
@@ -141,7 +141,7 @@ struct MahjongLaunchView: View {
     }
 
     private var settingsMenu: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             ForEach(MahjongSettingsSection.allCases) { section in
                 menuButton(section.rawValue) {
                     withAnimation(.easeInOut(duration: 0.18)) { settingsSelection = section }
@@ -166,7 +166,7 @@ struct MahjongLaunchView: View {
     }
 
     private var lanMenu: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
             ForEach(MahjongRuleset.allCases) { ruleset in
                 menuButton(ruleset.title) {
                     selectedLANRuleset = ruleset
@@ -193,7 +193,7 @@ struct MahjongLaunchView: View {
                 .foregroundStyle(hoveredMenuTitle == title ? MahjongVisualTheme.menuHover : MahjongVisualTheme.ivory)
                 .shadow(color: .black.opacity(0.9), radius: 5, y: 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
+                .padding(.vertical, JarvisSpacing.textGap)
                 .scaleEffect(hoveredMenuTitle == title ? 1.055 : 1, anchor: .leading)
         }
         .buttonStyle(.plain)
@@ -204,7 +204,7 @@ struct MahjongLaunchView: View {
     }
 
     private func lanDialogPanel(_ dialog: LANDialog) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
             HStack {
                 Text(dialog == .create ? "创建房间" : "加入房间")
                     .font(.system(size: 25, weight: .semibold, design: .serif))
@@ -228,15 +228,15 @@ struct MahjongLaunchView: View {
                         joinRoomContent
                     }
                 }
-                .mahjongGlassGroup(spacing: 12)
+                .mahjongGlassGroup(spacing: JarvisSpacing.itemGap)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .padding(.top, 4)
-                .padding(.bottom, 20)
+                .padding(.top, JarvisSpacing.textGap)
+                .padding(.bottom, JarvisSpacing.sectionGap)
             }
             .scrollIndicators(.hidden)
         }
         .foregroundStyle(MahjongVisualTheme.ivory)
-        .padding(26)
+        .padding(JarvisSpacing.pageInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.32), radius: 22, y: 10)
@@ -244,7 +244,7 @@ struct MahjongLaunchView: View {
     }
 
     private var createRoomContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.groupGap) {
             if let code = service.roomCode {
                 Text("\(service.roomRuleset.title) · \(service.humanCount)/4 · \(archive.player.nickname)的房间")
                     .font(.system(size: 16, weight: .medium))
@@ -277,8 +277,8 @@ struct MahjongLaunchView: View {
     }
 
     private var joinRoomContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.groupGap) {
+            HStack(spacing: JarvisSpacing.itemGap) {
                 MahjongRoomCodeInput(code: $joinCode)
                 Button("加入") { service.joinRoom(code: joinCode, profile: archive.player) }
                     .buttonStyle(MahjongGameButtonStyle(kind: .primary))
@@ -297,7 +297,7 @@ struct MahjongLaunchView: View {
                     .foregroundStyle(MahjongVisualTheme.muted)
                     .frame(maxWidth: .infinity, minHeight: 75, alignment: .center)
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: JarvisSpacing.controlGap) {
                     ForEach(service.rooms) { room in
                         Button {
                             joinCode = room.code
@@ -309,7 +309,7 @@ struct MahjongLaunchView: View {
                                 Image(systemName: "arrow.right")
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
+                            .padding(JarvisSpacing.rowInset)
                         }
                         .buttonStyle(MahjongGameButtonStyle(borderShape: .roundedRectangle(radius: 12)))
                         .disabled(room.humanCount >= 4 || service.isConnecting)

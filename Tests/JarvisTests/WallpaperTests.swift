@@ -8,7 +8,7 @@ final class WallpaperTests: XCTestCase {
         XCTAssertEqual(WallpaperSource.qihoo.title, "360壁纸")
         XCTAssertEqual(WallpaperSource.wikimedia.title, "Wikimedia")
         XCTAssertEqual(WallpaperSource.local.title, "本地")
-        XCTAssertEqual(WallpaperSource.onlineGalleryCases, [.wallhaven, .qihoo])
+        XCTAssertEqual(WallpaperSource.onlineGalleryCases, [.wallhaven])
     }
 
     func testWallpaperFiltersExposeWallhavenResolutionOptions() {
@@ -45,7 +45,8 @@ final class WallpaperTests: XCTestCase {
 
         XCTAssertEqual(filters.sorting, .dateAdded)
         XCTAssertEqual(filters.sorting.title, "最新")
-        XCTAssertEqual(filters.qihooCategory, .all)
+        XCTAssertEqual(filters.resolution, .any)
+        XCTAssertEqual(WallpaperViewModel().selectedResolution, .any)
         XCTAssertEqual(WallpaperViewModel().selectedSource, .wallhaven)
         XCTAssertEqual(WallpaperViewModel.initialDisplayCount, 36)
     }
@@ -123,268 +124,47 @@ final class WallpaperTests: XCTestCase {
         )
     }
 
-    func testQihooEmptyGalleryUsesASingleNewestList() throws {
-        XCTAssertEqual(QihooWallpaperSource.route(for: WallpaperSearchFilters()), .mixed)
-        let url = try QihooWallpaperSource.orderURL(page: 1, count: 36)
-        let query = try Dictionary(
-            uniqueKeysWithValues: XCTUnwrap(
-                URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
-            ).map { ($0.name, $0.value) }
-        )
-        XCTAssertEqual(url.host, "wallpaper.apc.360.cn")
-        XCTAssertEqual(query["a"], "getAppsByOrder")
-        XCTAssertEqual(query["order"], "create_time")
-        XCTAssertEqual(query["count"], "36")
-        XCTAssertEqual(WallpaperQihooCategory.girls.title, "美女模特")
-        XCTAssertEqual(WallpaperQihooCategory.girls.cid, "6")
-        XCTAssertNil(WallpaperQihooCategory.all.cid)
-    }
-
-    func testQihooRoutesCategoryAndSearchIndependently() throws {
-        XCTAssertEqual(
-            QihooWallpaperSource.route(for: WallpaperSearchFilters(qihooCategory: .girls)),
-            .category("6")
-        )
-        XCTAssertEqual(
-            QihooWallpaperSource.route(for: WallpaperSearchFilters(qihooCategory: .anime)),
-            .category("26")
-        )
-        XCTAssertEqual(
-            QihooWallpaperSource.route(for: WallpaperSearchFilters(tag: "赛博朋克")),
-            .search("赛博朋克")
-        )
-        XCTAssertEqual(
-            QihooWallpaperSource.route(
-                for: WallpaperSearchFilters(tag: "赛博朋克", qihooCategory: .girls)
-            ),
-            .search("赛博朋克")
-        )
-
-        let searchURL = try QihooWallpaperSource.searchURL(query: "赛博朋克", page: 2, count: 24)
-        let searchQuery = try Dictionary(
-            uniqueKeysWithValues: XCTUnwrap(
-                URLComponents(url: searchURL, resolvingAgainstBaseURL: false)?.queryItems
-            ).map { ($0.name, $0.value) }
-        )
-        XCTAssertEqual(searchURL.host, "wp.birdpaper.com.cn")
-        XCTAssertEqual(searchQuery["content"], "赛博朋克")
-        XCTAssertEqual(searchQuery["pageno"], "2")
-
-        let categoryURL = try QihooWallpaperSource.categoryURL(cid: "6", page: 3, count: 8)
-        let categoryQuery = try Dictionary(
-            uniqueKeysWithValues: XCTUnwrap(
-                URLComponents(url: categoryURL, resolvingAgainstBaseURL: false)?.queryItems
-            ).map { ($0.name, $0.value) }
-        )
-        XCTAssertEqual(categoryURL.host, "wallpaper.apc.360.cn")
-        XCTAssertEqual(categoryQuery["cid"], "6")
-        XCTAssertEqual(categoryQuery["start"], "16")
-        XCTAssertEqual(categoryQuery["count"], "8")
-    }
-
-    func testQihooRewritesHTTPImageURLsToHTTPS() throws {
-        let httpURL = try XCTUnwrap(URL(string: "http://p3.qhimg.com/bdr/__85/test.jpg"))
-        XCTAssertEqual(
-            QihooWallpaperSource.httpsURL(from: httpURL).absoluteString,
-            "https://p3.qhimg.com/bdr/__85/test.jpg"
-        )
-    }
-
-    func testQihooDecodesCategoryItemsAndRewritesHTTPS() throws {
-        let data = Data(
-            """
-            {
-              "errno": "0",
-              "total": "40",
-              "data": [
-                {
-                  "id": "2054151",
-                  "url": "http://p3.qhimg.com/bdr/__85/girl.jpg",
-                  "url_thumb": "http://p3.qhimg.com/bdr/__85/girl.jpg",
-                  "img_1600_900": "http://p3.qhimg.com/bdm/1600_900_85/girl.jpg",
-                  "resolution": "3840x2160",
-                  "utag": "清纯",
-                  "tag": "_美女模特_"
-                },
-                {
-                  "id": "1",
-                  "url": "http://p3.qhimg.com/bdr/__85/small.jpg",
-                  "resolution": "800x600",
-                  "utag": "small"
-                }
-              ]
-            }
-            """.utf8
-        )
-
-        let unfiltered = try QihooWallpaperSource.decodeCategory(
-            data: data,
-            page: 1,
-            count: 24,
-            filters: WallpaperSearchFilters()
-        )
-        XCTAssertEqual(unfiltered.items.count, 2)
-
-        let page = try QihooWallpaperSource.decodeCategory(
-            data: data,
-            page: 1,
-            count: 24,
-            filters: WallpaperSearchFilters(qihooResolution: .uhd)
-        )
-        XCTAssertEqual(page.items.count, 1)
-        let item = try XCTUnwrap(page.items.first)
-        XCTAssertEqual(item.source, .qihoo)
-        XCTAssertEqual(item.id, "qihoo:2054151")
-        XCTAssertEqual(item.title, "清纯")
-        XCTAssertEqual(item.resolutionDescription, "3840 × 2160")
-        XCTAssertEqual(
-            item.originalURL.absoluteString,
-            "https://p3.qhimg.com/bdr/__85/girl.jpg"
-        )
-        XCTAssertEqual(
-            item.previewURL.absoluteString,
-            "https://p3.qhimg.com/bdm/720_405_85/girl.jpg"
-        )
-        XCTAssertFalse(item.previewURL.absoluteString.contains("1600_900"))
-        XCTAssertTrue(page.hasNextPage)
-    }
-
-    func testQihooPreviewURLKeepsTheSourceAspectRatio() throws {
-        let original = try XCTUnwrap(URL(string: "http://p3.qhimg.com/bdr/__85/wide.jpg"))
-        XCTAssertEqual(
-            QihooWallpaperSource.previewURL(from: original, width: 1920, height: 1200).absoluteString,
-            "https://p3.qhimg.com/bdm/720_450_85/wide.jpg"
-        )
-        XCTAssertEqual(
-            QihooWallpaperSource.previewURL(from: original, width: 3840, height: 2560).absoluteString,
-            "https://p3.qhimg.com/bdm/720_480_85/wide.jpg"
-        )
-    }
-
-    func testQihooMatchesExactCatalogResolutions() throws {
-        let imageURL = try XCTUnwrap(URL(string: "https://p3.qhimg.com/4k.jpg"))
-        let landscape4K = WallpaperItem(
-            id: "qihoo:4k",
-            source: .qihoo,
-            sourceID: "4k",
-            title: "4K",
-            previewURL: imageURL,
-            originalURL: imageURL,
-            sourcePageURL: nil,
-            authorName: nil,
-            authorURL: nil,
-            width: 3840,
-            height: 2160,
-            fileExtension: "jpg",
-            licenseName: nil,
-            licenseURL: nil,
-            isFavorite: false,
-            localFileName: nil
-        )
-        XCTAssertTrue(QihooWallpaperSource.matches(landscape4K, filters: WallpaperSearchFilters()))
-        XCTAssertTrue(
-            QihooWallpaperSource.matches(landscape4K, filters: WallpaperSearchFilters(qihooResolution: .uhd))
-        )
-        XCTAssertFalse(
-            QihooWallpaperSource.matches(
-                landscape4K,
-                filters: WallpaperSearchFilters(qihooResolution: .fiveK)
-            )
-        )
-        XCTAssertEqual(
-            WallpaperQihooResolution.allCases.map(\.title),
-            [
-                "不限分辨率",
-                "1920 × 1080",
-                "1920 × 1200",
-                "2560 × 1440",
-                "2560 × 1600",
-                "2880 × 1800",
-                "3840 × 2160",
-                "4096 × 2304",
-                "5120 × 2880"
-            ]
-        )
-    }
-
-    func testQihooDecodesBirdpaperSearchResults() throws {
-        let data = Data(
-            """
-            {
-              "errno": 0,
-              "data": {
-                "total_count": 70,
-                "total_page": 3,
-                "pageno": 1,
-                "count": 1,
-                "list": [
-                  {
-                    "id": "2066652",
-                    "author": "潇",
-                    "category": "游戏壁纸",
-                    "tag": "赛博朋克,边缘行者",
-                    "url": "http://cdn-hsyq-static.shanhutech.cn/bizhi/cyberpunk.jpg",
-                    "class_id": "5"
-                  }
-                ]
-              }
-            }
-            """.utf8
-        )
-
-        let page = try QihooWallpaperSource.decodeSearch(
-            data: data,
-            page: 1,
-            filters: WallpaperSearchFilters(tag: "cyberpunk")
-        )
-        let item = try XCTUnwrap(page.items.first)
-        XCTAssertEqual(item.id, "qihoo:2066652")
-        XCTAssertEqual(item.authorName, "潇")
-        XCTAssertEqual(
-            item.originalURL.absoluteString,
-            "https://cdn-hsyq-static.shanhutech.cn/bizhi/cyberpunk.jpg"
-        )
-        XCTAssertTrue(page.hasNextPage)
-    }
-
     @MainActor
-    func testWallpaperRefreshUsesTheSelectedSourceOnly() async throws {
+    func testWallpaperRefreshUsesOnlyWallhaven() async throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("jarvis-wallpaper-fallback-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("jarvis-wallpaper-source-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
+        let store = WallpaperStore(directoryURL: directory)
+        let unavailable = WallpaperViewModel(store: store, wallhavenSource: FailingWallpaperSource())
+        await unavailable.refresh()
+        XCTAssertNotNil(unavailable.errorMessage)
+        XCTAssertTrue(unavailable.items.isEmpty)
 
-        let item = try WallpaperItem(
-            id: "qihoo:fallback",
-            source: .qihoo,
-            sourceID: "fallback",
-            title: "Fallback",
-            previewURL: XCTUnwrap(URL(string: "https://p3.qhimg.com/bdr/__85/fallback.jpg")),
-            originalURL: XCTUnwrap(URL(string: "https://p3.qhimg.com/bdr/__85/fallback.jpg")),
-            sourcePageURL: nil,
-            authorName: nil,
-            authorURL: nil,
-            width: 1920,
-            height: 1080,
-            fileExtension: "jpg",
-            licenseName: nil,
-            licenseURL: nil,
-            isFavorite: false,
-            localFileName: nil
+        let url = try XCTUnwrap(URL(string: "https://w.wallhaven.cc/full/ab/wallhaven-abc123.jpg"))
+        let item = WallpaperItem(
+            id: "wallhaven:abc123", source: .wallhaven, sourceID: "abc123", title: "Wallhaven",
+            previewURL: url, originalURL: url, sourcePageURL: nil, authorName: nil, authorURL: nil,
+            width: 2560, height: 1440, fileExtension: "jpg", licenseName: nil, licenseURL: nil,
+            isFavorite: false, localFileName: nil
         )
-        let model = WallpaperViewModel(
-            store: WallpaperStore(directoryURL: directory),
-            wallhavenSource: FailingWallpaperSource(),
-            qihooSource: StubWallpaperSource(item: item)
-        )
+        let available = WallpaperViewModel(store: store, wallhavenSource: StubWallpaperSource(item: item))
+        await available.refresh()
+        XCTAssertEqual(available.selectedSource, .wallhaven)
+        XCTAssertNil(available.errorMessage)
+        XCTAssertEqual(available.items.map(\.id), [item.id])
+    }
 
-        await model.refresh()
-        XCTAssertNotNil(model.errorMessage)
-        XCTAssertTrue(model.items.isEmpty)
+    func testGalleryFiltersOnlyExposeRequestedOptions() {
+        XCTAssertEqual(WallpaperResolution.galleryCases, [.any, .qHD, .uwqhd, .uhd, .fiveK, .superUltrawide, .eightK])
+        XCTAssertFalse(WallpaperRatio.galleryCases.contains(.landscape))
+        XCTAssertFalse(WallpaperRatio.galleryCases.contains(.portrait))
+        XCTAssertFalse(WallpaperRatio.galleryCases.contains(.square))
+        XCTAssertTrue(WallpaperRatio.galleryCases.contains(.any))
+        XCTAssertTrue(WallpaperRatio.galleryCases.contains(.sixteenByNine))
+        XCTAssertEqual(WallpaperColor.galleryCases.map(\.title), ["红", "粉", "紫", "蓝", "青", "绿", "黄", "橙", "棕", "黑", "灰", "白"])
+    }
 
-        model.selectedSource = .qihoo
-        await model.refresh()
-        XCTAssertNil(model.errorMessage)
-        XCTAssertEqual(model.items.map(\.id), ["qihoo:fallback"])
+    func testPreviouslySavedWallpaperSourcesRemainDecodable() throws {
+        let decoder = JSONDecoder()
+        for source in WallpaperSource.allCases {
+            let data = try JSONEncoder().encode(source)
+            XCTAssertEqual(try decoder.decode(WallpaperSource.self, from: data), source)
+        }
     }
 
     func testWallpaperSkillUsesDesktopWallpaperName() {
@@ -923,7 +703,7 @@ private struct FailingWallpaperSource: WallpaperSourceProviding {
 }
 
 private struct StubWallpaperSource: WallpaperSourceProviding {
-    let source: WallpaperSource = .wikimedia
+    let source: WallpaperSource = .wallhaven
     let item: WallpaperItem
 
     func search(page _: Int, filters _: WallpaperSearchFilters) async throws -> WallpaperPage {

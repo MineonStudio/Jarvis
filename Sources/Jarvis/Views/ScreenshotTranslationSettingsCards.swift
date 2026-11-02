@@ -75,7 +75,7 @@ struct ScreenshotLanguagePackSettingsCard: View {
             VStack(alignment: .leading, spacing: SettingsFormMetrics.cardContentSpacing) {
                 SettingsCardHeader(title: "截图翻译语言包", systemImage: "character.bubble")
 
-                VStack(spacing: 8) {
+                VStack(spacing: JarvisSpacing.controlGap) {
                     ForEach(ScreenshotTranslationLanguage.packTargets) { target in
                         LanguagePackRowView(
                             model: store.model(for: target),
@@ -99,15 +99,16 @@ private struct LanguagePackRowView: View {
     @State private var showingSettingsOpenFailure = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: JarvisSpacing.itemGap) {
             Text(model.target.title)
                 .font(SettingsTypography.itemTitle)
                 .foregroundStyle(Color.primary)
             Spacer(minLength: 8)
             statusSlot
         }
-        .padding(.horizontal, 10)
-        .frame(minHeight: 30)
+        .padding(.horizontal, JarvisSpacing.rowInset)
+        .padding(.vertical, JarvisSpacing.controlGap)
+        .frame(minHeight: SettingsFormMetrics.controlHeight)
         .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         // 挂在背景上。直接修饰这一行时，translationTask 的首帧会把行高撑开一下。
         .background {
@@ -134,7 +135,9 @@ private struct LanguagePackRowView: View {
                 .buttonStyle(JarvisSecondaryButtonStyle())
                 .hidden()
                 .accessibilityHidden(true)
-            statusView
+            HStack(spacing: JarvisSpacing.controlGap) {
+                statusView
+            }
         }
     }
 

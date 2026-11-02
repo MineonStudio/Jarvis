@@ -80,9 +80,9 @@ enum SettingsTypography {
 }
 
 enum SettingsFormMetrics {
-    static let cardContentSpacing: CGFloat = 14
-    static let sectionSpacing: CGFloat = 16
-    static let labelSpacing: CGFloat = 8
+    static let cardContentSpacing = JarvisSpacing.groupGap
+    static let sectionSpacing = JarvisSpacing.groupGap
+    static let labelSpacing = JarvisSpacing.controlGap
     static let controlHeight: CGFloat = 34
     static let disabledControlOpacity = 0.82
 }
@@ -92,7 +92,7 @@ struct SettingsCardHeader: View {
     let systemImage: String
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: JarvisSpacing.controlGap) {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(Color.secondary)
@@ -204,7 +204,7 @@ struct ShortcutSettingsCard: View {
         conflictMessage: String,
         onRestore: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: JarvisSpacing.groupGap) {
             Text(title)
                 .font(SettingsTypography.itemTitle)
                 .fixedSize(horizontal: true, vertical: false)
@@ -256,7 +256,7 @@ private struct WindowLayoutShortcutRow: View {
     @State private var conflictMessage = ""
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: JarvisSpacing.groupGap) {
             Text(layout.title)
                 .font(SettingsTypography.itemTitle)
                 .fixedSize(horizontal: true, vertical: false)
@@ -317,8 +317,6 @@ struct SettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selection: SettingsSection = .general
     @State private var isClearPermissionsConfirmationPresented = false
-    @AppStorage(WallpaperSourcePreferences.storageKey)
-    private var enabledWallpaperSources = WallpaperSourcePreferences.defaultStorageValue
 
     init(onClose: (() -> Void)? = nil) {
         self.onClose = onClose
@@ -340,7 +338,7 @@ struct SettingsView: View {
                     .frame(maxHeight: .infinity)
 
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
                             Text(selection.title)
                                 .font(SettingsTypography.pageTitle)
                                 .foregroundStyle(.primary)
@@ -368,8 +366,8 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.jarvisTextSecondary)
                 .accessibilityLabel("关闭设置")
-                .padding(.top, 15)
-                .padding(.trailing, 15)
+                .padding(.top, JarvisSpacing.cardInset)
+                .padding(.trailing, JarvisSpacing.cardInset)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -392,7 +390,7 @@ struct SettingsView: View {
             themeSettingsCard
             accentColorSettingsCard
         case .wallpaperSources:
-            WallpaperSourcesSettingsCard(enabledSourcesStorageValue: $enabledWallpaperSources)
+            WallpaperSourcesSettingsCard()
         case .shortcuts:
             ShortcutSettingsCard()
             WindowLayoutShortcutSettingsCard()
@@ -418,7 +416,7 @@ struct SettingsView: View {
                     systemImage: "arrow.triangle.2.circlepath"
                 )
 
-                HStack(alignment: .center, spacing: 14) {
+                HStack(alignment: .center, spacing: JarvisSpacing.groupGap) {
                     versionStatusLine
                         .frame(maxWidth: .infinity, alignment: .leading)
                     updateActionButton
@@ -525,7 +523,7 @@ struct SettingsView: View {
 
     private var themeSettingsCard: some View {
         JarvisCard {
-            HStack(spacing: 14) {
+            HStack(spacing: JarvisSpacing.groupGap) {
                 SettingsCardHeader(title: "主题", systemImage: "circle.lefthalf.filled")
                 Spacer(minLength: 8)
                 JarvisThemePicker(selection: Binding(
@@ -539,7 +537,7 @@ struct SettingsView: View {
 
     private var accentColorSettingsCard: some View {
         JarvisCard {
-            HStack(spacing: 14) {
+            HStack(spacing: JarvisSpacing.groupGap) {
                 SettingsCardHeader(title: "强调色", systemImage: "paintpalette")
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(1)
@@ -554,7 +552,7 @@ struct SettingsView: View {
 
     private var launchAtLoginSettingsCard: some View {
         JarvisCard {
-            HStack(spacing: 14) {
+            HStack(spacing: JarvisSpacing.groupGap) {
                 SettingsCardHeader(title: "开机自启", systemImage: "power")
                 Spacer(minLength: 8)
                 Toggle("", isOn: Binding(
@@ -578,7 +576,7 @@ struct SettingsView: View {
                     title: "开源仓库",
                     systemImage: "chevron.left.forwardslash.chevron.right"
                 )
-                HStack(spacing: 14) {
+                HStack(spacing: JarvisSpacing.groupGap) {
                     Text("github.com/MineonStudio/Jarvis")
                         .font(JarvisTypography.monospacedSmall)
                         .foregroundStyle(Color.jarvisTextSecondary)
@@ -603,8 +601,8 @@ struct SettingsView: View {
 
     private var permissionSettingsCard: some View {
         JarvisCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
+                HStack(spacing: JarvisSpacing.groupGap) {
                     SettingsCardHeader(title: "权限", systemImage: "lock.shield")
                     Spacer(minLength: 8)
                     Button("清除所有权限") {
@@ -671,7 +669,7 @@ struct JarvisCenteredModalOverlay<Content: View>: View {
             .frame(width: proxy.size.width, height: proxy.size.height)
             .overlay(alignment: .bottom) {
                 JarvisToastHost(message: app.toastMessage)
-                    .padding(.bottom, 26)
+                    .padding(.bottom, JarvisSpacing.pageInset)
                     .allowsHitTesting(false)
             }
         }
@@ -1086,7 +1084,7 @@ struct DiagnosticsSettingsCard: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: SettingsFormMetrics.cardContentSpacing) {
-            HStack(spacing: 14) {
+            HStack(spacing: JarvisSpacing.groupGap) {
                 SettingsCardHeader(title: "诊断日志", systemImage: "waveform.path.ecg")
                 Spacer(minLength: 8)
                 Button("导出日志") {
@@ -1136,8 +1134,8 @@ private struct MeetingModelSettingsRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 12) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
+            HStack(alignment: .center, spacing: JarvisSpacing.itemGap) {
                 VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
                     Text(stage.title)
                         .font(SettingsTypography.itemTitle)
@@ -1156,7 +1154,7 @@ private struct MeetingModelSettingsRow: View {
             if case let .downloading(activeStage, progress) = app.meetingModelState,
                activeStage == stage
             {
-                HStack(spacing: 8) {
+                HStack(spacing: JarvisSpacing.controlGap) {
                     ProgressView(value: progress)
                         .tint(Color.jarvisAccent)
                     Text("下载中 · \(Int(progress * 100))%")
@@ -1174,7 +1172,7 @@ private struct MeetingModelSettingsRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, JarvisSpacing.controlGap)
     }
 
     @ViewBuilder
@@ -1193,7 +1191,7 @@ private struct MeetingModelSettingsRow: View {
             }
         case let .removing(activeStage):
             if activeStage == stage {
-                HStack(spacing: 6) {
+                HStack(spacing: JarvisSpacing.iconGap) {
                     ProgressView().controlSize(.small)
                     Text("移除中")
                         .font(JarvisTypography.caption)
@@ -1260,7 +1258,7 @@ struct JarvisThemePicker: View {
                     minHeight: JarvisMetrics.segmentedItemHeight,
                     maxHeight: JarvisMetrics.segmentedItemHeight
                 )
-                .padding(.horizontal, 8)
+                .padding(.horizontal, JarvisSpacing.controlGap)
                 .padding(.vertical, JarvisMetrics.segmentedItemVerticalPadding)
                 .contentShape(Capsule())
         }
@@ -1405,8 +1403,8 @@ struct JarvisToast: View {
             .foregroundStyle(.primary)
             .lineLimit(2)
             .multilineTextAlignment(.center)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, JarvisSpacing.cardInset)
+            .padding(.vertical, JarvisSpacing.rowInset)
             .background(.regularMaterial, in: Capsule())
             .overlay {
                 Capsule()

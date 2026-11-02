@@ -13,9 +13,9 @@ struct WallhavenAPIKeySettingsCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                HStack(spacing: 5) {
+        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
+            HStack(spacing: JarvisSpacing.itemGap) {
+                HStack(spacing: JarvisSpacing.iconGap) {
                     Text("API Key")
                         .font(SettingsTypography.itemTitle)
 
@@ -29,7 +29,7 @@ struct WallhavenAPIKeySettingsCard: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Wallhaven API Key 帮助")
                     .popover(isPresented: $showingAPIKeyHelp, arrowEdge: .top) {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
                             Text("填写后可显示 NSFW 壁纸；留空仍可正常浏览其他内容。")
                                 .font(SettingsTypography.itemSubtitle)
                                 .foregroundStyle(Color.jarvisTextSecondary)
@@ -38,7 +38,7 @@ struct WallhavenAPIKeySettingsCard: View {
                             Link("去获取", destination: URL(string: "https://wallhaven.cc/settings/account")!)
                                 .font(SettingsTypography.itemSubtitle)
                         }
-                        .padding(12)
+                        .padding(JarvisSpacing.rowInset)
                         .frame(width: 260, alignment: .leading)
                     }
                 }
@@ -88,7 +88,7 @@ struct WallhavenAPIKeySettingsCard: View {
     }
 
     private var actionsRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: JarvisSpacing.controlGap) {
             if isLocked {
                 Button("编辑", action: beginEditing)
                     .buttonStyle(JarvisSecondaryButtonStyle())
@@ -115,7 +115,7 @@ struct WallhavenAPIKeySettingsCard: View {
     ) -> some View {
         content()
             .frame(maxWidth: .infinity, minHeight: SettingsFormMetrics.controlHeight, alignment: .leading)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, JarvisSpacing.rowInset)
             .background(
                 Color.jarvisPanel.opacity(0.72),
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)

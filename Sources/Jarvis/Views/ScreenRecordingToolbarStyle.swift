@@ -4,10 +4,10 @@ import SwiftUI
 enum ScreenRecordingToolbarLayout {
     static let width: CGFloat = 320
     static let height: CGFloat = 52
-    static let padding: CGFloat = 8
+    static let padding = JarvisSpacing.controlGap
     static let controlHeight: CGFloat = 36
     static let modeWidth: CGFloat = 40
-    static let spacing: CGFloat = 6
+    static let spacing = JarvisSpacing.iconGap
     /// Leave space for native glass antialiasing and refraction outside its shape.
     static let glassOverflow: CGFloat = 8
     static var windowSize: CGSize {
