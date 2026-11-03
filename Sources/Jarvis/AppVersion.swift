@@ -5,8 +5,8 @@ import Foundation
 import Security
 
 enum JarvisAppVersion {
-    private static let fallbackShortVersion = "1.9.5"
-    private static let fallbackBuild = "388"
+    private static let fallbackShortVersion = "1.9.6"
+    private static let fallbackBuild = "389"
 
     static var shortVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String

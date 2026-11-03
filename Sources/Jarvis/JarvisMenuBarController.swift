@@ -154,7 +154,6 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         configureMenuShortcut(screenRecordingMenuItem, with: .screenRecordingDefault)
         addMenuItem(clipboardMenuItem)
         addMenuItem(meetingMenuItem)
-        menu.addItem(.separator())
 
         let layoutItem = NSMenuItem(
             title: "窗口布局…", action: #selector(showWindowLayoutPicker),
