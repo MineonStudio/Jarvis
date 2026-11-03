@@ -165,69 +165,13 @@ struct SettingsView: View {
                 )
 
                 HStack(alignment: .center, spacing: JarvisSpacing.groupGap) {
-                    versionStatusLine
+                    Text("Jarvis V\(JarvisAppVersion.shortVersion)")
+                        .font(SettingsTypography.itemSubtitle)
+                        .foregroundStyle(Color.jarvisTextSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     updateActionButton
                 }
             }
-        }
-    }
-
-    /// 平时显示版本号。检查有了结果之后，结果占同一位置，版本号让开。
-    private var versionStatusLine: some View {
-        ZStack(alignment: .leading) {
-            if let status = updateStatusText {
-                Text(status)
-                    .font(SettingsTypography.itemSubtitle)
-                    .foregroundStyle(updateStatusColor)
-                    .lineLimit(updateStatusWraps ? 2 : 1)
-                    .fixedSize(horizontal: false, vertical: updateStatusWraps)
-                    .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
-            } else {
-                Text("Jarvis V\(JarvisAppVersion.shortVersion)")
-                    .font(SettingsTypography.itemSubtitle)
-                    .foregroundStyle(Color.jarvisTextSecondary)
-                    .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
-            }
-        }
-        .animation(
-            JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion),
-            value: updateStatusText
-        )
-    }
-
-    private var updateStatusText: String? {
-        switch app.updateState {
-        case .idle, .checking:
-            nil
-        case .upToDate:
-            JarvisFeedbackCopy.latestVersion
-        case let .available(release):
-            "\(JarvisFeedbackCopy.updateAvailable) \(displayVersion(release.version))"
-        case let .downloading(version):
-            "正在下载 \(displayVersion(version))"
-        case let .readyToInstall(version):
-            "准备安装 \(displayVersion(version))"
-        case let .installing(version):
-            "正在安装 \(displayVersion(version))"
-        case let .failed(message):
-            message
-        }
-    }
-
-    private var updateStatusColor: Color {
-        if case .available = app.updateState {
-            Color.jarvisAccent
-        } else {
-            Color.jarvisTextSecondary
-        }
-    }
-
-    private var updateStatusWraps: Bool {
-        if case .failed = app.updateState {
-            true
-        } else {
-            false
         }
     }
 
