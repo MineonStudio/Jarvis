@@ -25,6 +25,7 @@ struct ScreenshotCanvasView: View {
     @State private var lastDragLocation: CGPoint?
     @State private var freehandPoints: [CGPoint] = []
     @State private var activeAnnotationID: UUID?
+    @State private var activeCommentPart: ScreenshotCommentPart?
     @State private var translationToast: String?
     @State private var translationToastTask: Task<Void, Never>?
 
@@ -126,6 +127,14 @@ struct ScreenshotCanvasView: View {
                         .gesture(canvasGesture)
                 }
 
+                if let pendingComment = editor.pendingComment {
+                    ScreenshotAnnotationView(
+                        annotation: pendingComment, canvasSize: editor.canvasSize, mosaicImage: nil,
+                        showsCommentBubble: false
+                    )
+                    ScreenshotCommentComposer(editor: editor)
+                }
+
                 if let textInputAnchor = editor.textInputAnchor {
                     inlineTextEditor(at: textInputAnchor)
                 }
@@ -140,6 +149,13 @@ struct ScreenshotCanvasView: View {
                 } else {
                     Rectangle()
                         .stroke(Color.blue.opacity(0.48), lineWidth: 1)
+                }
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if interactive, editor.selectedTool != .eyedropper {
+                ForEach(editor.annotations.filter { $0.kind == .comment && $0.id != editor.editingCommentID }) { comment in
+                    ScreenshotCommentInteractionView(editor: editor, annotation: comment)
                 }
             }
         }
@@ -182,7 +198,7 @@ struct ScreenshotCanvasView: View {
     }
 
     private var canvasGesture: some Gesture {
-        DragGesture(minimumDistance: editor.selectedTool == .text ? 0 : 2)
+        DragGesture(minimumDistance: editor.selectedTool == .text || editor.selectedTool == .comment ? 0 : 2)
             .onChanged { value in
                 guard editor.selectedTool != .eyedropper else { return }
                 if dragStart == nil {
@@ -191,7 +207,15 @@ struct ScreenshotCanvasView: View {
                     dragCurrent = editablePoint(value.location) ?? start
                     lastDragLocation = dragCurrent
 
-                    if editor.selectedTool == .text {
+                    if editor.selectedTool == .comment {
+                        let hit = editor.commentHit(at: start)
+                        activeAnnotationID = hit?.id
+                        activeCommentPart = hit?.part
+                        if let activeAnnotationID {
+                            editor.commitPendingEdits()
+                            editor.beginMove(id: activeAnnotationID)
+                        }
+                    } else if editor.selectedTool == .text {
                         activeAnnotationID = editor.textAnnotation(at: start)
                         editor.selectedAnnotationID = activeAnnotationID
                         if let activeAnnotationID {
@@ -208,7 +232,7 @@ struct ScreenshotCanvasView: View {
                 guard let dragStart else { return }
                 let currentPoint = editablePoint(value.location) ?? dragStart
                 if let activeAnnotationID,
-                   editor.selectedTool == .text,
+                   editor.selectedTool == .text || editor.selectedTool == .comment,
                    let lastDragLocation
                 {
                     editor.moveAnnotation(
@@ -217,7 +241,8 @@ struct ScreenshotCanvasView: View {
                             x: currentPoint.x - lastDragLocation.x,
                             y: currentPoint.y - lastDragLocation.y
                         ),
-                        within: editor.editingRect
+                        within: editor.editingRect,
+                        commentPart: activeCommentPart
                     )
                     self.lastDragLocation = currentPoint
                 } else if isFreehandDrag {
@@ -255,6 +280,15 @@ struct ScreenshotCanvasView: View {
                         ? (freehandPoints.count > 1 ? freehandPoints : [start, end])
                         : [start, end]
                     editor.addMosaic(points: points)
+                case .comment:
+                    editor.endMove()
+                    if let activeAnnotationID, dragDistance < 8 {
+                        editor.beginCommentEditing(id: activeAnnotationID)
+                    } else if editor.isEditingComment {
+                        editor.commitCommentEditing()
+                    } else if activeAnnotationID == nil, dragDistance < 8 {
+                        editor.beginCommentEditing(at: start)
+                    }
                 case .text:
                     // 点击输入区以外 = 确认（先把草稿落下去）；具体该做什么见
                     // `textToolTapOutcome`。
@@ -301,7 +335,7 @@ struct ScreenshotCanvasView: View {
     /// 数据），那就让画布继续画着，别在半路抽走几行。
     var canvasAnnotations: [ScreenshotAnnotation] {
         guard let editingTextID = editor.editingTextID, editor.isEditingText else {
-            return editor.annotations
+            return editor.annotations.filter { $0.id != editor.editingCommentID }
         }
         let editedIsMultiLine = editor.annotations
             .first { $0.id == editingTextID }?
@@ -315,7 +349,7 @@ struct ScreenshotCanvasView: View {
         guard let start = dragStart, let end = dragCurrent else { return nil }
         guard let selectedTool = editor.selectedTool else { return nil }
         switch selectedTool {
-        case .text, .eyedropper:
+        case .text, .comment, .eyedropper:
             return nil
         case .arrow:
             return .init(
@@ -430,6 +464,7 @@ struct ScreenshotCanvasView: View {
         lastDragLocation = nil
         freehandPoints.removeAll()
         activeAnnotationID = nil
+        activeCommentPart = nil
     }
 
     /// 画笔，以及马赛克的涂抹，都是沿途收点，不是拉一个矩形。

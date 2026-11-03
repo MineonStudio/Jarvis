@@ -97,10 +97,9 @@ private struct JarvisRootView: View {
     @ObservedObject private var shareStore = ShareStore.shared
 
     @StateObject private var mainWindowController = JarvisMainWindowController()
-    @State private var isSettingsPresented = false
 
     var body: some View {
-        ContentView(isSettingsPresented: $isSettingsPresented)
+        ContentView(onOpenSettings: { appModel.settingsPanelController.show(app: appModel) })
             .environment(appModel)
             .environmentObject(appModel.resumeWorkspace)
             .tint(appModel.accentColorPreference.resolvedColor)
@@ -114,7 +113,7 @@ private struct JarvisRootView: View {
                 minHeight: JarvisMainWindowController.minimumWindowSize.height
             )
             .overlay {
-                if let prompt = appModel.taskPermissionPrompt, !isSettingsPresented {
+                if let prompt = appModel.taskPermissionPrompt {
                     JarvisTaskPermissionOverlay(prompt: prompt)
                         .environment(appModel)
                 }
@@ -141,13 +140,6 @@ private struct JarvisRootView: View {
                         Text("\(offer.name) · \(ByteCountFormatter.string(fromByteCount: offer.total, countStyle: .file))")
                     }
                 }
-            }
-            .background {
-                SettingsOverlayAnchor(
-                    isPresented: $isSettingsPresented,
-                    app: appModel,
-                    content: .settings
-                )
             }
             .overlay(alignment: .bottom) {
                 JarvisToastHost(message: appModel.toastMessage)

@@ -82,7 +82,6 @@ enum AIConversationProvider: String, CaseIterable, Hashable, Identifiable {
 
 struct AIConversationView: View {
     @Environment(AppModel.self) private var app
-    @State private var showsDownloadManager = false
 
     var body: some View {
         JarvisContentArea(
@@ -102,17 +101,7 @@ struct AIConversationView: View {
             },
             trailingToolbar: {
                 ToolbarItem(id: "ai.actions", placement: .automatic) {
-                    JarvisWebPlatformActionCluster(
-                        controller: currentController,
-                        showsDownloadManager: $showsDownloadManager,
-                        activeDownloadCount: currentController.downloadManager.activeDownloadCount
-                    ) {
-                        JarvisWebPlatformDownloadManagerView(
-                            manager: currentController.downloadManager,
-                            emptyHint: "在 AI 聚合页面点击文件下载后，任务会显示在这里"
-                        )
-                        .frame(width: 390, height: 390)
-                    }
+                    JarvisWebPlatformActionCluster(controller: currentController)
                 }
             },
             content: {

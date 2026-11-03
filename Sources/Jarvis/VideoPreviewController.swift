@@ -2,10 +2,10 @@ import AppKit
 import AVKit
 import SwiftUI
 
-/// Shared native video preview for recording history, clipboard videos and downloads.
+/// Shared native video preview for recording history and clipboard videos.
 /// Uses the same screen-wide canvas and zoom model as image previews.
 @MainActor
-final class EntertainmentVideoPreviewController {
+final class VideoPreviewController {
     private let previewController = FullscreenMediaPreviewController()
     private var player: AVPlayer?
     private var loadTask: Task<Void, Never>?

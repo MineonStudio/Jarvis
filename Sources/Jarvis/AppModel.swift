@@ -184,6 +184,7 @@ final class AppModel {
     @ObservationIgnored lazy var clipboardHistoryWriter = ClipboardHistoryWriter(store: clipboardStore)
     @ObservationIgnored lazy var startupRepository = JarvisStartupRepository()
     @ObservationIgnored let clipboardPanelController = ClipboardPanelController()
+    @ObservationIgnored let settingsPanelController = SettingsPanelController()
     @ObservationIgnored lazy var screenshotCacheStore = ScreenshotCacheStore()
     @ObservationIgnored lazy var screenshotHistoryStore = ScreenshotHistoryStore()
     @ObservationIgnored let screenshotController = ScreenshotCaptureController()
@@ -191,13 +192,10 @@ final class AppModel {
     @ObservationIgnored let clipboardMediaPreviewController = ClipboardMediaPreviewController()
     @ObservationIgnored let updateService = JarvisUpdateService()
     var shouldRelaunchAfterTermination = false
-    @ObservationIgnored let aiConversationDownloadManager = AIConversationDownloadManager()
     @ObservationIgnored let meetingRepository: MeetingRepository
     @ObservationIgnored let meetingRecorder: MeetingRecorder
     @ObservationIgnored let meetingTranscriptionService: any MeetingTranscribing
     @ObservationIgnored let aiTextCompletionAPI: any AITextCompletionAPI
-    @ObservationIgnored let entertainmentDownloadManager = AIConversationDownloadManager()
-    @ObservationIgnored let entertainmentVideoDownloads = EntertainmentVideoDownloadManager()
     @ObservationIgnored let resumeWorkspace = ResumeWorkspace()
     @ObservationIgnored let launchAtLoginService = JarvisLaunchAtLoginService.shared
     @ObservationIgnored let aiAPIConnectionTester: any AIAPIConnectionTesting
@@ -250,10 +248,7 @@ final class AppModel {
             return controller
         }
 
-        let controller = JarvisWebPlatformController(
-            platform: provider.webPlatform,
-            downloadManager: aiConversationDownloadManager
-        )
+        let controller = JarvisWebPlatformController(platform: provider.webPlatform)
         aiConversationControllers[provider] = controller
         return controller
     }
@@ -263,10 +258,7 @@ final class AppModel {
             return controller
         }
 
-        let controller = JarvisWebPlatformController(
-            platform: platform.webPlatform,
-            downloadManager: entertainmentDownloadManager
-        )
+        let controller = JarvisWebPlatformController(platform: platform.webPlatform)
         entertainmentControllers[platform] = controller
         return controller
     }
@@ -587,9 +579,14 @@ extension AppModel {
     private func handleEditorStatusAction(_ action: ScreenshotAction) {
         switch action {
         case let .tool(tool):
-            statusMessage = tool == .eyedropper
-                ? "已选择取色，移动鼠标预览色值，点击或按 C 复制"
-                : "已选择\(tool.title)，在截图上拖动即可使用"
+            switch tool {
+            case .eyedropper:
+                statusMessage = "已选择取色，移动鼠标预览色值，点击或按 C 复制"
+            case .comment:
+                statusMessage = "已选择批注，点击截图添加说明，拖动圆点或说明可调整位置"
+            default:
+                statusMessage = "已选择\(tool.title)，在截图上拖动即可使用"
+            }
         case .undo:
             statusMessage = "已撤销上一步标注"
         case .redo:

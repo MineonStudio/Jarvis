@@ -4,7 +4,7 @@ import SwiftUI
 @MainActor
 final class ClipboardMediaPreviewController {
     private let previewController = FullscreenMediaPreviewController()
-    private let videoPreviewController = EntertainmentVideoPreviewController()
+    private let videoPreviewController = VideoPreviewController()
 
     func show(item: ClipboardItem) {
         dismiss()

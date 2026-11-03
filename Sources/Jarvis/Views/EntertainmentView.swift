@@ -3,7 +3,6 @@ import SwiftUI
 
 struct EntertainmentView: View {
     @Environment(AppModel.self) private var app
-    @State private var showsDownloadManager = false
 
     var body: some View {
         JarvisContentArea(
@@ -23,17 +22,7 @@ struct EntertainmentView: View {
             },
             trailingToolbar: {
                 ToolbarItem(id: "entertainment.actions", placement: .automatic) {
-                    JarvisWebPlatformActionCluster(
-                        controller: currentController,
-                        showsDownloadManager: $showsDownloadManager,
-                        activeDownloadCount: app.entertainmentVideoDownloads.activeCount,
-                        downloadHelp: "视频下载"
-                    ) {
-                        EntertainmentVideoDownloadView(
-                            manager: app.entertainmentVideoDownloads,
-                            initialURL: currentController.currentURL
-                        )
-                    }
+                    JarvisWebPlatformActionCluster(controller: currentController)
                 }
             },
             content: {

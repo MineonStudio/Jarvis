@@ -27,7 +27,6 @@ enum JarvisWebHostAllowlist {
 
 enum JarvisWebPlatformNavigationDecision: Equatable {
     case allow
-    case download
     case openExternally
     case cancel
 }
@@ -40,7 +39,7 @@ enum JarvisWebPlatformNavigationPolicy {
         allowsHost: (String) -> Bool
     ) -> JarvisWebPlatformNavigationDecision {
         if shouldDownload {
-            return .download
+            return .cancel
         }
         guard let url else {
             return .cancel
@@ -68,12 +67,21 @@ enum JarvisWebPlatformNavigationPolicy {
         guard scheme == "https", let host = url.host else { return false }
         return allowsHost(host)
     }
+
+    static func allowsResponse(_ response: URLResponse, canShowMIMEType: Bool) -> Bool {
+        guard canShowMIMEType else { return false }
+        let disposition = (response as? HTTPURLResponse)?
+            .value(forHTTPHeaderField: "Content-Disposition")?
+            .split(separator: ";", maxSplits: 1).first?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return disposition != "attachment"
+    }
 }
 
 enum JarvisWebPlatformLayoutMetrics {
     static let topBarSpacing: CGFloat = 12
     static let browserControlSize = JarvisToolbarMetrics.controlSize
-    static let browserControlCount = 5
+    static let browserControlCount = 4
     static let groupedPickerMinimumWidth: CGFloat = 268
 
     static var actionClusterMinimumWidth: CGFloat {
@@ -193,75 +201,6 @@ final class JarvisWebPlatformViewContainer: NSView {
     override func viewDidUnhide() {
         super.viewDidUnhide()
         publishHostVisibility()
-    }
-
-    /// While settings is open, this container — not the page — is what
-    /// `contentView` hit-testing finds, so WebKit stops treating the page as
-    /// the view under the pointer.
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        guard SettingsBackdropLock.isActive else { return super.hitTest(point) }
-        let localPoint = convert(point, from: superview)
-        return bounds.contains(localPoint) ? self : nil
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.mouseDown(with: event)
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.mouseUp(with: event)
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.mouseDragged(with: event)
-    }
-
-    override func rightMouseDown(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.rightMouseDown(with: event)
-    }
-
-    override func rightMouseUp(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.rightMouseUp(with: event)
-    }
-
-    override func rightMouseDragged(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.rightMouseDragged(with: event)
-    }
-
-    override func otherMouseDown(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.otherMouseDown(with: event)
-    }
-
-    override func otherMouseUp(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.otherMouseUp(with: event)
-    }
-
-    override func otherMouseDragged(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.otherMouseDragged(with: event)
-    }
-
-    override func scrollWheel(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.scrollWheel(with: event)
-    }
-
-    override func mouseMoved(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.mouseMoved(with: event)
-    }
-
-    override func magnify(with event: NSEvent) {
-        guard !SettingsBackdropLock.isActive else { return }
-        super.magnify(with: event)
     }
 
     private var isHostVisible: Bool {
@@ -411,12 +350,10 @@ final class JarvisWebPlatformController: NSObject, ObservableObject {
     let platform: JarvisWebPlatformDescriptor
     let webView: WKWebView
     let webViewContainer = JarvisWebPlatformViewContainer()
-    let downloadManager: AIConversationDownloadManager
 
     @Published private(set) var canGoBack = false
     @Published private(set) var canGoForward = false
     @Published private(set) var loadState: JarvisWebLoadState = .idle
-    @Published private(set) var currentURL: URL?
 
     var isLoading: Bool {
         loadState == .loading
@@ -448,12 +385,8 @@ final class JarvisWebPlatformController: NSObject, ObservableObject {
         }
     }
 
-    init(
-        platform: JarvisWebPlatformDescriptor,
-        downloadManager: AIConversationDownloadManager
-    ) {
+    init(platform: JarvisWebPlatformDescriptor) {
         self.platform = platform
-        self.downloadManager = downloadManager
 
         let configuration = JarvisWebPlatformConfiguration.make()
         webView = WKWebView(frame: .zero, configuration: configuration)
@@ -546,15 +479,11 @@ final class JarvisWebPlatformController: NSObject, ObservableObject {
     private func updateNavigationState() {
         let canGoBack = webView.canGoBack
         let canGoForward = webView.canGoForward
-        let currentURL = webView.url
         if self.canGoBack != canGoBack {
             self.canGoBack = canGoBack
         }
         if self.canGoForward != canGoForward {
             self.canGoForward = canGoForward
-        }
-        if self.currentURL != currentURL {
-            self.currentURL = currentURL
         }
     }
 
@@ -662,12 +591,6 @@ extension JarvisWebPlatformController: WKNavigationDelegate {
             shouldDownload: navigationAction.shouldPerformDownload,
             allowsHost: platform.allowsHost
         ) {
-        case .download:
-            downloadManager.enqueue(
-                platformTitle: platform.title,
-                sourceURL: navigationAction.request.url
-            )
-            decisionHandler(.download)
         case .allow:
             decisionHandler(.allow)
         case .openExternally:
@@ -685,39 +608,10 @@ extension JarvisWebPlatformController: WKNavigationDelegate {
         decidePolicyFor navigationResponse: WKNavigationResponse,
         decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
     ) {
-        if !navigationResponse.canShowMIMEType {
-            downloadManager.enqueue(
-                platformTitle: platform.title,
-                sourceURL: navigationResponse.response.url
-            )
-            decisionHandler(.download)
-        } else {
-            decisionHandler(.allow)
-        }
-    }
-
-    func webView(
-        _: WKWebView,
-        navigationAction: WKNavigationAction,
-        didBecome download: WKDownload
-    ) {
-        downloadManager.attach(
-            download,
-            platformTitle: platform.title,
-            sourceURL: navigationAction.request.url
-        )
-    }
-
-    func webView(
-        _: WKWebView,
-        navigationResponse: WKNavigationResponse,
-        didBecome download: WKDownload
-    ) {
-        downloadManager.attach(
-            download,
-            platformTitle: platform.title,
-            sourceURL: navigationResponse.response.url
-        )
+        decisionHandler(JarvisWebPlatformNavigationPolicy.allowsResponse(
+            navigationResponse.response,
+            canShowMIMEType: navigationResponse.canShowMIMEType
+        ) ? .allow : .cancel)
     }
 
     func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation?) {

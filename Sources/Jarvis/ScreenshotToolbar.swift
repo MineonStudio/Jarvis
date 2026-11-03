@@ -667,7 +667,7 @@ extension ScreenshotToolbar {
             penStyleControl
         } else if editor.selectedTool == .mosaic {
             mosaicStyleControl
-        } else if editor.selectedTool == .text {
+        } else if editor.selectedTool == .text || editor.selectedTool == .comment {
             textStyleControl
         }
     }
@@ -811,37 +811,44 @@ extension ScreenshotToolbar {
 
     private var textStyleControl: some View {
         HStack(spacing: 8) {
-            colorButtons(selected: editor.textColor) { color in
+            colorButtons(
+                selected: editor.textColor,
+                colors: editor.selectedTool == .comment
+                    ? ScreenshotTextColor.allCases.filter { $0 != .white }
+                    : ScreenshotTextColor.allCases
+            ) { color in
                 editor.textColor = color
             }
 
             secondaryDivider
 
-            HStack(spacing: 2) {
-                ScreenshotToolbarOptionButton(
-                    icon: "bold",
-                    selected: editor.textBold,
-                    help: "粗体"
-                ) {
-                    editor.textBold.toggle()
+            if editor.selectedTool != .comment {
+                HStack(spacing: 2) {
+                    ScreenshotToolbarOptionButton(
+                        icon: "bold",
+                        selected: editor.textBold,
+                        help: "粗体"
+                    ) {
+                        editor.textBold.toggle()
+                    }
+                    ScreenshotToolbarOptionButton(
+                        icon: "italic",
+                        selected: editor.textItalic,
+                        help: "斜体"
+                    ) {
+                        editor.textItalic.toggle()
+                    }
+                    ScreenshotToolbarOptionButton(
+                        icon: "strikethrough",
+                        selected: editor.textStrikethrough,
+                        help: "删除线"
+                    ) {
+                        editor.textStrikethrough.toggle()
+                    }
                 }
-                ScreenshotToolbarOptionButton(
-                    icon: "italic",
-                    selected: editor.textItalic,
-                    help: "斜体"
-                ) {
-                    editor.textItalic.toggle()
-                }
-                ScreenshotToolbarOptionButton(
-                    icon: "strikethrough",
-                    selected: editor.textStrikethrough,
-                    help: "删除线"
-                ) {
-                    editor.textStrikethrough.toggle()
-                }
-            }
 
-            secondaryDivider
+                secondaryDivider
+            }
 
             HStack(spacing: 2) {
                 ForEach(ScreenshotTextSize.options) { option in
@@ -859,10 +866,11 @@ extension ScreenshotToolbar {
 
     private func colorButtons(
         selected: ScreenshotTextColor,
+        colors: [ScreenshotTextColor] = ScreenshotTextColor.allCases,
         action: @escaping (ScreenshotTextColor) -> Void
     ) -> some View {
         HStack(spacing: 5) {
-            ForEach(ScreenshotTextColor.allCases) { color in
+            ForEach(colors) { color in
                 Button {
                     action(color)
                 } label: {
@@ -879,6 +887,9 @@ extension ScreenshotToolbar {
                         .contentShape(Circle())
                 }
                 .buttonStyle(JarvisPressButtonStyle(pressedScale: 0.94, pressedOpacity: 0.76))
+                .help(color.title)
+                .accessibilityLabel(color.title)
+                .accessibilityValue(selected == color ? "已选择" : "")
             }
         }
     }

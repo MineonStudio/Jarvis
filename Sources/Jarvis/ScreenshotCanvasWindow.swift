@@ -39,6 +39,8 @@ final class ScreenshotImagePanel: ScreenshotColorProbePanel {
         if event.type == .leftMouseDown,
            event.clickCount == 2,
            !isPickingColor,
+           colorProbeCanvas?.isCommentInteraction != true,
+           colorProbeCanvas?.isCommentEvent(event) != true,
            isCanvasEvent(event),
            let onDoubleClick
         {
@@ -182,6 +184,13 @@ final class ScreenshotCanvasHostingView: NSHostingView<ScreenshotCanvasView> {
         // 注：中键事件由 sendEvent 先行拦截为 .otherMouseDown 并派往
         // otherMouseDown(with:)，不会进到这里；不要在这里加中键分支。
         onActivate?()
+
+        if rootView.interactive, editor.selectedTool != .eyedropper,
+           isCommentEvent(event)
+        {
+            super.mouseDown(with: event)
+            return
+        }
 
         if allowsSelectionTransform,
            editor.selectedTool == nil,
@@ -372,6 +381,16 @@ final class ScreenshotCanvasHostingView: NSHostingView<ScreenshotCanvasView> {
 }
 
 extension ScreenshotCanvasHostingView {
+    func isCommentEvent(_ event: NSEvent) -> Bool {
+        let point = canvasPoint(for: event)
+        let scale = max(rootView.canvasScale, 0.01)
+        return rootView.interactive && editor.commentHit(at: CGPoint(x: point.x / scale, y: point.y / scale)) != nil
+    }
+
+    var isCommentInteraction: Bool {
+        rootView.interactive && (editor.selectedTool == .comment || editor.isEditingComment)
+    }
+
     var isPickingColor: Bool {
         rootView.interactive && editor.selectedTool == .eyedropper
     }

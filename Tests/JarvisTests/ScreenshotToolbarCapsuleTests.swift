@@ -69,15 +69,15 @@ final class ScreenshotToolbarCapsuleTests: XCTestCase {
     /// 面板宽度由主按钮行推出（主行内容固定，窗口跟着它），钉成具体数值：这条
     /// 一改，工具栏在屏幕上的落位、以及二级行能有多少余量都会跟着变。
     func testPanelWidthFollowsTheMainRow() {
-        // 13 颗图标按钮 × 40 + 2 条分隔线 × 17 + 两侧内缩 8 × 2。
-        XCTAssertEqual(ScreenshotToolbarMetrics.baseWidth, 570, accuracy: 0.001)
-        XCTAssertEqual(ScreenshotToolbarComposition.buttonCount, 13)
+        // 14 颗图标按钮 × 40 + 2 条分隔线 × 17 + 两侧内缩 8 × 2。
+        XCTAssertEqual(ScreenshotToolbarMetrics.baseWidth, 610, accuracy: 0.001)
+        XCTAssertEqual(ScreenshotToolbarComposition.buttonCount, 14)
         XCTAssertEqual(ScreenshotToolbarComposition.dividerCount, 2)
         XCTAssertTrue(ScreenshotToolbarComposition.mainRow.contains(.tool(.pen)))
         XCTAssertEqual(
             ScreenshotToolbarComposition.mainRow,
             [
-                .tool(.arrow), .tool(.rectangle), .tool(.pen), .tool(.mosaic), .tool(.text), .tool(.eyedropper),
+                .tool(.arrow), .tool(.rectangle), .tool(.pen), .tool(.mosaic), .tool(.text), .tool(.comment), .tool(.eyedropper),
                 .translate, .divider, .undo, .redo, .divider, .save, .pin, .cancel, .confirm
             ]
         )

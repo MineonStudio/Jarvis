@@ -41,7 +41,7 @@ final class ScreenRecordingCoordinator {
         ).devices
     }
 
-    @ObservationIgnored let videoPreviewController = EntertainmentVideoPreviewController()
+    @ObservationIgnored let videoPreviewController = VideoPreviewController()
     @ObservationIgnored let repository: ScreenRecordingRepository
     @ObservationIgnored weak var app: AppModel?
     @ObservationIgnored var sourceContent: SCShareableContent?

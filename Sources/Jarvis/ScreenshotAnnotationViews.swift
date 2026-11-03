@@ -5,6 +5,7 @@ struct ScreenshotAnnotationView: View {
     let canvasSize: CGSize
     let mosaicImage: NSImage?
     var isDraft = false
+    var showsCommentBubble = true
 
     /// 标注自己的外接矩形（画布坐标，含线宽/箭头/笔触的余量）。
     ///
@@ -24,6 +25,8 @@ struct ScreenshotAnnotationView: View {
                 width: annotation.textSize.width,
                 height: annotation.textSize.height
             )
+        case .comment:
+            annotation.bounds
         case .arrow, .rectangle, .pen, .mosaic:
             annotation.canvasBounds
         }
@@ -77,6 +80,16 @@ struct ScreenshotAnnotationView: View {
                     size: bounds.size,
                     isDraft: isDraft
                 )
+            case .comment:
+                Canvas { context, _ in
+                    context.translateBy(x: -origin.x, y: -origin.y)
+                    context.withCGContext { cgContext in
+                        ScreenshotCommentLayout.draw(
+                            annotation, in: cgContext, opacity: isDraft ? 0.7 : 1,
+                            showsBubble: showsCommentBubble
+                        )
+                    }
+                }
             case .text:
                 TextAnnotationView(annotation: annotation, origin: origin, isDraft: isDraft)
             }

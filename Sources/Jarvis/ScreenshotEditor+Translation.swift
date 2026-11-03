@@ -78,7 +78,7 @@ extension ScreenshotEditorModel {
     func enterTranslationMode() {
         // #11：和 selectTool 一致，先把正在输入的文字草稿提交，
         // 再清工具/选中态，避免草稿收尾路径不一致。
-        commitTextEditing()
+        commitPendingEdits()
         selectedTool = nil
         selectedAnnotationID = nil
         translationMode = true

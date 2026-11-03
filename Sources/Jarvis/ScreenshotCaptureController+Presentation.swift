@@ -358,7 +358,7 @@ extension ScreenshotCaptureController {
             screenshotPanel.onEscape = cancelEditing
             screenshotPanel.onResignKey = { [weak editor = presentation.editor] in
                 // 点出窗口也算「离开输入」。
-                editor?.commitTextEditing()
+                editor?.commitPendingEdits()
             }
             screenshotPanel.onEscapeIntercept = { [weak editor = presentation.editor] in
                 editor?.handleEscape() ?? false
@@ -441,7 +441,7 @@ extension ScreenshotCaptureController {
     ) {
         // 工具栏上的任何动作都意味着「这次输入结束了」：先把草稿落下去，
         // 否则点保存/撤销/完成时正在打的那段字会丢。
-        editor.commitTextEditing()
+        editor.commitPendingEdits()
         switch action {
         case .saveRequested:
             finishToolbarAction(editor, onAction: onAction, makeAction: ScreenshotAction.save)

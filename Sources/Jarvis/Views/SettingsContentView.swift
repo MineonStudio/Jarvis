@@ -3,32 +3,8 @@ import SwiftUI
 
 enum SettingsLayout {
     static let contentMaxWidth: CGFloat = 760
-    static let sidebarIdealWidth: CGFloat = 200
-    static let sidebarMinimumWidth: CGFloat = 180
-    /// Preferred card size. Width is 70% of the previous 1040pt card.
-    static let modalSize = CGSize(width: 728, height: 680)
-    /// Space kept between the card and the main window so the shadow and
-    /// the window edge never cover the settings sidebar.
-    static let modalEdgeMargin: CGFloat = 28
-
-    /// The card uses `modalSize` while the window is large enough. Once the
-    /// window is smaller, the card shrinks to stay fully inside it.
-    static func fittedModalSize(in available: CGSize) -> CGSize {
-        CGSize(
-            width: min(modalSize.width, max(0, available.width - modalEdgeMargin * 2)),
-            height: min(modalSize.height, max(0, available.height - modalEdgeMargin * 2))
-        )
-    }
-
-    /// Keeps the settings sidebar inside the card. A nested split view would
-    /// otherwise borrow the main window's leading column and get clipped
-    /// when that window shrinks.
-    static func sidebarWidth(forModalWidth width: CGFloat) -> CGFloat {
-        let minimumContentWidth: CGFloat = 280
-        guard width > 0 else { return 0 }
-        let fitted = min(sidebarIdealWidth, max(sidebarMinimumWidth, width - minimumContentWidth))
-        return min(width, fitted)
-    }
+    static let defaultWindowSize = CGSize(width: 1040, height: 680)
+    static let minimumWindowSize = CGSize(width: 728, height: 520)
 }
 
 enum SettingsSection: String, CaseIterable, Hashable, Identifiable {
@@ -106,9 +82,11 @@ struct SettingsCardHeader: View {
 struct ShortcutSettingsCard: View {
     @Environment(AppModel.self) private var app
     @State private var screenshotShortcut = ScreenshotShortcut.default
+    @State private var screenRecordingShortcut = ScreenshotShortcut.screenRecordingDefault
     @State private var clipboardShortcut = ScreenshotShortcut.clipboardDefault
     @State private var meetingShortcut = ScreenshotShortcut.meetingDefault
     @State private var isRecordingScreenshotShortcut = false
+    @State private var isRecordingScreenRecordingShortcut = false
     @State private var isRecordingClipboardShortcut = false
     @State private var isRecordingMeetingShortcut = false
 
@@ -118,6 +96,8 @@ struct ShortcutSettingsCard: View {
         }
         .onAppear {
             screenshotShortcut = app.screenshotShortcut
+            screenRecordingShortcut = app.screenRecording.shortcuts.bindings[ScreenRecordingShortcutAction.open.rawValue]
+                ?? .screenRecordingDefault
             clipboardShortcut = app.clipboardShortcut
             meetingShortcut = app.meetingShortcut
             _ = app.validateScreenshotShortcut(screenshotShortcut)
@@ -130,6 +110,12 @@ struct ShortcutSettingsCard: View {
                 guard newValue != app.screenshotShortcut else { return }
                 _ = app.updateScreenshotShortcut(newValue)
             }
+        }
+        .onChange(of: screenRecordingShortcut) { _, newValue in
+            guard isRecordingScreenRecordingShortcut,
+                  newValue != app.screenRecording.shortcuts.bindings[ScreenRecordingShortcutAction.open.rawValue]
+            else { return }
+            _ = app.screenRecording.shortcuts.set(newValue, for: .open)
         }
         .onChange(of: clipboardShortcut) { _, newValue in
             guard isRecordingClipboardShortcut else { return }
@@ -165,7 +151,16 @@ struct ShortcutSettingsCard: View {
                 }
             }
 
-            ScreenRecordingShortcutSettings(shortcuts: app.screenRecording.shortcuts)
+            shortcutRow(
+                title: "屏幕录制",
+                shortcut: $screenRecordingShortcut,
+                isRecording: $isRecordingScreenRecordingShortcut,
+                conflictMessage: app.screenRecording.shortcuts.error
+            ) {
+                if app.screenRecording.shortcuts.set(.screenRecordingDefault, for: .open) {
+                    screenRecordingShortcut = .screenRecordingDefault
+                }
+            }
 
             shortcutRow(
                 title: "剪贴板",
@@ -217,6 +212,7 @@ struct ShortcutSettingsCard: View {
             if !conflictMessage.isEmpty {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
+                    .help(conflictMessage)
             }
             Button("恢复默认", action: onRestore)
                 .buttonStyle(JarvisSecondaryButtonStyle())
@@ -311,64 +307,42 @@ private struct WindowLayoutShortcutRow: View {
 }
 
 struct SettingsView: View {
-    let onClose: (() -> Void)?
-
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selection: SettingsSection = .general
     @State private var isClearPermissionsConfirmationPresented = false
 
-    init(onClose: (() -> Void)? = nil) {
-        self.onClose = onClose
-    }
-
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            GeometryReader { proxy in
-                HStack(spacing: 0) {
-                    JarvisSidebarNavigation(
-                        topItems: SettingsSection.allCases,
-                        selection: $selection,
-                        title: { $0.title },
-                        icon: { $0.icon },
-                        headerTitle: "设置",
-                        showsHeaderOrb: false
-                    )
-                    .frame(width: SettingsLayout.sidebarWidth(forModalWidth: proxy.size.width))
-                    .frame(maxHeight: .infinity)
-
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
-                            Text(selection.title)
-                                .font(SettingsTypography.pageTitle)
-                                .foregroundStyle(.primary)
-
-                            detailContent
-                        }
-                        .frame(maxWidth: SettingsLayout.contentMaxWidth, alignment: .leading)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(JarvisMetrics.pageInset)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.jarvisBackground)
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height)
-            }
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            JarvisSidebarNavigation(
+                topItems: SettingsSection.allCases,
+                selection: $selection,
+                title: { $0.title },
+                icon: { $0.icon },
+                showsHeader: false
+            )
             .background(Color.jarvisBackground)
+            .toolbar(removing: .sidebarToggle)
+            .navigationSplitViewColumnWidth(
+                min: JarvisMetrics.sidebarMinimumWidth,
+                ideal: JarvisMetrics.sidebarWidth,
+                max: JarvisMetrics.sidebarMaximumWidth
+            )
+        } detail: {
+            ScrollView {
+                VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
+                    Text(selection.title)
+                        .font(SettingsTypography.pageTitle)
+                        .foregroundStyle(.primary)
 
-            if let onClose {
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .medium))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
+                    detailContent
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.jarvisTextSecondary)
-                .accessibilityLabel("关闭设置")
-                .padding(.top, JarvisSpacing.cardInset)
-                .padding(.trailing, JarvisSpacing.cardInset)
+                .frame(maxWidth: SettingsLayout.contentMaxWidth, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(JarvisMetrics.pageInset)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.jarvisBackground)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -626,450 +600,6 @@ struct SettingsView: View {
         } message: {
             Text("将清除屏幕录制、辅助功能、麦克风和摄像头授权，然后重新打开工作搭子 Jarvis。")
         }
-    }
-}
-
-struct SettingsModalOverlay: View {
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        JarvisCenteredModalOverlay(isPresented: $isPresented, title: "设置") {
-            SettingsView { isPresented = false }
-        }
-    }
-}
-
-struct JarvisCenteredModalOverlay<Content: View>: View {
-    @Binding var isPresented: Bool
-    let title: String
-    @ViewBuilder let content: Content
-    @Environment(AppModel.self) private var app
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        GeometryReader { proxy in
-            let fitted = SettingsLayout.fittedModalSize(in: proxy.size)
-            ZStack {
-                // 模糊由窗口上的 NSGlassEffectView 绘制。这里只接住点击，
-                // 避免再叠一层材质把系统玻璃盖住。
-                Color.clear
-                    .contentShape(Rectangle())
-
-                content
-                    .frame(width: fitted.width, height: fitted.height)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.8)
-                    }
-                    .shadow(color: Color.black.opacity(0.30), radius: 34, y: 18)
-                    .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .overlay(alignment: .bottom) {
-                JarvisToastHost(message: app.toastMessage)
-                    .padding(.bottom, JarvisSpacing.pageInset)
-                    .allowsHitTesting(false)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea()
-        .onExitCommand {
-            isPresented = false
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
-    }
-}
-
-enum JarvisModalContent {
-    case settings
-}
-
-/// Installs the settings card above the window's AppKit sidebar and toolbar.
-/// Those views are outside the SwiftUI overlay order, so hiding them was the
-/// only way to keep the card visible, and that reflowed the main window.
-struct SettingsOverlayAnchor: NSViewRepresentable {
-    @Binding var isPresented: Bool
-    /// Passed in directly. Reading `@Environment` here crashes while AppKit
-    /// builds the key-view loop, before that environment value is installed.
-    let app: AppModel
-    let content: JarvisModalContent
-
-    func makeCoordinator() -> SettingsOverlayAnchorView {
-        SettingsOverlayAnchorView()
-    }
-
-    func makeNSView(context: Context) -> SettingsOverlayAnchorView {
-        context.coordinator
-    }
-
-    func updateNSView(_ anchor: SettingsOverlayAnchorView, context _: Context) {
-        anchor.update(isPresented: isPresented, app: app, content: content) {
-            isPresented = $0
-        }
-    }
-}
-
-final class SettingsOverlayAnchorView: NSView {
-    private var presented = false
-    private var app: AppModel?
-    private var content: JarvisModalContent = .settings
-    private var setPresented: ((Bool) -> Void)?
-    private var container: SettingsOverlayContainer?
-
-    override func hitTest(_: NSPoint) -> NSView? {
-        nil
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        MainActor.assumeIsolated {
-            sync()
-        }
-    }
-
-    func update(
-        isPresented: Bool,
-        app: AppModel,
-        content: JarvisModalContent,
-        setPresented: @escaping (Bool) -> Void
-    ) {
-        presented = isPresented
-        self.app = app
-        self.content = content
-        self.setPresented = setPresented
-        sync()
-    }
-
-    private func sync() {
-        guard presented, let app, setPresented != nil, let parent = overlayParent else {
-            container?.dismiss()
-            return
-        }
-
-        let container = self.container ?? SettingsOverlayContainer()
-        self.container = container
-        let binding = Binding<Bool>(
-            get: { [weak self] in
-                self?.presented ?? false
-            },
-            set: { [weak self] newValue in
-                self?.presented = newValue
-                self?.setPresented?(newValue)
-            }
-        )
-        container.present(isPresented: binding, app: app, content: content, in: parent)
-    }
-
-    private var overlayParent: NSView? {
-        guard let contentView = window?.contentView else { return nil }
-        return contentView.superview ?? contentView
-    }
-}
-
-private struct SettingsOverlayRoot: View {
-    @Binding var isPresented: Bool
-    let app: AppModel
-    let content: JarvisModalContent
-
-    var body: some View {
-        SettingsModalOverlay(isPresented: $isPresented)
-            .environment(app)
-            .tint(app.accentColorPreference.resolvedColor)
-            .accentColor(app.accentColorPreference.resolvedColor)
-            .jarvisTheme(app.themePreference, systemColorScheme: app.systemColorScheme)
-    }
-}
-
-private final class ClearHostingView<Content: View>: NSHostingView<Content> {
-    override var isOpaque: Bool {
-        false
-    }
-
-    /// SwiftUI's first layout pass sizes a hosting view to the card. That pass
-    /// was shrinking the main window the first time settings opened.
-    override var intrinsicContentSize: NSSize {
-        NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
-    }
-
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(lockedSize ?? newSize)
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        clearBacking()
-    }
-
-    override func layout() {
-        super.layout()
-        clearBacking()
-    }
-
-    /// Fill the overlay. A proposal smaller than the overlay is the fitting pass.
-    private var lockedSize: NSSize? {
-        guard let container = superview else { return nil }
-        let size = container.bounds.size
-        guard size.width > 1, size.height > 1 else { return nil }
-        return size
-    }
-
-    private func clearBacking() {
-        layer?.isOpaque = false
-        layer?.backgroundColor = NSColor.clear.cgColor
-    }
-}
-
-/// WebKit decides whether the page is under the pointer by hit-testing
-/// `window.contentView` only. The settings glass is a sibling of that view,
-/// so the page still sees the pointer through the scrim.
-enum SettingsBackdropLock {
-    nonisolated(unsafe) static var isActive = false
-}
-
-private final class SettingsOverlayContainer: NSView {
-    /// System Settings → 外观 → Liquid Glass. `.clear` is the lighter system
-    /// preset and still follows that slider. `.regular` on a full window reads
-    /// as a heavy frost, and a material plus a black dim does not follow it.
-    private let scrim = NSGlassEffectView(frame: .zero)
-    private let hosting = ClearHostingView(rootView: AnyView(Color.clear))
-    private var observers: [NSObjectProtocol] = []
-    private var eventMonitor: Any?
-    private var isBringingToFront = false
-    private var isInstalled = false
-
-    override var isOpaque: Bool {
-        false
-    }
-
-    init() {
-        super.init(frame: .zero)
-        scrim.style = .clear
-        scrim.cornerRadius = 0
-        scrim.translatesAutoresizingMaskIntoConstraints = true
-        scrim.autoresizingMask = [.width, .height]
-        hosting.sizingOptions = []
-        hosting.safeAreaRegions = []
-        hosting.translatesAutoresizingMaskIntoConstraints = true
-        // Keep the glass view outside a layer-backed parent so its backdrop
-        // samples the main window instead of an empty container layer.
-        addSubview(scrim)
-        addSubview(hosting)
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        nil
-    }
-
-    override var mouseDownCanMoveWindow: Bool {
-        false
-    }
-
-    /// Glass hit-testing returns the page underneath the scrim. Keep those
-    /// events here so the window behind the settings card cannot scroll or
-    /// activate. Traffic-light buttons stay outside this view.
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let localPoint = convert(point, from: superview)
-        guard bounds.contains(localPoint), !coversWindowButton(at: localPoint) else { return nil }
-        if let hit = hosting.hitTest(localPoint), hit.isDescendant(of: hosting) {
-            return hit
-        }
-        return self
-    }
-
-    override func mouseDown(with _: NSEvent) {}
-
-    override func mouseUp(with _: NSEvent) {}
-
-    override func mouseDragged(with _: NSEvent) {}
-
-    override func rightMouseDown(with _: NSEvent) {}
-
-    override func rightMouseUp(with _: NSEvent) {}
-
-    override func rightMouseDragged(with _: NSEvent) {}
-
-    override func otherMouseDown(with _: NSEvent) {}
-
-    override func otherMouseUp(with _: NSEvent) {}
-
-    override func otherMouseDragged(with _: NSEvent) {}
-
-    override func scrollWheel(with _: NSEvent) {}
-
-    override func magnify(with _: NSEvent) {}
-
-    override func rotate(with _: NSEvent) {}
-
-    override func swipe(with _: NSEvent) {}
-
-    override func viewDidMoveToSuperview() {
-        super.viewDidMoveToSuperview()
-        installObservers()
-        bringToFront()
-    }
-
-    override func viewWillMove(toSuperview newSuperview: NSView?) {
-        super.viewWillMove(toSuperview: newSuperview)
-        if newSuperview == nil {
-            removeObservers()
-        }
-    }
-
-    override func layout() {
-        super.layout()
-        if let superview, frame != superview.bounds {
-            frame = superview.bounds
-        }
-        scrim.frame = bounds
-        hosting.frame = bounds
-        bringToFront()
-    }
-
-    func present(
-        isPresented: Binding<Bool>,
-        app: AppModel,
-        content: JarvisModalContent,
-        in parent: NSView
-    ) {
-        SettingsBackdropLock.isActive = true
-        installEventMonitor()
-        // Replacing rootView resets the settings selection, so install it once per open.
-        let installing = !isInstalled
-        // Size to the window before the SwiftUI tree is installed, so its first
-        // layout sees the real window instead of the card's ideal size.
-        frame = parent.bounds
-        scrim.frame = bounds
-        hosting.frame = bounds
-        if superview !== parent {
-            autoresizingMask = [.width, .height]
-            parent.addSubview(self, positioned: .above, relativeTo: nil)
-        }
-        if installing {
-            hosting.sizingOptions = []
-            hosting.safeAreaRegions = []
-            hosting.rootView = AnyView(
-                SettingsOverlayRoot(isPresented: isPresented, app: app, content: content)
-            )
-            hosting.sizingOptions = []
-            isInstalled = true
-        }
-        bringToFront()
-        guard installing else { return }
-        window?.makeFirstResponder(hosting)
-    }
-
-    func dismiss() {
-        guard superview != nil || isInstalled else { return }
-        SettingsBackdropLock.isActive = false
-        removeEventMonitor()
-        isInstalled = false
-        hosting.rootView = AnyView(Color.clear)
-        removeFromSuperview()
-    }
-
-    /// Events over the glass never reach the page. The settings card and the
-    /// window buttons still receive theirs.
-    private func installEventMonitor() {
-        guard eventMonitor == nil else { return }
-        eventMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [
-                .leftMouseDown, .leftMouseUp, .leftMouseDragged,
-                .rightMouseDown, .rightMouseUp, .rightMouseDragged,
-                .otherMouseDown, .otherMouseUp, .otherMouseDragged,
-                .scrollWheel, .magnify, .swipe, .rotate, .mouseMoved
-            ]
-        ) { [weak self] event in
-            guard let self, SettingsBackdropLock.isActive, event.window === self.window else {
-                return event
-            }
-            if self.shouldPassThroughScrim(event) {
-                return event
-            }
-            NSCursor.arrow.set()
-            return nil
-        }
-    }
-
-    private func removeEventMonitor() {
-        if let eventMonitor {
-            NSEvent.removeMonitor(eventMonitor)
-        }
-        eventMonitor = nil
-    }
-
-    private func shouldPassThroughScrim(_ event: NSEvent) -> Bool {
-        let localPoint = convert(event.locationInWindow, from: nil)
-        if coversWindowButton(at: localPoint) {
-            return true
-        }
-        let fitted = SettingsLayout.fittedModalSize(in: bounds.size)
-        let card = CGRect(
-            x: bounds.midX - fitted.width / 2,
-            y: bounds.midY - fitted.height / 2,
-            width: fitted.width,
-            height: fitted.height
-        ).insetBy(dx: -8, dy: -8)
-        return card.contains(localPoint)
-    }
-
-    private func bringToFront() {
-        guard !isBringingToFront, let superview, superview.subviews.last !== self else { return }
-        isBringingToFront = true
-        superview.addSubview(self, positioned: .above, relativeTo: nil)
-        isBringingToFront = false
-    }
-
-    private func coversWindowButton(at localPoint: NSPoint) -> Bool {
-        guard let window else { return false }
-        let windowPoint = convert(localPoint, to: nil)
-        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-        return buttons.contains { kind in
-            guard let button = window.standardWindowButton(kind), let buttonParent = button.superview else {
-                return false
-            }
-            let local = buttonParent.convert(windowPoint, from: nil)
-            return button.frame.insetBy(dx: -4, dy: -4).contains(local)
-        }
-    }
-
-    private func installObservers() {
-        removeObservers()
-        guard let window else { return }
-        let center = NotificationCenter.default
-        let resizeNames: [Notification.Name] = [
-            NSWindow.didResizeNotification,
-            NSWindow.didEndLiveResizeNotification
-        ]
-        for name in resizeNames {
-            observers.append(
-                center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated {
-                        self?.bringToFront()
-                    }
-                }
-            )
-        }
-        observers.append(
-            center.addObserver(
-                forName: NSSplitView.didResizeSubviewsNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.bringToFront()
-                }
-            }
-        )
-    }
-
-    private func removeObservers() {
-        let center = NotificationCenter.default
-        observers.forEach(center.removeObserver)
-        observers.removeAll()
     }
 }
 
