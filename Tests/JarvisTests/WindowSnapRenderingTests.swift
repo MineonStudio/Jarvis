@@ -51,7 +51,7 @@ final class WindowSnapRenderingTests: XCTestCase {
             let bitmap = try render(view)
             let root = geometry.localRect(for: placement.group)
             let hoverColor = try compositedHoverColor(in: view, bitmap: bitmap)
-            let accentColor = try resolvedAccentColor(in: view)
+            let accentColor = try renderedAccentColor(in: view)
             for item in placement.group.placements {
                 let block = geometry.localRect(for: item).offsetBy(dx: -root.minX, dy: -root.minY)
                 let color = try pixel(at: CGPoint(x: block.midX, y: block.midY), bitmap: bitmap, size: view.bounds.size)
@@ -69,12 +69,16 @@ final class WindowSnapRenderingTests: XCTestCase {
         return try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
     }
 
-    private func resolvedAccentColor(in view: NSView) throws -> NSColor {
-        var color: NSColor?
-        view.effectiveAppearance.performAsCurrentDrawingAppearance {
-            color = NSColor.controlAccentColor.usingColorSpace(.sRGB)
-        }
-        return try XCTUnwrap(color)
+    private func renderedAccentColor(in view: NSView) throws -> NSColor {
+        // Match both the appearance and the window's bitmap color profile.
+        // Converting NSColor directly to sRGB omits the cacheDisplay transform.
+        let reference = WindowSnapAccentReferenceView(frame: CGRect(x: 0, y: 0, width: 12, height: 12))
+        view.addSubview(reference)
+        defer { reference.removeFromSuperview() }
+        return try pixel(
+            at: CGPoint(x: reference.bounds.midX, y: reference.bounds.midY),
+            bitmap: render(reference), size: reference.bounds.size
+        )
     }
 
     private func compositedHoverColor(in view: NSView, bitmap: NSBitmapImageRep) throws -> NSColor {
@@ -140,5 +144,13 @@ final class WindowSnapRenderingTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
             .write(to: directory.appendingPathComponent("window-layout-\(name).png"))
+    }
+}
+
+@MainActor
+private final class WindowSnapAccentReferenceView: NSView {
+    override func draw(_: NSRect) {
+        NSColor.controlAccentColor.setFill()
+        NSBezierPath(rect: bounds).fill()
     }
 }
