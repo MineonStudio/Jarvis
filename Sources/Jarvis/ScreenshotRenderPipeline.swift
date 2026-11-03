@@ -91,38 +91,48 @@ final class ScreenshotRenderPipeline {
         }
 
         for annotation in request.annotations {
-            context.saveGState()
-            // Annotation points come from the SwiftUI canvas (top-left
-            // origin), while the exported bitmap keeps the source image's
-            // native bottom-left pixel coordinates.
-            context.translateBy(x: 0, y: CGFloat(pixelHeight))
-            context.scaleBy(x: scale, y: -scale)
-            switch annotation.kind {
-            case .arrow:
-                drawArrow(annotation, in: context)
-            case .rectangle:
-                drawRectangle(annotation, in: context)
-            case .pen:
-                drawPen(annotation, in: context)
-            case .mosaic:
-                drawMosaic(
-                    annotation,
-                    in: context,
-                    canvasRect: canvasRect,
-                    blurredImage: request.blurredImage,
-                    pixelatedImage: request.pixelatedImage
-                )
-            case .text:
-                // 文字和别的标注一样走这条翻转过 CTM 的通道，位置由
-                // `ScreenshotAnnotationText` 统一给出——预览和输入控件用的是同一份。
-                // 它也因此和别的标注一样按数组顺序叠：导出与预览的上下层关系一致
-                // （原来文字单独留到最后画，永远压在所有标注之上）。
-                ScreenshotAnnotationText.draw(annotation, in: context)
-            }
-            context.restoreGState()
+            drawAnnotation(annotation, in: context, request: request, scale: scale)
         }
 
         return context.makeImage()
+    }
+
+    private func drawAnnotation(
+        _ annotation: ScreenshotAnnotation,
+        in context: CGContext,
+        request: ScreenshotRenderRequest,
+        scale: CGFloat
+    ) {
+        context.saveGState()
+        defer { context.restoreGState() }
+        // Annotation points use the canvas's top-left origin. Keep each
+        // annotation in its own transformed context so stacking is unchanged.
+        context.translateBy(x: 0, y: CGFloat(context.height))
+        context.scaleBy(x: scale, y: -scale)
+        switch annotation.kind {
+        case .arrow:
+            drawArrow(annotation, in: context)
+        case .rectangle:
+            drawRectangle(annotation, in: context)
+        case .pen:
+            drawPen(annotation, in: context)
+        case .mosaic:
+            drawMosaic(
+                annotation,
+                in: context,
+                canvasRect: CGRect(origin: .zero, size: request.canvasSize),
+                blurredImage: request.blurredImage,
+                pixelatedImage: request.pixelatedImage
+            )
+        case .comment:
+            ScreenshotCommentLayout.draw(annotation, in: context)
+        case .text:
+            // 文字和别的标注一样走这条翻转过 CTM 的通道，位置由
+            // `ScreenshotAnnotationText` 统一给出——预览和输入控件用的是同一份。
+            // 它也因此和别的标注一样按数组顺序叠：导出与预览的上下层关系一致
+            // （原来文字单独留到最后画，永远压在所有标注之上）。
+            ScreenshotAnnotationText.draw(annotation, in: context)
+        }
     }
 
     private func drawArrow(_ annotation: ScreenshotAnnotation, in context: CGContext) {

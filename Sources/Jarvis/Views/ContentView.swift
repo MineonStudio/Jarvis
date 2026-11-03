@@ -5,7 +5,7 @@ import SwiftUI
 struct ContentView: View {
     static let homePointerCoordinateSpace = "jarvis.main-window"
 
-    @Binding var isSettingsPresented: Bool
+    let onOpenSettings: () -> Void
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var navigationSelection: TopLevelSection = .home
@@ -23,7 +23,7 @@ struct ContentView: View {
                 footerTitle: "设置",
                 footerIcon: "gearshape",
                 footerIsSelected: false,
-                footerAction: { isSettingsPresented = true },
+                footerAction: onOpenSettings,
                 showsHeader: false
             )
             // Track the page below the toolbar. A tracker on the entire

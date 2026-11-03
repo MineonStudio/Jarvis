@@ -112,6 +112,49 @@ final class EntertainmentPlatformTests: XCTestCase {
         )
     }
 
+    func testDownloadActionsAreCancelledForBothWebModulesAndFrames() throws {
+        let blobURL = try XCTUnwrap(URL(string: "blob:https://example.com/file"))
+        let fileURL = try XCTUnwrap(URL(string: "https://example.com/file.zip"))
+        for platform in [AIConversationProvider.gpt.webPlatform, EntertainmentPlatform.youtube.webPlatform] {
+            for isMainFrame in [true, false] {
+                for url in [platform.url, blobURL, fileURL] {
+                    XCTAssertEqual(
+                        JarvisWebPlatformNavigationPolicy.decision(
+                            url: url,
+                            isMainFrame: isMainFrame,
+                            shouldDownload: true,
+                            allowsHost: platform.allowsHost
+                        ),
+                        .cancel
+                    )
+                }
+            }
+        }
+    }
+
+    func testDownloadResponsesAreBlockedWhileInlineContentStaysVisible() throws {
+        let url = try XCTUnwrap(URL(string: "https://www.youtube.com/file"))
+        for disposition in ["attachment", "Attachment; filename=video.mp4", " attachment ; filename=page.html"] {
+            let response = try XCTUnwrap(HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Disposition": disposition]
+            ))
+            XCTAssertFalse(JarvisWebPlatformNavigationPolicy.allowsResponse(response, canShowMIMEType: true))
+        }
+        let inlineResponse = try XCTUnwrap(HTTPURLResponse(
+            url: url,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Disposition": "inline; filename=video.mp4"]
+        ))
+        XCTAssertTrue(JarvisWebPlatformNavigationPolicy.allowsResponse(inlineResponse, canShowMIMEType: true))
+        XCTAssertFalse(JarvisWebPlatformNavigationPolicy.allowsResponse(inlineResponse, canShowMIMEType: false))
+        let page = URLResponse(url: url, mimeType: "text/html", expectedContentLength: 0, textEncodingName: "utf-8")
+        XCTAssertTrue(JarvisWebPlatformNavigationPolicy.allowsResponse(page, canShowMIMEType: true))
+    }
+
     func testWebViewContainerFillsBoundsWithoutCornerOverlaysOrClipping() {
         let container = JarvisWebPlatformViewContainer(
             frame: NSRect(x: 0, y: 0, width: 320, height: 180)

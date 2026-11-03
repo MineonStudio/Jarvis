@@ -16,6 +16,18 @@ enum ScreenshotTextColor: String, CaseIterable, Identifiable, Equatable {
         rawValue
     }
 
+    var title: String {
+        switch self {
+        case .red: "红色"
+        case .yellow: "黄色"
+        case .white: "白色"
+        case .black: "黑色"
+        case .cyan: "青色"
+        case .blue: "蓝色"
+        case .green: "绿色"
+        }
+    }
+
     var color: Color {
         switch self {
         case .red: Color(red: 1, green: 0.12, blue: 0.12)
@@ -128,6 +140,7 @@ struct ScreenshotAnnotation: Identifiable, Equatable, Sendable {
         case pen
         case mosaic
         case text
+        case comment
     }
 
     var id = UUID()
@@ -148,8 +161,14 @@ struct ScreenshotAnnotation: Identifiable, Equatable, Sendable {
     var mosaicMode: ScreenshotMosaicMode = .rectangle
     var mosaicStyle: ScreenshotMosaicStyle = .blur
 
+    var commentNumber: Int = 0
+    var commentWidth: CGFloat = 280
+
     /// 标注在画布坐标里的外接矩形（右键菜单的热区用）。
     var canvasBounds: CGRect {
+        if kind == .comment {
+            return ScreenshotCommentLayout.bounds(of: self)
+        }
         let all = points.isEmpty ? [start, end] : points
         let xs = all.map(\.x)
         let ys = all.map(\.y)
@@ -212,6 +231,8 @@ struct ScreenshotAnnotation: Identifiable, Equatable, Sendable {
         case .mosaic:
             let padding = mosaicMode == .brush ? brushSize / 2 + 4 : 4
             return rect.insetBy(dx: -padding, dy: -padding)
+        case .comment:
+            return ScreenshotCommentLayout.bounds(of: self)
         case .text:
             let size = textSize
             return CGRect(
@@ -251,6 +272,11 @@ final class ScreenshotEditorModel: ObservableObject {
     /// 离开输入的动作都要先把草稿提交掉，而那些动作发生在模型这一层。
     @Published var textDraft = ""
 
+    @Published var commentInputAnchor: CGPoint?
+    @Published var commentBubbleOrigin: CGPoint?
+    @Published var editingCommentID: UUID?
+    @Published var commentDraft = ""
+
     @Published private(set) var selectionRect: CGRect? {
         didSet { scheduleRenderedTranslationBlocksRefresh() }
     }
@@ -273,8 +299,14 @@ final class ScreenshotEditorModel: ObservableObject {
     @Published var rectangleLineStyle: ScreenshotLineStyle = .solid
     @Published var penColor: ScreenshotTextColor = .red
     @Published var penLineWidth: CGFloat = ScreenshotStrokeWidth.default
-    @Published var textFontSize: CGFloat = ScreenshotTextSize.default
-    @Published var textColor: ScreenshotTextColor = .red
+    @Published var textFontSize: CGFloat = ScreenshotTextSize.default {
+        didSet { updateSelectedCommentStyle() }
+    }
+
+    @Published var textColor: ScreenshotTextColor = .red {
+        didSet { updateSelectedCommentStyle() }
+    }
+
     @Published var textBold = true
     @Published var textItalic = false
     @Published var textStrikethrough = false
@@ -392,6 +424,7 @@ extension ScreenshotEditorModel {
             || selectedTool == .pen
             || selectedTool == .mosaic
             || selectedTool == .text
+            || selectedTool == .comment
     }
 
     var isEditingText: Bool {
@@ -472,6 +505,10 @@ extension ScreenshotEditorModel {
             selectTool(nil)
             return true
         }
+        if isEditingComment {
+            endCommentEditing()
+            return true
+        }
         if isEditingText {
             endTextEditing()
             return true
@@ -487,7 +524,7 @@ extension ScreenshotEditorModel {
         // 换工具时把正在输入的文字落下去：编辑器没有确认按钮，换工具就是提交时机。
         // （顺带保证锚点不会留在模型里——Esc 的第一步会被一个不存在的「正在输入」
         // 永远吃掉。）
-        commitTextEditing()
+        commitPendingEdits()
         selectedTool = tool
         translationMode = false
         if tool != .text {
@@ -592,8 +629,23 @@ extension ScreenshotEditorModel {
         activeMoveSnapshot = annotations
     }
 
-    func moveAnnotation(id: UUID, by delta: CGPoint, within constraint: CGRect? = nil) {
+    func moveAnnotation(
+        id: UUID, by delta: CGPoint, within constraint: CGRect? = nil,
+        commentPart: ScreenshotCommentPart? = nil
+    ) {
         guard let index = annotations.firstIndex(where: { $0.id == id }) else { return }
+        if annotations[index].kind == .comment, let commentPart {
+            let rect = constraint ?? commentEditingRect
+            let pointIndex = commentPart == .anchor ? 0 : 1
+            let current = annotations[index].points[pointIndex]
+            let proposed = CGPoint(x: current.x + delta.x, y: current.y + delta.y)
+            annotations[index].points[pointIndex] = commentPart == .anchor
+                ? ScreenshotCommentLayout.clampedAnchor(proposed, in: rect)
+                : ScreenshotCommentLayout.clampedOrigin(
+                    proposed, size: ScreenshotCommentLayout.bubbleRect(of: annotations[index]).size, in: rect
+                )
+            return
+        }
         var adjustedDelta = delta
         if let constraint {
             let bounds = annotations[index].bounds
@@ -673,12 +725,23 @@ extension ScreenshotEditorModel {
         )
     }
 
+    func replaceComment(_ comment: ScreenshotAnnotation) {
+        guard let index = annotations.firstIndex(where: { $0.id == comment.id }),
+              annotations[index] != comment else { return }
+        recordBeforeMutation()
+        annotations[index] = comment
+        redoStack.removeAll()
+    }
+
     func deleteSelectedAnnotation() {
         guard let selectedAnnotationID else { return }
         deleteAnnotation(id: selectedAnnotationID)
     }
 
     func deleteAnnotation(id: UUID) {
+        if editingCommentID == id {
+            endCommentEditing()
+        }
         guard annotations.contains(where: { $0.id == id }) else { return }
         recordBeforeMutation()
         annotations.removeAll { $0.id == id }
@@ -693,7 +756,16 @@ extension ScreenshotEditorModel {
               var copy = annotations.first(where: { $0.id == selectedAnnotationID }) else { return }
         recordBeforeMutation()
         copy.id = UUID()
+        if copy.kind == .comment {
+            copy.commentNumber = nextCommentNumber
+        }
         copy.points = copy.points.map { CGPoint(x: $0.x + 16, y: $0.y + 16) }
+        if copy.kind == .comment {
+            copy.points[0] = ScreenshotCommentLayout.clampedAnchor(copy.start, in: commentEditingRect)
+            copy.points[1] = ScreenshotCommentLayout.clampedOrigin(
+                copy.end, size: ScreenshotCommentLayout.bubbleRect(of: copy).size, in: commentEditingRect
+            )
+        }
         annotations.append(copy)
         self.selectedAnnotationID = copy.id
         redoStack.removeAll()
@@ -750,6 +822,7 @@ extension ScreenshotEditorModel {
     }
 
     func finalPNGData() async -> Data {
+        commitPendingEdits()
         guard hasVisualEdits else { return originalOutputData }
         return await renderedPNGData() ?? originalOutputData
     }
@@ -759,6 +832,7 @@ extension ScreenshotEditorModel {
     /// 渲染与编码都在后台任务上跑：6K 画布上整段是几百毫秒到数秒的量级，压在主
     /// 线程就是点「完成」之后界面直接卡死几秒。
     func renderedPNGData() async -> Data? {
+        commitPendingEdits()
         // 排版是合并刷新的，导出前先确保拿到的是最新结果。
         refreshRenderedTranslationBlocks()
         guard let baseImage = Self.cgImage(from: originalImage) else { return nil }
@@ -841,13 +915,13 @@ extension ScreenshotEditorModel {
         return representation.representation(using: .png, properties: [:])
     }
 
-    private func append(_ annotation: ScreenshotAnnotation) {
+    func append(_ annotation: ScreenshotAnnotation) {
         recordBeforeMutation()
         annotations.append(annotation)
         redoStack.removeAll()
     }
 
-    private func recordBeforeMutation() {
+    func recordBeforeMutation() {
         undoStack.append(annotations)
     }
 

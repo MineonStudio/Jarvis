@@ -16,6 +16,7 @@ final class ScreenshotToolbarIconTests: XCTestCase {
         "arrow.up.right",
         "rectangle",
         "pencil.tip",
+        "bubble.and.pencil",
         "eyedropper",
         "translate",
         "arrow.uturn.backward",

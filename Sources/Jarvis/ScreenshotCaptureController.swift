@@ -58,6 +58,7 @@ enum ScreenshotTool: CaseIterable {
     case pen
     case mosaic
     case text
+    case comment
     case eyedropper
 
     var icon: String {
@@ -67,6 +68,7 @@ enum ScreenshotTool: CaseIterable {
         case .pen: "pencil.tip"
         case .mosaic: "checkerboard.rectangle"
         case .text: "textformat"
+        case .comment: "bubble.and.pencil"
         case .eyedropper: "eyedropper"
         }
     }
@@ -78,6 +80,7 @@ enum ScreenshotTool: CaseIterable {
         case .pen: "画笔"
         case .mosaic: "马赛克"
         case .text: "文字"
+        case .comment: "批注"
         case .eyedropper: "取色"
         }
     }
@@ -131,6 +134,7 @@ enum ScreenshotToolbarComposition {
         .tool(.pen),
         .tool(.mosaic),
         .tool(.text),
+        .tool(.comment),
         .tool(.eyedropper),
         .translate,
         .divider,

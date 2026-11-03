@@ -81,13 +81,7 @@ struct JarvisSidebarNavigation<
             }
 
             if let footerTitle, let footerIcon, let footerAction {
-                Button {
-                    withAnimation(
-                        JarvisMotion.animation(JarvisMotion.sidebarSelection, reduceMotion: reduceMotion)
-                    ) {
-                        footerAction()
-                    }
-                } label: {
+                Button(action: footerAction) {
                     HStack(spacing: JarvisSpacing.controlGap) {
                         Image(systemName: footerIcon)
                             .font(.system(size: 12, weight: .medium))

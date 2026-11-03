@@ -25,6 +25,8 @@ final class SelectionOverlayWindow: ScreenshotColorProbePanel {
         if event.type == .leftMouseDown,
            event.clickCount == 2,
            !isPickingColor,
+           colorProbeCanvas?.isCommentInteraction != true,
+           colorProbeCanvas?.isCommentEvent(event) != true,
            isCanvasEvent(event),
            let onDoubleClick
         {
