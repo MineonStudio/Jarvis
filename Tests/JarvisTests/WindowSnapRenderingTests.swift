@@ -51,10 +51,11 @@ final class WindowSnapRenderingTests: XCTestCase {
             let bitmap = try render(view)
             let root = geometry.localRect(for: placement.group)
             let hoverColor = try compositedHoverColor(in: view, bitmap: bitmap)
+            let accentColor = try resolvedAccentColor(in: view)
             for item in placement.group.placements {
                 let block = geometry.localRect(for: item).offsetBy(dx: -root.minX, dy: -root.minY)
                 let color = try pixel(at: CGPoint(x: block.midX, y: block.midY), bitmap: bitmap, size: view.bounds.size)
-                assertColor(color, matches: item == placement ? NSColor.controlAccentColor : hoverColor)
+                assertColor(color, matches: item == placement ? accentColor : hoverColor)
             }
             XCTAssertEqual(previous, try render(other).representation(using: .png, properties: [:]))
             XCTAssertEqual(overlay.drop(at: pointer)?.0, placement)
@@ -66,6 +67,14 @@ final class WindowSnapRenderingTests: XCTestCase {
         let x = Int(point.x / size.width * CGFloat(bitmap.pixelsWide))
         let y = Int((size.height - point.y) / size.height * CGFloat(bitmap.pixelsHigh))
         return try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+    }
+
+    private func resolvedAccentColor(in view: NSView) throws -> NSColor {
+        var color: NSColor?
+        view.effectiveAppearance.performAsCurrentDrawingAppearance {
+            color = NSColor.controlAccentColor.usingColorSpace(.sRGB)
+        }
+        return try XCTUnwrap(color)
     }
 
     private func compositedHoverColor(in view: NSView, bitmap: NSBitmapImageRep) throws -> NSColor {
