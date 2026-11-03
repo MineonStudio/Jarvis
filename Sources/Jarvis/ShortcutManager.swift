@@ -79,7 +79,7 @@ struct ScreenshotShortcut: Codable, Equatable {
             return keyCode == systemDefinedKeyCode && modifiers == 0
         }
 
-        guard event.type == .keyDown else { return false }
+        guard event.type == .keyDown, !event.isARepeat else { return false }
         let allowed = event.modifierFlags.intersection([.command, .option, .control, .shift])
         return event.keyCode == keyCode && allowed.rawValue == modifiers
     }

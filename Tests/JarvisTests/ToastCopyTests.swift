@@ -29,13 +29,6 @@ final class ToastCopyTests: XCTestCase {
         XCTAssertFalse(JarvisFeedbackCopy.connectionFailed.contains(":"))
     }
 
-    func testWindowLayoutSuccessOmitsTheAppName() {
-        let message = JarvisFeedbackCopy.windowAdjusted("左半屏")
-        XCTAssertEqual(message, "已调整为左半屏")
-        XCTAssertFalse(message.contains("Safari"))
-        XCTAssertFalse(message.contains("当前窗口"))
-    }
-
     func testANewActionReusesTheSameToastCapsule() {
         XCTAssertEqual(JarvisToastHost.capsuleIdentity, "jarvis.toast")
         XCTAssertTrue(JarvisToastHost.shouldAnimatePresence(from: nil, to: "复制成功"))

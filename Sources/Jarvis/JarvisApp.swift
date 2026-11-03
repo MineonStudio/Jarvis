@@ -113,7 +113,7 @@ private struct JarvisRootView: View {
                 minHeight: JarvisMainWindowController.minimumWindowSize.height
             )
             .overlay {
-                if let prompt = appModel.taskPermissionPrompt {
+                if let prompt = appModel.taskPermissionPrompt, prompt.presentation == .mainWindow {
                     JarvisTaskPermissionOverlay(prompt: prompt)
                         .environment(appModel)
                 }
@@ -181,6 +181,8 @@ private final class JarvisApplicationDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
         NSApp.setActivationPolicy(JarvisApplicationPresentation.activationPolicy)
         menuBarController.install()
+        appModel?.configureAutomaticUpdates()
+        appModel?.configureWindowDragLayout()
         NSApp.activate()
         // 挂在委托上而不是主窗口上：主窗口关着时贴图也可能还在。
         screenParametersObserver = NotificationCenter.default.addObserver(
@@ -215,6 +217,8 @@ private final class JarvisApplicationDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_: Notification) {
+        appModel?.windowDragLayoutController?.stop()
+        appModel?.windowLayoutPickerController?.cancel()
         appModel?.performPermissionResetAndRelaunchIfNeeded()
         if let screenParametersObserver {
             NotificationCenter.default.removeObserver(screenParametersObserver)

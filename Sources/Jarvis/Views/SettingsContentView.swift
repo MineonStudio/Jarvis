@@ -79,233 +79,6 @@ struct SettingsCardHeader: View {
     }
 }
 
-struct ShortcutSettingsCard: View {
-    @Environment(AppModel.self) private var app
-    @State private var screenshotShortcut = ScreenshotShortcut.default
-    @State private var screenRecordingShortcut = ScreenshotShortcut.screenRecordingDefault
-    @State private var clipboardShortcut = ScreenshotShortcut.clipboardDefault
-    @State private var meetingShortcut = ScreenshotShortcut.meetingDefault
-    @State private var isRecordingScreenshotShortcut = false
-    @State private var isRecordingScreenRecordingShortcut = false
-    @State private var isRecordingClipboardShortcut = false
-    @State private var isRecordingMeetingShortcut = false
-
-    var body: some View {
-        JarvisCard {
-            content
-        }
-        .onAppear {
-            screenshotShortcut = app.screenshotShortcut
-            screenRecordingShortcut = app.screenRecording.shortcuts.bindings[ScreenRecordingShortcutAction.open.rawValue]
-                ?? .screenRecordingDefault
-            clipboardShortcut = app.clipboardShortcut
-            meetingShortcut = app.meetingShortcut
-            _ = app.validateScreenshotShortcut(screenshotShortcut)
-            _ = app.validateClipboardShortcut(clipboardShortcut)
-            _ = app.validateMeetingShortcut(meetingShortcut)
-        }
-        .onChange(of: screenshotShortcut) { _, newValue in
-            guard isRecordingScreenshotShortcut else { return }
-            if app.validateScreenshotShortcut(newValue) {
-                guard newValue != app.screenshotShortcut else { return }
-                _ = app.updateScreenshotShortcut(newValue)
-            }
-        }
-        .onChange(of: screenRecordingShortcut) { _, newValue in
-            guard isRecordingScreenRecordingShortcut,
-                  newValue != app.screenRecording.shortcuts.bindings[ScreenRecordingShortcutAction.open.rawValue]
-            else { return }
-            _ = app.screenRecording.shortcuts.set(newValue, for: .open)
-        }
-        .onChange(of: clipboardShortcut) { _, newValue in
-            guard isRecordingClipboardShortcut else { return }
-            if app.validateClipboardShortcut(newValue) {
-                guard newValue != app.clipboardShortcut else { return }
-                _ = app.updateClipboardShortcut(newValue)
-            }
-        }
-        .onChange(of: meetingShortcut) { _, newValue in
-            guard isRecordingMeetingShortcut else { return }
-            if app.validateMeetingShortcut(newValue) {
-                guard newValue != app.meetingShortcut else { return }
-                _ = app.updateMeetingShortcut(newValue)
-            }
-        }
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: SettingsFormMetrics.cardContentSpacing) {
-            SettingsCardHeader(title: "快捷键", systemImage: "keyboard")
-
-            shortcutRow(
-                title: "截图",
-                shortcut: $screenshotShortcut,
-                isRecording: $isRecordingScreenshotShortcut,
-                conflictMessage: app.screenshotShortcutConflictMessage
-            ) {
-                let previous = screenshotShortcut
-                if !app.updateScreenshotShortcut(.default) {
-                    screenshotShortcut = previous
-                } else {
-                    screenshotShortcut = .default
-                }
-            }
-
-            shortcutRow(
-                title: "屏幕录制",
-                shortcut: $screenRecordingShortcut,
-                isRecording: $isRecordingScreenRecordingShortcut,
-                conflictMessage: app.screenRecording.shortcuts.error
-            ) {
-                if app.screenRecording.shortcuts.set(.screenRecordingDefault, for: .open) {
-                    screenRecordingShortcut = .screenRecordingDefault
-                }
-            }
-
-            shortcutRow(
-                title: "剪贴板",
-                shortcut: $clipboardShortcut,
-                isRecording: $isRecordingClipboardShortcut,
-                conflictMessage: app.clipboardShortcutConflictMessage
-            ) {
-                let previous = clipboardShortcut
-                if !app.updateClipboardShortcut(.clipboardDefault) {
-                    clipboardShortcut = previous
-                } else {
-                    clipboardShortcut = .clipboardDefault
-                }
-            }
-
-            shortcutRow(
-                title: "会议录制",
-                shortcut: $meetingShortcut,
-                isRecording: $isRecordingMeetingShortcut,
-                conflictMessage: app.meetingShortcutConflictMessage
-            ) {
-                let previous = meetingShortcut
-                if !app.updateMeetingShortcut(.meetingDefault) {
-                    meetingShortcut = previous
-                } else {
-                    meetingShortcut = .meetingDefault
-                }
-            }
-        }
-    }
-
-    private func shortcutRow(
-        title: String,
-        shortcut: Binding<ScreenshotShortcut>,
-        isRecording: Binding<Bool>,
-        conflictMessage: String,
-        onRestore: @escaping () -> Void
-    ) -> some View {
-        HStack(spacing: JarvisSpacing.groupGap) {
-            Text(title)
-                .font(SettingsTypography.itemTitle)
-                .fixedSize(horizontal: true, vertical: false)
-            Spacer(minLength: 8)
-            ShortcutRecorderControl(
-                shortcut: shortcut,
-                isRecording: isRecording
-            )
-            .frame(width: 170, height: 32)
-            if !conflictMessage.isEmpty {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                    .help(conflictMessage)
-            }
-            Button("恢复默认", action: onRestore)
-                .buttonStyle(JarvisSecondaryButtonStyle())
-                .fixedSize(horizontal: true, vertical: false)
-        }
-    }
-}
-
-struct WindowLayoutShortcutSettingsCard: View {
-    var body: some View {
-        JarvisCard {
-            content
-        }
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: SettingsFormMetrics.cardContentSpacing) {
-            SettingsCardHeader(
-                title: "窗口布局快捷键",
-                systemImage: "macwindow.on.rectangle"
-            )
-
-            ForEach(WindowLayout.allCases, id: \.self) { layout in
-                WindowLayoutShortcutRow(layout: layout)
-            }
-        }
-    }
-}
-
-private struct WindowLayoutShortcutRow: View {
-    @Environment(AppModel.self) private var app
-
-    let layout: WindowLayout
-
-    @State private var shortcut = ScreenshotShortcut.default
-    @State private var isRecording = false
-    @State private var conflictMessage = ""
-
-    var body: some View {
-        HStack(spacing: JarvisSpacing.groupGap) {
-            Text(layout.title)
-                .font(SettingsTypography.itemTitle)
-                .fixedSize(horizontal: true, vertical: false)
-            Spacer(minLength: 8)
-            ShortcutRecorderControl(
-                shortcut: $shortcut,
-                isRecording: $isRecording
-            )
-            .frame(width: 170, height: 32)
-            if !conflictMessage.isEmpty {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                    .help(conflictMessage)
-            }
-            Button("恢复默认", action: restoreDefault)
-                .buttonStyle(JarvisSecondaryButtonStyle())
-                .fixedSize(horizontal: true, vertical: false)
-        }
-        .onAppear {
-            shortcut = app.windowLayoutShortcut(for: layout)
-            conflictMessage = validationMessage(for: shortcut)
-        }
-        .onChange(of: shortcut) { _, newValue in
-            guard isRecording else { return }
-            let validation = app.validateWindowLayoutShortcut(layout, newValue)
-            conflictMessage = validation == .available ? "" : validation.message
-            guard validation == .available else { return }
-            guard newValue != app.windowLayoutShortcut(for: layout) else { return }
-            guard app.updateWindowLayoutShortcut(layout, newValue) else {
-                shortcut = app.windowLayoutShortcut(for: layout)
-                conflictMessage = validationMessage(for: shortcut)
-                return
-            }
-        }
-    }
-
-    private func restoreDefault() {
-        let defaultShortcut = layout.defaultShortcut
-        guard app.updateWindowLayoutShortcut(layout, defaultShortcut) else {
-            shortcut = app.windowLayoutShortcut(for: layout)
-            conflictMessage = validationMessage(for: shortcut)
-            return
-        }
-        shortcut = defaultShortcut
-        conflictMessage = ""
-    }
-
-    private func validationMessage(for shortcut: ScreenshotShortcut) -> String {
-        let validation = app.validateWindowLayoutShortcut(layout, shortcut)
-        return validation == .available ? "" : validation.message
-    }
-}
-
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -358,6 +131,7 @@ struct SettingsView: View {
         switch selection {
         case .general:
             launchAtLoginSettingsCard
+            WindowDragLayoutSettingsCard()
             ScreenshotLanguagePackSettingsCard()
             permissionSettingsCard
         case .appearance:
@@ -367,7 +141,6 @@ struct SettingsView: View {
             WallpaperSourcesSettingsCard()
         case .shortcuts:
             ShortcutSettingsCard()
-            WindowLayoutShortcutSettingsCard()
         case .model:
             AIAPISettingsCard()
             MeetingModelSettingsCard()
@@ -378,6 +151,7 @@ struct SettingsView: View {
             DiagnosticsSettingsCard()
         case .about:
             versionAndUpdateCard
+            automaticUpdatesSettingsCard
             sourceRepositoryCard
         }
     }
@@ -543,6 +317,26 @@ struct SettingsView: View {
         }
     }
 
+    private var automaticUpdatesSettingsCard: some View {
+        JarvisCard {
+            HStack(spacing: JarvisSpacing.groupGap) {
+                SettingsCardHeader(title: "自动更新", systemImage: "arrow.clockwise")
+                Spacer(minLength: 8)
+                Toggle("自动更新", isOn: Binding(
+                    get: { app.automaticUpdatesEnabled },
+                    set: { app.updateAutomaticUpdatesEnabled($0) }
+                ))
+                .labelsHidden()
+                .jarvisSwitchAccent()
+                .animation(
+                    JarvisMotion.animation(JarvisMotion.selection, reduceMotion: reduceMotion),
+                    value: app.automaticUpdatesEnabled
+                )
+                .help("自动检查新版本，发现更新时提醒，由你选择更新时间")
+            }
+        }
+    }
+
     private var sourceRepositoryCard: some View {
         JarvisCard {
             VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
@@ -599,177 +393,6 @@ struct SettingsView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("将清除屏幕录制、辅助功能、麦克风和摄像头授权，然后重新打开工作搭子 Jarvis。")
-        }
-    }
-}
-
-struct DiagnosticsSettingsCard: View {
-    @Environment(AppModel.self) private var app
-
-    var body: some View {
-        JarvisCard {
-            content
-        }
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: SettingsFormMetrics.cardContentSpacing) {
-            HStack(spacing: JarvisSpacing.groupGap) {
-                SettingsCardHeader(title: "诊断日志", systemImage: "waveform.path.ecg")
-                Spacer(minLength: 8)
-                Button("导出日志") {
-                    app.exportDiagnostics()
-                }
-                .buttonStyle(JarvisSecondaryButtonStyle())
-            }
-        }
-    }
-}
-
-struct MeetingModelSettingsCard: View {
-    @Environment(AppModel.self) private var app
-
-    var body: some View {
-        JarvisCard {
-            content
-        }
-        .onAppear {
-            app.refreshMeetingModelState()
-        }
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: SettingsFormMetrics.sectionSpacing) {
-            SettingsCardHeader(title: "会议识别模型", systemImage: "waveform.and.person.filled")
-
-            ForEach(MeetingModelPreparationStage.allCases) { stage in
-                MeetingModelSettingsRow(stage: stage)
-            }
-
-            if case let .failed(nil, _, message) = app.meetingModelState {
-                Text(message)
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(.red)
-            }
-        }
-    }
-}
-
-private struct MeetingModelSettingsRow: View {
-    @Environment(AppModel.self) private var app
-    let stage: MeetingModelPreparationStage
-
-    private var isReady: Bool {
-        app.meetingModelAvailability.isReady(for: stage)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
-            HStack(alignment: .center, spacing: JarvisSpacing.itemGap) {
-                VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
-                    Text(stage.title)
-                        .font(SettingsTypography.itemTitle)
-                    Text(stage.modelName)
-                        .font(JarvisTypography.monospacedSmall)
-                        .foregroundStyle(Color.jarvisTextSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-
-                Spacer(minLength: 8)
-                action
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-
-            if case let .downloading(activeStage, progress) = app.meetingModelState,
-               activeStage == stage
-            {
-                HStack(spacing: JarvisSpacing.controlGap) {
-                    ProgressView(value: progress)
-                        .tint(Color.jarvisAccent)
-                    Text("下载中 · \(Int(progress * 100))%")
-                        .font(JarvisTypography.caption)
-                        .foregroundStyle(Color.jarvisTextSecondary)
-                }
-            }
-
-            if case let .failed(failedStage, operation, message) = app.meetingModelState,
-               failedStage == stage
-            {
-                Text("\(operation == .remove ? "移除失败" : "下载失败")：\(message)")
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.vertical, JarvisSpacing.controlGap)
-    }
-
-    @ViewBuilder
-    private var action: some View {
-        switch app.meetingModelState {
-        case .checking:
-            Button("检查中") {}
-                .buttonStyle(JarvisSecondaryButtonStyle())
-                .disabled(true)
-        case let .downloading(activeStage, _):
-            if activeStage == stage {
-                Button("取消") { app.cancelMeetingModelPreparation() }
-                    .buttonStyle(JarvisSecondaryButtonStyle())
-            } else {
-                availabilityAction
-            }
-        case let .removing(activeStage):
-            if activeStage == stage {
-                HStack(spacing: JarvisSpacing.iconGap) {
-                    ProgressView().controlSize(.small)
-                    Text("移除中")
-                        .font(JarvisTypography.caption)
-                        .foregroundStyle(Color.jarvisTextSecondary)
-                }
-            } else {
-                availabilityAction
-            }
-        case let .failed(failedStage, operation, _) where failedStage == stage:
-            if operation == .remove {
-                Button("重试移除", role: .destructive) {
-                    app.removeMeetingModel(stage)
-                }
-                .buttonStyle(JarvisSecondaryButtonStyle(tint: .red))
-                .disabled(!app.canManageMeetingModels)
-            } else {
-                Button("重试下载") {
-                    app.prepareMeetingModel(stage)
-                }
-                .buttonStyle(JarvisPrimaryButtonStyle())
-                .disabled(!app.canManageMeetingModels)
-            }
-        default:
-            availabilityAction
-        }
-    }
-
-    @ViewBuilder
-    private var availabilityAction: some View {
-        if isReady {
-            if stage == .chineseTranscription {
-                Text("系统已安装")
-                    .font(JarvisTypography.caption)
-                    .foregroundStyle(Color.jarvisTextSecondary)
-            } else {
-                Button("移除", role: .destructive) {
-                    app.removeMeetingModel(stage)
-                }
-                .buttonStyle(JarvisSecondaryButtonStyle(tint: .red))
-                .disabled(!app.canManageMeetingModels)
-                .help("移除本机下载的 \(stage.title) 模型")
-            }
-        } else {
-            Button("下载") {
-                app.prepareMeetingModel(stage)
-            }
-            .buttonStyle(JarvisPrimaryButtonStyle())
-            .disabled(!app.canManageMeetingModels)
         }
     }
 }

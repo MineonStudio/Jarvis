@@ -109,8 +109,4 @@ enum JarvisFeedbackCopy {
     static func recordingsUsageWarning(_ gigabytes: Double) -> String {
         String(format: "录音已占用 %.1f GB", gigabytes)
     }
-
-    static func windowAdjusted(_ layoutTitle: String) -> String {
-        "已调整为\(layoutTitle)"
-    }
 }

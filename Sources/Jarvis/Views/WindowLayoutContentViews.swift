@@ -1,45 +1,11 @@
 import SwiftUI
 
 enum WindowLayoutDisplayMetrics {
-    static let diagramWidth: CGFloat = 44
-    static let cardContentSpacing = JarvisSpacing.itemGap
-    static let cardHorizontalPadding = JarvisSpacing.cardInset * 2
-    static let minimumTitleWidth: CGFloat = 52
-    static let shortcutPartWidth: CGFloat = 13
-    static let shortcutPartSpacing: CGFloat = 4
-    static let maximumShortcutPartCount = 3
-    static let gridSpacing = JarvisSpacing.gridGap
-
-    static var shortcutWidth: CGFloat {
-        (shortcutPartWidth * CGFloat(maximumShortcutPartCount))
-            + (shortcutPartSpacing * CGFloat(maximumShortcutPartCount - 1))
-    }
-
-    static var minimumCardWidth: CGFloat {
-        cardHorizontalPadding
-            + diagramWidth
-            + cardContentSpacing
-            + minimumTitleWidth
-            + cardContentSpacing
-            + shortcutWidth
-    }
-
-    static var minimumGridWidth: CGFloat {
-        (minimumCardWidth * 2) + gridSpacing
-    }
+    static let minimumContentWidth: CGFloat = 520
 }
 
 struct WindowLayoutView: View {
     @Environment(AppModel.self) private var app
-
-    private let layouts: [WindowLayout] = [
-        .halfLeft,
-        .halfRight,
-        .upperLeft,
-        .upperRight,
-        .lowerLeft,
-        .lowerRight
-    ]
 
     var body: some View {
         JarvisContentArea(
@@ -47,122 +13,30 @@ struct WindowLayoutView: View {
                 JarvisToolbarPlaceholder(id: "window-layout.placeholder")
             },
             trailingToolbar: {
-                ToolbarItem(placement: .automatic) {
-                    EmptyView()
-                }
+                ToolbarItem(placement: .automatic) { EmptyView() }
             },
             content: {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: JarvisSpacing.pageInset) {
-                        layoutGrid
+                    VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
+                        JarvisCard {
+                            VStack(alignment: .leading, spacing: JarvisSpacing.groupGap) {
+                                SettingsCardHeader(title: "窗口布局", systemImage: "rectangle.3.group")
+                                Text("按 F5 打开顶部布局面板，点击布局块，调整当前激活的窗口。")
+                                    .font(JarvisTypography.body)
+                                Text("支持左右分屏、上下分屏和四角分屏。按 Esc、再次按 F5 或点击面板外取消。")
+                                    .font(JarvisTypography.secondary)
+                                    .foregroundStyle(Color.jarvisTextSecondary)
+                                Button("选择窗口布局 · F5") { app.showWindowLayoutPicker() }
+                                    .buttonStyle(JarvisPrimaryButtonStyle())
+                            }
+                        }
+                        WindowDragLayoutSettingsCard()
                     }
-                    .frame(maxWidth: 980, alignment: .leading)
+                    .frame(maxWidth: 760, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.bottom, JarvisMetrics.pageInset)
                 }
             }
         )
-    }
-
-    private var layoutGrid: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(
-                    .flexible(minimum: WindowLayoutDisplayMetrics.minimumCardWidth),
-                    spacing: WindowLayoutDisplayMetrics.gridSpacing
-                ),
-                GridItem(
-                    .flexible(minimum: WindowLayoutDisplayMetrics.minimumCardWidth),
-                    spacing: WindowLayoutDisplayMetrics.gridSpacing
-                )
-            ],
-            spacing: WindowLayoutDisplayMetrics.gridSpacing
-        ) {
-            ForEach(layouts) { layout in
-                WindowLayoutDisplayCard(
-                    layout: layout,
-                    shortcut: app.windowLayoutShortcut(for: layout)
-                )
-            }
-        }
-    }
-}
-
-private struct WindowLayoutDisplayCard: View {
-    let layout: WindowLayout
-    let shortcut: ScreenshotShortcut
-
-    var body: some View {
-        HStack(spacing: JarvisSpacing.itemGap) {
-            WindowLayoutDiagram(layout: layout)
-            Text(layout.title)
-                .font(JarvisTypography.bodyEmphasis)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            WindowLayoutShortcutLabel(shortcut: shortcut)
-        }
-        .padding(.horizontal, JarvisSpacing.cardInset)
-        .padding(.vertical, JarvisSpacing.rowInset)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .jarvisContentSurface(cornerRadius: 13)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-private struct WindowLayoutShortcutLabel: View {
-    let shortcut: ScreenshotShortcut
-
-    var body: some View {
-        HStack(spacing: JarvisSpacing.textGap) {
-            ForEach(Array(shortcut.displayString.map(String.init)), id: \.self) { part in
-                Text(part)
-                    .font(JarvisTypography.monospaced)
-                    .frame(minWidth: 13)
-            }
-        }
-        .foregroundStyle(Color.jarvisTextSecondary)
-        .fixedSize()
-    }
-}
-
-private struct WindowLayoutDiagram: View {
-    let layout: WindowLayout
-
-    private var fillAlignment: Alignment {
-        switch layout {
-        case .halfLeft: .leading
-        case .halfRight: .trailing
-        case .upperLeft: .topLeading
-        case .upperRight: .topTrailing
-        case .lowerLeft: .bottomLeading
-        case .lowerRight: .bottomTrailing
-        }
-    }
-
-    private var fillHeightRatio: CGFloat {
-        switch layout {
-        case .halfLeft, .halfRight: 1
-        case .upperLeft, .upperRight, .lowerLeft, .lowerRight: 0.5
-        }
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            let inset: CGFloat = 2
-            let width = max(0, geometry.size.width - inset * 2)
-            let height = max(0, geometry.size.height - inset * 2)
-
-            ZStack(alignment: fillAlignment) {
-                Color.clear
-                Rectangle()
-                    .fill(Color.jarvisAccent.opacity(0.9))
-                    .frame(width: width / 2, height: height * fillHeightRatio)
-            }
-            .padding(inset)
-            .overlay {
-                Rectangle()
-                    .strokeBorder(Color.primary.opacity(0.72), lineWidth: 1)
-            }
-        }
-        .frame(width: 44, height: 24.75)
     }
 }

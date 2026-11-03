@@ -138,14 +138,6 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         configureMenuShortcut(clipboardMenuItem, with: app.clipboardShortcut)
         updateMeetingMenuItem()
         configureMenuShortcut(meetingMenuItem, with: app.meetingShortcut)
-        for item in menu.items {
-            guard let rawValue = item.representedObject as? String,
-                  let layout = WindowLayout(rawValue: rawValue)
-            else {
-                continue
-            }
-            configureMenuShortcut(item, with: app.windowLayoutShortcut(for: layout))
-        }
         for item in menu.items where !item.isSeparatorItem {
             item.isEnabled = true
         }
@@ -164,18 +156,12 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         addMenuItem(meetingMenuItem)
         menu.addItem(.separator())
 
-        for layout in WindowLayout.allCases {
-            let shortcut = app?.windowLayoutShortcut(for: layout) ?? layout.defaultShortcut
-            let item = NSMenuItem(
-                title: layout.title,
-                action: #selector(applyWindowLayout(_:)),
-                keyEquivalent: shortcut.menuKeyEquivalent
-            )
-            item.keyEquivalentModifierMask = shortcut.modifierFlags
-            item.representedObject = layout.rawValue
-            item.image = layout.menuIcon
-            addMenuItem(item)
-        }
+        let layoutItem = NSMenuItem(
+            title: "窗口布局…", action: #selector(showWindowLayoutPicker),
+            keyEquivalent: ScreenshotShortcut.windowLayoutDefault.menuKeyEquivalent
+        )
+        layoutItem.keyEquivalentModifierMask = []
+        addMenuItem(layoutItem)
 
         menu.addItem(.separator())
         addMenuItem(
@@ -268,6 +254,88 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         meetingMenuItem.isEnabled = isMeetingRecording || meetingModelsReady
     }
 
+    @objc private func captureScreenshot() {
+        app?.captureScreenshot()
+    }
+
+    @objc private func toggleScreenRecording() {
+        app?.screenRecording.handlePrimaryShortcut()
+    }
+
+    func reopenMainWindow(preservingSelection: Bool = false) {
+        if !preservingSelection {
+            app?.selectedSection = .home
+        }
+        showMainWindow(requiresMainScene: preservingSelection)
+    }
+
+    @objc private func openMainWindow() {
+        app?.selectedSection = .home
+        showMainWindow()
+    }
+
+    private func showMainWindow(requiresMainScene: Bool = false) {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let mainWindow = NSApp.windows.first { window in
+            window.identifier?.rawValue == JarvisAppIdentity.mainWindowSceneID
+                || window.frameAutosaveName == JarvisMainWindowController.frameAutosaveName
+        }
+        if let mainWindow, mainWindow.isMiniaturized {
+            mainWindow.deminiaturize(nil)
+            mainWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+        if let mainWindow, mainWindow.isVisible {
+            mainWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        if requiresMainScene {
+            openMainWindowAction?()
+            return
+        }
+
+        if let window = NSApp.windows.first(where: { window in
+            window.canBecomeKey && window.isVisible && !window.isMiniaturized
+                && !(window is NSPanel)
+        }) {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        if let window = NSApp.windows.first(where: { window in
+            window.canBecomeKey && window.isMiniaturized
+        }) {
+            window.deminiaturize(nil)
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        // WindowGroup removes its NSWindow after the user closes the last
+        // window. Recreate the scene through SwiftUI instead of trying to
+        // front a stale AppKit window reference.
+        openMainWindowAction?()
+    }
+
+    @objc private func openClipboardPanel() {
+        app?.showClipboardPanel()
+    }
+
+    @objc private func toggleMeetingRecording() {
+        app?.toggleMeetingRecording()
+    }
+
+    @objc private func showWindowLayoutPicker() {
+        app?.showWindowLayoutPicker()
+    }
+
+    @objc private func terminate() {
+        NSApp.terminate(nil)
+    }
+}
+
+extension JarvisMenuBarController {
     static func makeMenuBarIcon() -> NSImage {
         makeTemplateIcon(
             from: JarvisMascotVector.makeMenuBarImage(),
@@ -340,78 +408,5 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
                 pixel[3] = alpha
             }
         }
-    }
-
-    @objc private func captureScreenshot() {
-        app?.captureScreenshot()
-    }
-
-    @objc private func toggleScreenRecording() {
-        app?.screenRecording.handlePrimaryShortcut()
-    }
-
-    func reopenMainWindow() {
-        openMainWindow()
-    }
-
-    @objc private func openMainWindow() {
-        app?.selectedSection = .home
-        NSApp.activate(ignoringOtherApps: true)
-
-        let mainWindow = NSApp.windows.first { window in
-            window.identifier?.rawValue == JarvisAppIdentity.mainWindowSceneID
-                || window.frameAutosaveName == JarvisMainWindowController.frameAutosaveName
-        }
-        if let mainWindow, mainWindow.isMiniaturized {
-            mainWindow.deminiaturize(nil)
-            mainWindow.makeKeyAndOrderFront(nil)
-            return
-        }
-        if let mainWindow, mainWindow.isVisible {
-            mainWindow.makeKeyAndOrderFront(nil)
-            return
-        }
-
-        if let window = NSApp.windows.first(where: { window in
-            window.canBecomeKey && window.isVisible && !window.isMiniaturized
-                && !(window is NSPanel)
-        }) {
-            window.makeKeyAndOrderFront(nil)
-            return
-        }
-
-        if let window = NSApp.windows.first(where: { window in
-            window.canBecomeKey && window.isMiniaturized
-        }) {
-            window.deminiaturize(nil)
-            window.makeKeyAndOrderFront(nil)
-            return
-        }
-
-        // WindowGroup removes its NSWindow after the user closes the last
-        // window. Recreate the scene through SwiftUI instead of trying to
-        // front a stale AppKit window reference.
-        openMainWindowAction?()
-    }
-
-    @objc private func openClipboardPanel() {
-        app?.showClipboardPanel()
-    }
-
-    @objc private func toggleMeetingRecording() {
-        app?.toggleMeetingRecording()
-    }
-
-    @objc private func applyWindowLayout(_ sender: NSMenuItem) {
-        guard let rawValue = sender.representedObject as? String,
-              let layout = WindowLayout(rawValue: rawValue)
-        else {
-            return
-        }
-        app?.applyWindowLayout(layout)
-    }
-
-    @objc private func terminate() {
-        NSApp.terminate(nil)
     }
 }

@@ -2,8 +2,14 @@ import AppKit
 import AVFoundation
 import Foundation
 
+enum JarvisPermissionPromptPresentation: Equatable {
+    case mainWindow
+    case settingsWindow
+}
+
 struct JarvisTaskPermissionPrompt: Equatable {
     let permission: JarvisRequiredPermission
+    var presentation: JarvisPermissionPromptPresentation = .mainWindow
 
     var title: String {
         switch permission {
@@ -75,15 +81,33 @@ extension AppModel {
         }
     }
 
-    func promptForTaskPermission(_ permission: JarvisRequiredPermission) {
+    func promptForTaskPermission(
+        _ permission: JarvisRequiredPermission,
+        presentation: JarvisPermissionPromptPresentation = .mainWindow
+    ) {
         refreshPermissionStatus()
         guard !isRequiredPermissionGranted(permission) else { return }
-        taskPermissionPrompt = JarvisTaskPermissionPrompt(permission: permission)
-        JarvisMenuBarController.shared.reopenMainWindow()
+        taskPermissionPrompt = JarvisTaskPermissionPrompt(permission: permission, presentation: presentation)
+        if presentation == .mainWindow {
+            JarvisMenuBarController.shared.reopenMainWindow()
+        }
+    }
+
+    func dismissTaskPermissionPrompt() {
+        if taskPermissionPrompt?.permission == .accessibility {
+            windowDragLayoutActivation.cancel()
+            accessibilityPermissionPollTask?.cancel()
+            accessibilityPermissionPollTask = nil
+        }
+        taskPermissionPrompt = nil
     }
 
     func handleTaskPermissionPromptAction() {
         guard let prompt = taskPermissionPrompt else { return }
+        // Hand off to macOS without keeping our explanation over the window.
+        // Do not use dismissTaskPermissionPrompt(): authorizing a pending
+        // window-layout activation must still enable it when access is granted.
+        taskPermissionPrompt = nil
         requestRequiredPermission(prompt.permission)
     }
 
@@ -92,6 +116,14 @@ extension AppModel {
         accessibilityPermissionGranted = windowLayoutController?.isAccessibilityTrusted ?? false
         microphonePermissionGranted = JarvisPrivacyPermissionAccess.isMicrophoneTrusted()
         cameraPermissionGranted = JarvisPrivacyPermissionAccess.isCameraTrusted()
+        completePendingWindowDragLayoutEnableIfAllowed()
+        if let prompt = taskPermissionPrompt, isRequiredPermissionGranted(prompt.permission) {
+            taskPermissionPrompt = nil
+        }
+        if accessibilityPermissionGranted {
+            accessibilityPermissionPollTask?.cancel()
+            accessibilityPermissionPollTask = nil
+        }
     }
 
     func requestRequiredPermission(_ permission: JarvisRequiredPermission) {
@@ -125,8 +157,20 @@ extension AppModel {
         refreshPermissionStatus()
         statusMessage = granted
             ? "辅助功能权限已开启"
-            : "请在系统设置的辅助功能中开启工作搭子 Jarvis"
+            : "已向 macOS 请求辅助功能权限，请完成系统授权"
         showToast(statusMessage)
+        guard !granted else { return }
+        accessibilityPermissionPollTask?.cancel()
+        accessibilityPermissionPollTask = Task { @MainActor [weak self] in
+            for _ in 0 ..< 240 {
+                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                self?.refreshPermissionStatus()
+                if self?.accessibilityPermissionGranted == true {
+                    return
+                }
+            }
+            self?.accessibilityPermissionPollTask = nil
+        }
     }
 
     func requestMicrophonePermission() {

@@ -39,7 +39,7 @@ struct JarvisTaskPermissionOverlay: View {
                     .frame(maxWidth: .infinity)
 
                     Button("暂不") {
-                        app.taskPermissionPrompt = nil
+                        app.dismissTaskPermissionPrompt()
                     }
                     .buttonStyle(PermissionCapsuleButtonStyle(isPrimary: false))
                     .frame(maxWidth: .infinity)
