@@ -34,4 +34,6 @@ extension ScreenshotShortcut {
         keyCode: 118, // F4
         modifiers: 0
     )
+
+    static let windowLayoutDefault = ScreenshotShortcut(keyCode: 96, modifiers: 0) // F5
 }

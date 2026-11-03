@@ -60,7 +60,7 @@ enum JarvisWindowLayoutMetrics {
             HistoryGridMetrics.clipboardSearchFieldWidth
         ) + (JarvisMetrics.pageInset * 2)
         let windowLayoutDetailWidth =
-            WindowLayoutDisplayMetrics.minimumGridWidth + (JarvisMetrics.pageInset * 2)
+            WindowLayoutDisplayMetrics.minimumContentWidth + (JarvisMetrics.pageInset * 2)
         let detailWidth = max(
             clipboardDetailWidth,
             windowLayoutDetailWidth,

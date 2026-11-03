@@ -17,7 +17,7 @@ final class MenuBarConfigurationTests: XCTestCase {
         let menu = controller.configuredMenuForTesting()
         let actionableItems = menu.items.filter { !$0.isSeparatorItem }
 
-        XCTAssertEqual(actionableItems.count, 5 + WindowLayout.allCases.count)
+        XCTAssertEqual(actionableItems.count, 6)
         XCTAssertFalse(actionableItems.contains { $0.title.contains("\u{63a7}\u{5236}\u{6761}") })
         for item in actionableItems {
             XCTAssertNotNil(item.action, item.title)
@@ -26,24 +26,13 @@ final class MenuBarConfigurationTests: XCTestCase {
         }
     }
 
-    func testWindowLayoutMenuItemsExposeTheirShortcuts() throws {
+    func testWindowLayoutHasOneF5MenuItemInsteadOfIndividualBindings() throws {
         let controller = JarvisMenuBarController()
         let menu = controller.configuredMenuForTesting()
-        let layoutTitles = Set(WindowLayout.allCases.map(\.title))
-        let layoutItems = menu.items.filter { layoutTitles.contains($0.title) }
-
-        XCTAssertEqual(layoutItems.count, WindowLayout.allCases.count)
-
-        let itemsByTitle = Dictionary(uniqueKeysWithValues: layoutItems.map { ($0.title, $0) })
-        for layout in WindowLayout.allCases {
-            let item = try XCTUnwrap(itemsByTitle[layout.title])
-            XCTAssertEqual(item.keyEquivalent, layout.menuKeyEquivalent, layout.title)
-            XCTAssertEqual(
-                item.keyEquivalentModifierMask,
-                WindowLayout.menuShortcutModifierFlags,
-                layout.title
-            )
-        }
+        let item = try XCTUnwrap(menu.items.first { $0.title == "窗口布局…" })
+        XCTAssertEqual(item.keyEquivalent, ScreenshotShortcut.windowLayoutDefault.menuKeyEquivalent)
+        XCTAssertEqual(item.keyEquivalentModifierMask, [])
+        XCTAssertFalse(menu.items.contains { item in WindowSnapPlacement.allCases.contains { $0.title == item.title } })
     }
 
     func testScreenRecordingMenuUsesF2() throws {

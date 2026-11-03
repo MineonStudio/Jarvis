@@ -95,15 +95,13 @@ enum JarvisPrivacyPermissionAccess {
 
     @discardableResult
     @MainActor
-    static func requestAccessibilityAccess() -> Bool {
+    static func requestAccessibilityAccess(
+        using request: (CFDictionary?) -> Bool = AXIsProcessTrustedWithOptions
+    ) -> Bool {
         let options = [
             "AXTrustedCheckOptionPrompt": true
         ] as CFDictionary
-        let trusted = AXIsProcessTrustedWithOptions(options)
-        if !trusted {
-            openSettings(for: .accessibility)
-        }
-        return trusted
+        return request(options)
     }
 
     @discardableResult

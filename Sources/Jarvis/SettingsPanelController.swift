@@ -6,8 +6,10 @@ import SwiftUI
 @MainActor
 final class SettingsPanelController: NSObject, ObservableObject, NSWindowDelegate {
     private(set) var panel: NSPanel?
+    private weak var appModel: AppModel?
 
     func show(app: AppModel) {
+        appModel = app
         show {
             AnyView(SettingsPanelView().environment(app).jarvisAccentAware())
         }
@@ -59,6 +61,9 @@ final class SettingsPanelController: NSObject, ObservableObject, NSWindowDelegat
     }
 
     func windowWillClose(_: Notification) {
+        if appModel?.taskPermissionPrompt?.presentation == .settingsWindow {
+            appModel?.dismissTaskPermissionPrompt()
+        }
         JarvisLog.info(category: .window, event: "settings.window.closed")
     }
 
@@ -87,6 +92,11 @@ private struct SettingsPanelView: View {
     var body: some View {
         SettingsView()
             .jarvisTheme(app.themePreference, systemColorScheme: app.systemColorScheme)
+            .overlay {
+                if let prompt = app.taskPermissionPrompt, prompt.presentation == .settingsWindow {
+                    JarvisTaskPermissionOverlay(prompt: prompt)
+                }
+            }
             .jarvisToastOverlay(app.toastMessage)
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             .toolbar(removing: .title)

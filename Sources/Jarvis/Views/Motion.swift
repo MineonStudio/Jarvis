@@ -15,7 +15,12 @@ enum JarvisMotion {
         Color.jarvisAccent.opacity(0.82)
     }
 
-    static let hoverPillTint = Color.primary.opacity(0.10)
+    static let hoverPillOpacity = 0.10
+    static let hoverPillTint = Color.primary.opacity(hoverPillOpacity)
+
+    static var hoverPillNSColor: NSColor {
+        NSColor.labelColor.withAlphaComponent(CGFloat(hoverPillOpacity))
+    }
 
     static func animation(_ animation: Animation, reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : animation

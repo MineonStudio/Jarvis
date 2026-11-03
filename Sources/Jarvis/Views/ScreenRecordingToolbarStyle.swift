@@ -18,7 +18,11 @@ enum ScreenRecordingToolbarLayout {
 extension View {
     /// 截图与录屏共用原生 Liquid Glass 胶囊。
     func captureToolbarGlassSurface() -> some View {
-        glassEffect(.regular.interactive(), in: Capsule())
+        captureToolbarGlassSurface(in: Capsule())
+    }
+
+    func captureToolbarGlassSurface(in shape: some Shape) -> some View {
+        glassEffect(.regular.interactive(), in: shape)
     }
 
     func captureToolbarSelection(isSelected: Bool, isHovered: Bool = false) -> some View {

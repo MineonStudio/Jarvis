@@ -2,209 +2,6 @@ import AppKit
 import ApplicationServices
 
 @MainActor
-enum WindowLayout: String, CaseIterable, Hashable, Identifiable {
-    case halfLeft
-    case halfRight
-    case upperLeft
-    case upperRight
-    case lowerLeft
-    case lowerRight
-
-    nonisolated var id: String {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .halfLeft: "左半屏"
-        case .halfRight: "右半屏"
-        case .upperLeft: "左上角"
-        case .upperRight: "右上角"
-        case .lowerLeft: "左下角"
-        case .lowerRight: "右下角"
-        }
-    }
-
-    var shortTitle: String {
-        title
-    }
-
-    var menuIcon: NSImage {
-        let image = NSImage(size: NSSize(width: 24, height: 16))
-        image.lockFocus()
-        defer { image.unlockFocus() }
-
-        let bounds = NSRect(x: 2, y: 2, width: 20, height: 11.25)
-
-        let halfWidth = bounds.width / 2
-        let halfHeight = bounds.height / 2
-        let selectedRect = switch self {
-        case .halfLeft:
-            NSRect(
-                x: bounds.minX,
-                y: bounds.minY,
-                width: halfWidth,
-                height: bounds.height
-            )
-        case .halfRight:
-            NSRect(
-                x: bounds.midX,
-                y: bounds.minY,
-                width: halfWidth,
-                height: bounds.height
-            )
-        case .upperLeft:
-            NSRect(
-                x: bounds.minX,
-                y: bounds.midY,
-                width: halfWidth,
-                height: halfHeight
-            )
-        case .upperRight:
-            NSRect(
-                x: bounds.midX,
-                y: bounds.midY,
-                width: halfWidth,
-                height: halfHeight
-            )
-        case .lowerLeft:
-            NSRect(
-                x: bounds.minX,
-                y: bounds.minY,
-                width: halfWidth,
-                height: halfHeight
-            )
-        case .lowerRight:
-            NSRect(
-                x: bounds.midX,
-                y: bounds.minY,
-                width: halfWidth,
-                height: halfHeight
-            )
-        }
-        NSColor.controlAccentColor.setFill()
-        selectedRect.fill()
-
-        NSColor.labelColor.withAlphaComponent(0.72).setStroke()
-        let border = NSBezierPath(rect: bounds)
-        border.lineWidth = 1
-        border.stroke()
-        return image
-    }
-
-    var shortcutDisplay: String {
-        shortcutDisplayParts.joined()
-    }
-
-    var shortcutDisplayParts: [String] {
-        switch self {
-        case .halfLeft: ["⇧", "⌘", "←"]
-        case .halfRight: ["⇧", "⌘", "→"]
-        case .upperLeft: ["⇧", "⌘", "U"]
-        case .upperRight: ["⇧", "⌘", "I"]
-        case .lowerLeft: ["⇧", "⌘", "J"]
-        case .lowerRight: ["⇧", "⌘", "K"]
-        }
-    }
-
-    /// The built-in shortcut used for first launch and as the restore-default
-    /// value in Settings. User overrides are stored by AppModel.
-    var defaultShortcut: ScreenshotShortcut {
-        ScreenshotShortcut(
-            keyCode: keyCode,
-            modifiers: Self.menuShortcutModifierFlags.rawValue
-        )
-    }
-
-    /// Kept as the default-facing API for menu and layout tests. Runtime code
-    /// should ask AppModel for the user's configured shortcut.
-    var shortcut: ScreenshotShortcut {
-        defaultShortcut
-    }
-
-    private var keyCode: UInt16 {
-        switch self {
-        case .halfLeft: 123
-        case .halfRight: 124
-        case .upperLeft: 32
-        case .upperRight: 34
-        case .lowerLeft: 38
-        case .lowerRight: 40
-        }
-    }
-
-    var menuKeyEquivalent: String {
-        shortcut.menuKeyEquivalent
-    }
-
-    static let menuShortcutModifierFlags: NSEvent.ModifierFlags = [.command, .shift]
-
-    static func layout(for directions: Set<WindowLayoutDirection>) -> WindowLayout? {
-        switch directions {
-        case [.left]: .halfLeft
-        case [.right]: .halfRight
-        case [.left, .up]: .upperLeft
-        case [.right, .up]: .upperRight
-        case [.left, .down]: .lowerLeft
-        case [.right, .down]: .lowerRight
-        default: nil
-        }
-    }
-
-    static func frame(for layout: WindowLayout, in visibleFrame: NSRect) -> NSRect {
-        let halfWidth = visibleFrame.width / 2
-        let halfHeight = visibleFrame.height / 2
-        let middleX = visibleFrame.minX + halfWidth
-        let middleY = visibleFrame.minY + halfHeight
-
-        switch layout {
-        case .halfLeft:
-            return NSRect(
-                x: visibleFrame.minX,
-                y: visibleFrame.minY,
-                width: halfWidth,
-                height: visibleFrame.height
-            )
-        case .halfRight:
-            return NSRect(
-                x: middleX,
-                y: visibleFrame.minY,
-                width: halfWidth,
-                height: visibleFrame.height
-            )
-        case .upperLeft:
-            return NSRect(
-                x: visibleFrame.minX,
-                y: middleY,
-                width: halfWidth,
-                height: halfHeight
-            )
-        case .upperRight:
-            return NSRect(
-                x: middleX,
-                y: middleY,
-                width: halfWidth,
-                height: halfHeight
-            )
-        case .lowerLeft:
-            return NSRect(
-                x: visibleFrame.minX,
-                y: visibleFrame.minY,
-                width: halfWidth,
-                height: halfHeight
-            )
-        case .lowerRight:
-            return NSRect(
-                x: middleX,
-                y: visibleFrame.minY,
-                width: halfWidth,
-                height: halfHeight
-            )
-        }
-    }
-}
-
-@MainActor
 enum WindowLayoutScreenArea {
     static func visibleFrame(for screen: NSScreen) -> NSRect {
         safeVisibleFrame(
@@ -284,7 +81,7 @@ enum WindowLayoutScreenArea {
             return nil
         }
 
-        let desktopTop = NSScreen.screens.map(\.frame.maxY).max() ?? screen.frame.maxY
+        let desktopTop = NSScreen.screens.first?.frame.maxY ?? screen.frame.maxY
         var bestFrame: NSRect?
         var bestArea: CGFloat = 0
 
@@ -317,26 +114,10 @@ enum WindowLayoutScreenArea {
     }
 }
 
-enum WindowLayoutDirection: Hashable {
-    case left
-    case right
-    case up
-    case down
-
-    init?(keyCode: UInt16) {
-        switch keyCode {
-        case 123: self = .left
-        case 124: self = .right
-        case 125: self = .down
-        case 126: self = .up
-        default: return nil
-        }
-    }
-}
-
 @MainActor
 final class WindowLayoutController {
     private let statusHandler: (String) -> Void
+    var onAccessibilityRequired: (() -> Void)?
 
     init(statusHandler: @escaping (String) -> Void) {
         self.statusHandler = statusHandler
@@ -351,105 +132,49 @@ final class WindowLayoutController {
         JarvisPrivacyPermissionAccess.requestAccessibilityAccess()
     }
 
-    func apply(_ layout: WindowLayout) {
-        guard isAccessibilityTrusted else {
-            statusHandler(JarvisFeedbackCopy.accessibilityRequired)
+    func apply(_ placement: WindowSnapPlacement, to target: WindowDragTarget, on screen: NSScreen) {
+        guard let originalFrame = target.frame else { return }
+        switch target.resolveAccessibilityWindow() {
+        case .ready:
+            break
+        case .permissionRequired:
+            statusHandler("请先开启辅助功能权限，以调整其他应用窗口")
+            onAccessibilityRequired?()
             return
-        }
-
-        guard let target = focusedWindowOfFrontmostApplication() else {
+        case .unavailable:
             statusHandler(JarvisFeedbackCopy.noAdjustableWindow)
             return
         }
-
-        guard let geometry = windowGeometry(for: target.window) else {
-            statusHandler(JarvisFeedbackCopy.cannotReadWindow)
+        let visibleFrame = WindowLayoutScreenArea.visibleFrame(for: screen)
+        let frame = placement.frame(in: visibleFrame)
+        if let window = target.nativeWindow {
+            applyNative(placement, to: window, in: visibleFrame)
+            return
+        } else if let window = target.accessibilityWindow {
+            guard isAccessibilityTrusted else { return }
+            if !target.supportsResizing || !setFrame(frame, on: window, using: screen) {
+                let fixedFrame = placement.frame(preserving: target.frame?.size ?? originalFrame.size, in: visibleFrame)
+                if setPosition(fixedFrame, on: window, using: screen) {
+                    statusHandler("窗口已移动，尺寸受应用限制")
+                    return
+                }
+                statusHandler(JarvisFeedbackCopy.windowNotResizable)
+                return
+            }
+        } else {
             return
         }
-
-        let targetFrame = WindowLayout.frame(
-            for: layout,
-            in: WindowLayoutScreenArea.visibleFrame(for: geometry.screen)
-        )
-        if target.application.processIdentifier == ProcessInfo.processInfo.processIdentifier,
-           let mainWindow = NSApp.windows.first(where: {
-               $0.identifier?.rawValue == JarvisAppIdentity.mainWindowSceneID
-                   || $0.frameAutosaveName == JarvisMainWindowController.frameAutosaveName
-           }),
-           JarvisMainWindowController.applyWindowLayoutFrame(targetFrame, to: mainWindow)
-        {
-            statusHandler(JarvisFeedbackCopy.windowAdjusted(layout.shortTitle))
-            return
-        }
-        guard setFrame(targetFrame, on: target.window, using: geometry.screen) else {
-            statusHandler(JarvisFeedbackCopy.windowNotResizable)
-            return
-        }
-
-        statusHandler(JarvisFeedbackCopy.windowAdjusted(layout.shortTitle))
     }
 
-    private struct FocusedWindow {
-        let application: NSRunningApplication
-        let window: AXUIElement
-    }
-
-    private struct WindowGeometry {
-        let screen: NSScreen
-    }
-
-    private func focusedWindowOfFrontmostApplication() -> FocusedWindow? {
-        // The frontmost app is the target, including Jarvis itself. Older
-        // builds deliberately skipped Jarvis and therefore could never tile
-        // the main window when it was active.
-        let application = NSWorkspace.shared.frontmostApplication
-        guard let application, !application.isTerminated else { return nil }
-
-        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
-        var value: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(
-            applicationElement,
-            kAXFocusedWindowAttribute as CFString,
-            &value
-        )
-        guard result == .success, let value else { return nil }
-        guard CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-        let window = unsafeDowncast(value, to: AXUIElement.self)
-        return FocusedWindow(application: application, window: window)
-    }
-
-    private func windowGeometry(for window: AXUIElement) -> WindowGeometry? {
-        var positionValue: CFTypeRef?
-        var sizeValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionValue) == .success,
-              AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success,
-              let positionValue,
-              let sizeValue
-        else {
-            return nil
+    private func applyNative(_ placement: WindowSnapPlacement, to window: NSWindow, in visibleFrame: CGRect) {
+        let frame = placement.frame(in: visibleFrame)
+        if !JarvisMainWindowController.applyWindowLayoutFrame(frame, to: window) {
+            window.setFrame(frame, display: true)
         }
-
-        var position = CGPoint.zero
-        var size = CGSize.zero
-        guard CFGetTypeID(positionValue) == AXValueGetTypeID(),
-              CFGetTypeID(sizeValue) == AXValueGetTypeID()
-        else {
-            return nil
+        if abs(window.frame.width - frame.width) > 1 || abs(window.frame.height - frame.height) > 1 {
+            window.setFrameOrigin(placement.frame(preserving: window.frame.size, in: visibleFrame).origin)
+            statusHandler("窗口已移动，尺寸受应用限制")
         }
-        let positionAXValue = unsafeDowncast(positionValue, to: AXValue.self)
-        let sizeAXValue = unsafeDowncast(sizeValue, to: AXValue.self)
-        guard AXValueGetType(positionAXValue) == .cgPoint,
-              AXValueGetType(sizeAXValue) == .cgSize,
-              AXValueGetValue(positionAXValue, .cgPoint, &position),
-              AXValueGetValue(sizeAXValue, .cgSize, &size),
-              size.width > 0,
-              size.height > 0,
-              let screen = screen(containing: CGRect(origin: position, size: size))
-        else {
-            return nil
-        }
-
-        return WindowGeometry(screen: screen)
     }
 
     private func setFrame(_ frame: NSRect, on window: AXUIElement, using screen: NSScreen) -> Bool {
@@ -484,24 +209,15 @@ final class WindowLayoutController {
             && finalPositionResult == .success
     }
 
-    private func screen(containing windowRect: CGRect) -> NSScreen? {
-        let candidates = NSScreen.screens
-        let containing = candidates.first { screen in
-            accessibilityFrame(for: screen).contains(windowRect.mid)
-        }
-        if let containing {
-            return containing
-        }
-
-        return candidates.max { lhs, rhs in
-            accessibilityFrame(for: lhs).intersection(windowRect).area
-                < accessibilityFrame(for: rhs).intersection(windowRect).area
-        }
+    private func setPosition(_ frame: NSRect, on window: AXUIElement, using screen: NSScreen) -> Bool {
+        var point = CGPoint(x: frame.minX, y: accessibilityY(for: frame, on: screen))
+        guard let value = AXValueCreate(.cgPoint, &point) else { return false }
+        return AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, value) == .success
     }
 
     private func accessibilityFrame(for screen: NSScreen) -> CGRect {
         guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-            let desktopTop = NSScreen.screens.map(\.frame.maxY).max() ?? screen.frame.maxY
+            let desktopTop = NSScreen.screens.first?.frame.maxY ?? screen.frame.maxY
             return CGRect(
                 x: screen.frame.minX,
                 y: desktopTop - screen.frame.maxY,
@@ -516,16 +232,5 @@ final class WindowLayoutController {
         let fullFrame = accessibilityFrame(for: screen)
         let relativeMaxY = frame.maxY - screen.frame.minY
         return fullFrame.minY + (screen.frame.height - relativeMaxY)
-    }
-}
-
-private extension CGRect {
-    var mid: CGPoint {
-        CGPoint(x: midX, y: midY)
-    }
-
-    var area: CGFloat {
-        guard !isNull, !isEmpty else { return 0 }
-        return width * height
     }
 }
