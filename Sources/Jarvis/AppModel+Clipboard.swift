@@ -596,6 +596,7 @@ extension AppModel {
                     clipboardItems = rollback.items
                     clipboardCacheStore.removeLegacyFiles(
                         atPaths: rollback.legacyPaths,
+                        ownedBy: url,
                         reason: "cacheDirectoryMigrationRollback"
                     )
                     clipboardCacheDirectoryURL = clipboardCacheStore.currentDirectoryURL
@@ -604,6 +605,7 @@ extension AppModel {
             } else {
                 clipboardCacheStore.removeLegacyFiles(
                     atPaths: migration.legacyPaths,
+                    ownedBy: oldDirectoryURL,
                     reason: "cacheDirectoryMigrationComplete"
                 )
                 showToast(JarvisFeedbackCopy.cacheDirectoryUpdated)

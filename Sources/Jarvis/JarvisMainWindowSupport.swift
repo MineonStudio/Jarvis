@@ -115,16 +115,21 @@ enum JarvisWindowLayoutMetrics {
 
 struct JarvisWindowFrameStore {
     private static let defaultsKey = "Jarvis.MainWindow.frame"
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
 
     func load() -> NSRect? {
-        if let data = UserDefaults.standard.data(forKey: Self.defaultsKey),
+        if let data = defaults.data(forKey: Self.defaultsKey),
            let frame = try? JSONDecoder().decode(JarvisStoredWindowFrame.self, from: data)
         {
             return frame.rect
         }
 
         // Migrate the string format used by the earlier window autosave fix.
-        if let legacyFrame = UserDefaults.standard.string(forKey: Self.defaultsKey) {
+        if let legacyFrame = defaults.string(forKey: Self.defaultsKey) {
             let rect = NSRectFromString(legacyFrame)
             guard rect.width > 0, rect.height > 0 else { return nil }
             save(rect)
@@ -137,7 +142,7 @@ struct JarvisWindowFrameStore {
     func save(_ rect: NSRect) {
         let frame = JarvisStoredWindowFrame(rect: rect)
         guard let data = try? JSONEncoder().encode(frame) else { return }
-        UserDefaults.standard.set(data, forKey: Self.defaultsKey)
+        defaults.set(data, forKey: Self.defaultsKey)
     }
 }
 

@@ -68,7 +68,11 @@ final class SettingsPanelControllerTests: XCTestCase {
         defer { controller.close() }
         controller.show { AnyView(Color.clear) }
         let panel = try XCTUnwrap(controller.panel)
-        for size in [SettingsLayout.minimumWindowSize, NSSize(width: 1100, height: 750)] {
+        // AppKit constrains a reopened window to the screen. CI uses a 1024pt
+        // display, so exercise user sizes that fit its actual visible bounds.
+        let available = try XCTUnwrap(panel.screen ?? NSScreen.main).visibleFrame.insetBy(dx: 20, dy: 20)
+        let expanded = NSSize(width: min(1100, available.width), height: min(750, available.height))
+        for size in [SettingsLayout.minimumWindowSize, expanded] {
             panel.setContentSize(size)
             let resizedSize = panel.frame.size
             controller.show {
