@@ -147,16 +147,17 @@ final class JarvisMainWindowControllerTests: XCTestCase {
     }
 
     func testAttachedWindowAllowsSystemFrameChanges() async throws {
-        let defaultsKey = "Jarvis.MainWindow.frame"
-        let previousFrame = UserDefaults.standard.object(forKey: defaultsKey)
-        defer { UserDefaults.standard.set(previousFrame, forKey: defaultsKey) }
+        let suite = "jarvis-window-frame-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let frameStore = JarvisWindowFrameStore(defaults: defaults)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1400, height: 800),
             styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: true
         )
         window.isReleasedWhenClosed = false
         defer { window.close() }
-        let controller = JarvisMainWindowController()
+        let controller = JarvisMainWindowController(frameStore: frameStore)
         controller.attach(to: window)
         let area = try XCTUnwrap(NSScreen.main).visibleFrame.insetBy(dx: 20, dy: 20)
         let target = NSRect(
@@ -170,7 +171,7 @@ final class JarvisMainWindowControllerTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(250))
 
         XCTAssertEqual(window.frame, target)
-        XCTAssertEqual(JarvisWindowFrameStore().load(), target)
+        XCTAssertEqual(frameStore.load(), target)
         XCTAssertEqual(window.animationBehavior, .default)
     }
 

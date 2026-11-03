@@ -454,7 +454,7 @@ final class ClipboardCacheStore: @unchecked Sendable {
         }
     }
 
-    func removeStoredFile(atPath path: String) {
+    private func removeStoredFile(atPath path: String) {
         let operationID = JarvisLog.operationID()
         do {
             try fileManager.removeItem(atPath: path)
@@ -484,8 +484,16 @@ final class ClipboardCacheStore: @unchecked Sendable {
         }
     }
 
-    func removeLegacyFiles(atPaths paths: [String], reason: String = "legacyCleanup") {
+    func removeLegacyFiles(
+        atPaths paths: [String],
+        ownedBy previousDirectory: URL? = nil,
+        reason: String = "legacyCleanup"
+    ) {
         guard !paths.isEmpty else { return }
+        let root = previousDirectory ?? currentDirectoryURL
+        let ownedPaths = paths.filter {
+            isOwnedFileURL(URL(fileURLWithPath: $0), in: root)
+        }
         JarvisLog.debug(
             category: .clipboard,
             event: "cache.legacyDelete.begin",
@@ -494,7 +502,7 @@ final class ClipboardCacheStore: @unchecked Sendable {
                 "reason": reason
             ]
         )
-        for path in paths {
+        for path in ownedPaths {
             removeStoredFile(atPath: path)
         }
         JarvisLog.info(
@@ -502,7 +510,8 @@ final class ClipboardCacheStore: @unchecked Sendable {
             event: "cache.legacyDelete.complete",
             result: "success",
             fields: [
-                "pathCount": String(paths.count),
+                "pathCount": String(ownedPaths.count),
+                "skippedPathCount": String(paths.count - ownedPaths.count),
                 "reason": reason
             ]
         )
@@ -659,10 +668,9 @@ final class ClipboardCacheStore: @unchecked Sendable {
 
     private func managedFileURLsLocked(for item: ClipboardItem) -> [URL] {
         let paths = item.cachePaths
-        let rootPath = directoryURL.standardizedFileURL.path + "/"
         return paths.compactMap { (path: String) -> URL? in
             let url = URL(fileURLWithPath: path).standardizedFileURL
-            guard url.path.hasPrefix(rootPath) else { return nil }
+            guard isOwnedFileURL(url, in: directoryURL) else { return nil }
             guard item.isStoredCopy || Self.isManagedFilename(url.lastPathComponent) else {
                 return nil
             }
@@ -676,6 +684,17 @@ final class ClipboardCacheStore: @unchecked Sendable {
 
     private static func isManagedFilename(_ filename: String) -> Bool {
         filename.hasPrefix("item-") || filename.hasPrefix("migrated-")
+    }
+
+    /// Both the supplied path and its resolved target must belong to the
+    /// cache. This also rejects a cache subdirectory symlinked outside it.
+    private func isOwnedFileURL(_ url: URL, in directory: URL) -> Bool {
+        let root = directory.standardizedFileURL
+        let candidate = url.standardizedFileURL
+        guard candidate.path.hasPrefix(root.path + "/"),
+              candidate.resolvingSymlinksInPath().path.hasPrefix(root.resolvingSymlinksInPath().path + "/")
+        else { return false }
+        return (try? candidate.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) != true
     }
 
     func migrateManagedFiles(
@@ -811,7 +830,7 @@ final class ClipboardCacheStore: @unchecked Sendable {
     ) throws -> (path: String, didCopy: Bool)? {
         let sourceURL = URL(fileURLWithPath: path).standardizedFileURL
         guard
-            sourceURL.path.hasPrefix(oldDirectoryURL.path + "/"),
+            isOwnedFileURL(sourceURL, in: oldDirectoryURL),
             fileManager.fileExists(atPath: sourceURL.path),
             (try? sourceURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
         else {

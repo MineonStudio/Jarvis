@@ -10,16 +10,8 @@ import XCTest
 final class AuditRegressionTests: XCTestCase {
     // MARK: - C-1：缓存淘汰不得删除缓存目录之外的用户文件
 
-    /// 复现并锁定审计报告 C-1：
-    /// `ClipboardItem.cachePaths` 会包含**外部原始文件路径**（文件 > 1 GB 或缓存已满时
-    /// `captureFile` 把 `filePath` 写成原始路径且 `isStoredCopy == false`），
-    /// 而 `receiveClipboardItem` 把这些路径交给 `removeLegacyFiles(atPaths:)`，
-    /// 后者不校验归属，直接 `removeItem`。
-    ///
-    /// 触发路径（手工验证步骤）：
-    /// 1. 复制一个 > 1 GB 的文件 → 历史条目引用原始路径；
-    /// 2. 再复制 300 条新内容把该条目挤出上限；
-    /// 3. 原始文件被删除。
+    /// 外部原始文件可能出现在旧记录的 cachePaths 中（未缓存的大文件等）。
+    /// 去重替换和迁移清理都必须校验路径归属，不能删除这些原始文件。
     func testLegacyFileRemovalMustNotDeleteFilesOutsideTheCacheDirectory() throws {
         let suiteName = "jarvis-audit-external-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -52,17 +44,13 @@ final class AuditRegressionTests: XCTestCase {
             "removeManagedFiles 删除了缓存目录之外的用户文件"
         )
 
-        // 缺陷行为：removeLegacyFiles 会把外部文件一并删掉。
-        // 用 XCTExpectFailure 固定"当前是坏的"，这样测试套件保持全绿，
-        // 而一旦修复（AppModel+Clipboard.swift:129 改回 removeManagedFiles），
-        // 这个用例会因为"预期失败但没有失败"而报错，提醒删除该标记。
-        XCTExpectFailure("缺陷 C-1：removeLegacyFiles 会删除缓存目录之外的用户文件") {
-            store.removeLegacyFiles(atPaths: [externalURL.path], reason: "auditRegression")
-            XCTAssertTrue(
-                FileManager.default.fileExists(atPath: externalURL.path),
-                "removeLegacyFiles 删除了缓存目录之外的用户文件（缺陷 C-1）"
-            )
-        }
+        // Duplicate replacement and migration cleanup must enforce the same
+        // ownership boundary as managed-file cleanup.
+        store.removeLegacyFiles(atPaths: [externalURL.path], reason: "auditRegression")
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: externalURL.path),
+            "removeLegacyFiles 删除了缓存目录之外的用户文件（缺陷 C-1）"
+        )
     }
 
     // MARK: - C-2：循环内缩容导致的越界崩溃

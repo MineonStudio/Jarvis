@@ -62,12 +62,17 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
         NSAnimationContext.endGrouping()
     }
 
-    private let frameStore = JarvisWindowFrameStore()
+    private let frameStore: JarvisWindowFrameStore
     private weak static var activeController: JarvisMainWindowController?
     private weak var window: NSWindow?
     private var frameObservers: [NSObjectProtocol] = []
     private var pendingFrameSave: Task<Void, Never>?
     private var isInFullScreenTransition = false
+
+    init(frameStore: JarvisWindowFrameStore = .init()) {
+        self.frameStore = frameStore
+        super.init()
+    }
 
     isolated deinit {
         pendingFrameSave?.cancel()
