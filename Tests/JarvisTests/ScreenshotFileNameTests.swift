@@ -18,7 +18,7 @@ final class ScreenshotFileNameTests: XCTestCase {
         )
 
         XCTAssertEqual(name, "20260918-123100-000.png")
-        XCTAssertFalse(name.contains("贾维斯"), "文件名里不该再有应用名")
+        XCTAssertFalse(name.contains("Jarvis"), "文件名里不该再有应用名")
     }
 
     /// 形状固定成 `yyyyMMdd-HHmmss-SSS.png`：换时区只改数字，不改形状。

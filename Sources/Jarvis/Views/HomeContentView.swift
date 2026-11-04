@@ -12,7 +12,7 @@ struct JarvisHomeView: View {
 
     private var prompts: [JarvisHomePrompt] {
         let permissionOrder: [JarvisRequiredPermission] = [
-            .microphone, .screenCapture, .accessibility, .camera
+            .microphone, .screenCapture, .accessibility
         ]
         let missingPermissions = permissionOrder.filter { !app.isRequiredPermissionGranted($0) }
 
@@ -224,13 +224,6 @@ private struct JarvisHomePrompt: Identifiable {
                 destination: .skill(.windowLayout),
                 permission: permission
             )
-        case .camera:
-            .init(
-                id: "permission.camera",
-                message: "开启摄像头权限，支持摄像头的网页功能就能正常使用啦。",
-                destination: .aiConversation,
-                permission: permission
-            )
         }
     }
 
@@ -243,7 +236,7 @@ private struct JarvisHomePrompt: Identifiable {
         ),
         .init(
             id: "work-companion",
-            message: "我是你的工作搭子 Jarvis。办公时帮你处理琐事，休息时一起放松。",
+            message: "我是 Jarvis。办公时帮你处理琐事，休息时一起放松。",
             destination: .gamePlaza,
             permission: nil
         ),

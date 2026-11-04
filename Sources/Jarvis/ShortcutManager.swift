@@ -104,7 +104,7 @@ struct ScreenshotShortcut: Codable, Equatable {
 
     /// The key-only value used by NSMenuItem. AppKit renders the modifier
     /// flags in its dedicated right-aligned shortcut column, just like the
-    /// built-in "退出贾维斯" menu item.
+    /// built-in "退出 Jarvis" menu item.
     var menuKeyEquivalent: String {
         switch keyCode {
         case JarvisKeyCode.returnKey: "\r"

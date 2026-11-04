@@ -795,19 +795,7 @@ extension JarvisWebPlatformController: WKUIDelegate {
     }
 
     private func requestSystemMediaAccess(for type: WKMediaCaptureType) async -> Bool {
-        let requiresMicrophone = type == .microphone || type == .cameraAndMicrophone
-        let requiresCamera = type == .camera || type == .cameraAndMicrophone
-
-        var microphoneGranted = true
-        if requiresMicrophone {
-            microphoneGranted = await JarvisPrivacyPermissionAccess.requestMediaAccess(for: .audio)
-        }
-
-        var cameraGranted = true
-        if requiresCamera {
-            cameraGranted = await JarvisPrivacyPermissionAccess.requestMediaAccess(for: .video)
-        }
-
-        return microphoneGranted && cameraGranted
+        guard type == .microphone else { return false }
+        return await JarvisPrivacyPermissionAccess.requestMicrophoneAccess()
     }
 }

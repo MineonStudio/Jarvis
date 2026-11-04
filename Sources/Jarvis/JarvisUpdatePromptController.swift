@@ -10,7 +10,7 @@ final class JarvisUpdatePromptController {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "发现新版本 \(version)"
-        alert.informativeText = "工作搭子 Jarvis 有新版本可用。立马更新将下载更新，并在完成后重启应用。"
+        alert.informativeText = "Jarvis 有新版本可用。立马更新将下载更新，并在完成后重启应用。"
         alert.addButton(withTitle: "立马更新")
         alert.addButton(withTitle: "稍后更新")
         alert.buttons[1].keyEquivalent = "\u{1b}"

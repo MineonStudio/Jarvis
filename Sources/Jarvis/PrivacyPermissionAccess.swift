@@ -7,14 +7,12 @@ enum JarvisPrivacyPermission: Hashable {
     case screenCapture
     case accessibility
     case microphone
-    case camera
 
     var settingsAnchor: String {
         switch self {
         case .screenCapture: "Privacy_ScreenCapture"
         case .accessibility: "Privacy_Accessibility"
         case .microphone: "Privacy_Microphone"
-        case .camera: "Privacy_Camera"
         }
     }
 }
@@ -23,7 +21,6 @@ enum JarvisRequiredPermission: String, CaseIterable, Identifiable, Equatable {
     case screenCapture
     case accessibility
     case microphone
-    case camera
 
     var id: String {
         rawValue
@@ -34,7 +31,6 @@ enum JarvisRequiredPermission: String, CaseIterable, Identifiable, Equatable {
         case .screenCapture: "屏幕录制"
         case .accessibility: "辅助功能"
         case .microphone: "麦克风"
-        case .camera: "摄像头"
         }
     }
 
@@ -43,7 +39,6 @@ enum JarvisRequiredPermission: String, CaseIterable, Identifiable, Equatable {
         case .screenCapture: "rectangle.dashed.badge.record"
         case .accessibility: "accessibility"
         case .microphone: "mic.fill"
-        case .camera: "camera.fill"
         }
     }
 
@@ -52,7 +47,6 @@ enum JarvisRequiredPermission: String, CaseIterable, Identifiable, Equatable {
         case .screenCapture: .screenCapture
         case .accessibility: .accessibility
         case .microphone: .microphone
-        case .camera: .camera
         }
     }
 }
@@ -67,26 +61,17 @@ enum JarvisPrivacyPermissionAccess {
     }
 
     static func isMicrophoneTrusted() -> Bool {
-        isMediaAccessGranted(for: .audio)
+        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     }
 
-    static func isCameraTrusted() -> Bool {
-        isMediaAccessGranted(for: .video)
+    static func requestMicrophoneAccess() async -> Bool {
+        await AVCaptureDevice.requestAccess(for: .audio)
     }
 
-    static func isMediaAccessGranted(for mediaType: AVMediaType) -> Bool {
-        AVCaptureDevice.authorizationStatus(for: mediaType) == .authorized
-    }
-
-    static func requestMediaAccess(for mediaType: AVMediaType) async -> Bool {
-        await AVCaptureDevice.requestAccess(for: mediaType)
-    }
-
-    static func requestMediaAccess(
-        for mediaType: AVMediaType,
+    static func requestMicrophoneAccess(
         completion: @escaping @MainActor @Sendable (Bool) -> Void
     ) {
-        AVCaptureDevice.requestAccess(for: mediaType) { granted in
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
             Task { @MainActor in
                 completion(granted)
             }
@@ -113,7 +98,6 @@ enum JarvisPrivacyPermissionAccess {
         ].compactMap(URL.init(string:))
 
         for url in urls where NSWorkspace.shared.open(url) {
-            NSApp.activate(ignoringOtherApps: true)
             return true
         }
         return false

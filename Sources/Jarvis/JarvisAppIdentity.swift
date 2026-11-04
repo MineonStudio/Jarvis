@@ -18,7 +18,7 @@ enum JarvisAppIdentity {
     }
 
     static var displayName: String {
-        isDevelopment ? "工作搭子 Jarvis 开发版" : "工作搭子 Jarvis"
+        isDevelopment ? "Jarvis 开发版" : "Jarvis"
     }
 
     static var dataDirectoryName: String {

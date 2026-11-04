@@ -154,7 +154,7 @@ final class AppModel {
     var screenCapturePermissionGranted = false
     var accessibilityPermissionGranted = false
     var microphonePermissionGranted = false
-    var cameraPermissionGranted = false
+    var onboarding = JarvisOnboardingState()
     var launchAtLoginEnabled = JarvisLaunchAtLoginPreference.defaultValue
     var clipboardCacheDirectoryURL: URL
     var clipboardCacheMaximumBytes: Int64

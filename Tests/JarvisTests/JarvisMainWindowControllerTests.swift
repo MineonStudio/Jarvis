@@ -4,6 +4,43 @@ import XCTest
 
 @MainActor
 final class JarvisMainWindowControllerTests: XCTestCase {
+    func testOnboardingPreservesWorkspaceFrameAndRestoresItOnCompletion() async throws {
+        let suite = "jarvis-onboarding-window-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let frameStore = JarvisWindowFrameStore(defaults: defaults)
+        let area = try XCTUnwrap(NSScreen.main).visibleFrame
+        let size = CGSize(
+            width: max(JarvisMainWindowController.minimumWindowSize.width, min(1240, area.width)),
+            height: max(JarvisMainWindowController.minimumWindowSize.height, min(740, area.height))
+        )
+        let saved = NSRect(origin: area.origin, size: size).integral
+        frameStore.save(saved)
+        let measuredContent = CGSize(width: 928, height: 536)
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: measuredContent),
+            styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: true
+        )
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let controller = JarvisMainWindowController(frameStore: frameStore)
+        controller.attach(to: window, isOnboardingPresented: true, onboardingContentSize: measuredContent)
+        XCTAssertEqual(window.contentRect(forFrameRect: window.frame).size, measuredContent)
+        let tallerContent = CGSize(width: measuredContent.width, height: measuredContent.height + 36)
+        controller.attach(to: window, isOnboardingPresented: true, onboardingContentSize: tallerContent)
+        XCTAssertEqual(window.contentRect(forFrameRect: window.frame).size, tallerContent)
+        window.setFrameOrigin(window.frame.origin.applying(CGAffineTransform(translationX: 5, y: 5)))
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertEqual(frameStore.load(), saved)
+
+        controller.attach(to: window, isOnboardingPresented: false)
+        XCTAssertEqual(window.frame, saved)
+        XCTAssertEqual(window.minSize, JarvisMainWindowController.minimumWindowSize)
+        controller.attach(to: window, isOnboardingPresented: true, onboardingContentSize: measuredContent)
+        controller.attach(to: window, isOnboardingPresented: false)
+        XCTAssertEqual(window.frame, saved)
+    }
+
     func testApplyingWindowLayoutsKeepsTheMainWindowAtNormalLevel() throws {
         // AppKit constrains frames to the real screen. Use on-screen targets
         // so this stacking-policy test also works on small CI displays.
@@ -35,11 +72,11 @@ final class JarvisMainWindowControllerTests: XCTestCase {
     func testSettingsSectionsExposeStableSidebarOrder() {
         XCTAssertEqual(
             SettingsSection.allCases,
-            [.general, .appearance, .wallpaperSources, .shortcuts, .model, .privacyCache, .diagnostics, .about]
+            [.general, .appearance, .wallpaperSources, .shortcuts, .model, .permissions, .privacyCache, .diagnostics, .about]
         )
         XCTAssertEqual(
             SettingsSection.allCases.map(\.title),
-            ["常规", "外观", "壁纸源", "快捷键", "模型", "隐私与缓存", "诊断", "关于"]
+            ["常规", "外观", "壁纸源", "快捷键", "模型", "权限", "隐私与缓存", "诊断", "关于"]
         )
         XCTAssertTrue(SettingsSection.allCases.allSatisfy { !$0.icon.isEmpty })
     }

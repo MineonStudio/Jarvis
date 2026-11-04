@@ -1,8 +1,8 @@
-# 工作搭子 Jarvis
+# Jarvis
 
-<img src="docs/icon.png" width="96" alt="工作搭子 Jarvis">
+<img src="docs/icon.png" width="96" alt="Jarvis">
 
-协助办公，也陪你摸鱼放松的 macOS 工作搭子。工作时处理截图、屏幕录制、剪贴板、会议记录、窗口布局和简历；休息时换壁纸、逛娱乐广场，或打一局欢乐麻将。
+Jarvis 是一款集办公效率与休闲功能于一体的 macOS 应用。工作时处理截图、屏幕录制、剪贴板、会议记录、窗口布局和简历；休息时换壁纸、逛娱乐广场，或打一局欢乐麻将。
 
 macOS 26 及以上。
 
