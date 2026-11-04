@@ -68,6 +68,10 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
     private var frameObservers: [NSObjectProtocol] = []
     private var pendingFrameSave: Task<Void, Never>?
     private var isInFullScreenTransition = false
+    private var isOnboardingPresented = false
+    private var workspaceFrameBeforeOnboarding: NSRect?
+    private var onboardingContentSize: CGSize?
+    private var hasFittedOnboardingContent = false
 
     init(frameStore: JarvisWindowFrameStore = .init()) {
         self.frameStore = frameStore
@@ -79,32 +83,117 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
         frameObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
-    func attach(to window: NSWindow?) {
-        guard let window, self.window !== window else { return }
+    func attach(
+        to window: NSWindow?,
+        isOnboardingPresented: Bool = false,
+        onboardingContentSize: CGSize? = nil
+    ) {
+        guard let window else { return }
+        if let onboardingContentSize {
+            self.onboardingContentSize = onboardingContentSize
+        }
+        if self.window === window {
+            if self.isOnboardingPresented != isOnboardingPresented {
+                changePresentation(isOnboardingPresented: isOnboardingPresented)
+            }
+            if isOnboardingPresented {
+                fitOnboardingContent()
+            }
+            return
+        }
         detach()
         self.window = window
+        self.isOnboardingPresented = isOnboardingPresented
         Self.activeController = self
         JarvisWindowAppearance.configure(for: window)
         JarvisWindowAppearance.configureStandardControls(for: window)
         window.level = .normal
-        window.minSize = Self.minimumWindowSize
 
         // Restore once before presentation. Subsequent changes belong to
         // AppKit: zoom, tiling and full-screen transitions must never be pinned.
-        let target = Self.resolvedLaunchFrame(
+        let workspaceFrame = Self.resolvedLaunchFrame(
             savedFrame: frameStore.load(),
             fallbackOrigin: window.frame.origin,
             visibleFrames: NSScreen.screens.map(\.visibleFrame)
         )
-        window.setFrameAutosaveName(Self.frameAutosaveName)
+        workspaceFrameBeforeOnboarding = workspaceFrame
+        window.setFrameAutosaveName(isOnboardingPresented ? "" : Self.frameAutosaveName)
+        window.contentMinSize = .zero
+        window.minSize = isOnboardingPresented ? .zero : Self.minimumWindowSize
         if !window.styleMask.contains(.fullScreen) {
-            Self.applyLaunchFrame(target, to: window)
+            if isOnboardingPresented {
+                fitOnboardingContent()
+            } else {
+                Self.applyLaunchFrame(workspaceFrame, to: window)
+            }
         }
         window.animationBehavior = .default
         observeFrameChanges(of: window)
         if NSApp.isActive {
             window.makeKeyAndOrderFront(nil)
         }
+    }
+
+    private func fitOnboardingContent() {
+        guard isOnboardingPresented, let window,
+              !window.styleMask.contains(.fullScreen), !isInFullScreenTransition,
+              let contentSize = onboardingContentSize ?? window.contentView?.fittingSize,
+              contentSize.width.isFinite, contentSize.height.isFinite,
+              contentSize.width > 0, contentSize.height > 0 else { return }
+        let frameSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
+        let area = (window.screen ?? NSScreen.main)?.visibleFrame
+        let size = CGSize(
+            width: min(frameSize.width, area?.width ?? frameSize.width),
+            height: min(frameSize.height, area?.height ?? frameSize.height)
+        )
+        let center = hasFittedOnboardingContent
+            ? CGPoint(x: window.frame.midX, y: window.frame.midY)
+            : CGPoint(x: area?.midX ?? window.frame.midX, y: area?.midY ?? window.frame.midY)
+        var target = NSRect(
+            x: (center.x - size.width / 2).rounded(),
+            y: (center.y - size.height / 2).rounded(),
+            width: size.width,
+            height: size.height
+        )
+        if let area {
+            target.origin.x = min(max(target.minX, area.minX), area.maxX - target.width)
+            target.origin.y = min(max(target.minY, area.minY), area.maxY - target.height)
+        }
+        hasFittedOnboardingContent = true
+        guard window.frame.size != target.size else { return }
+        Self.applyLaunchFrame(target, to: window)
+        window.animationBehavior = .default
+    }
+
+    private func changePresentation(isOnboardingPresented: Bool) {
+        guard let window else { return }
+        pendingFrameSave?.cancel()
+        pendingFrameSave = nil
+        if isOnboardingPresented {
+            workspaceFrameBeforeOnboarding = window.frame
+            frameStore.save(window.frame)
+        }
+        self.isOnboardingPresented = isOnboardingPresented
+        hasFittedOnboardingContent = false
+        window.setFrameAutosaveName("")
+        window.contentMinSize = .zero
+        window.minSize = isOnboardingPresented ? .zero : Self.minimumWindowSize
+        // Native full-screen and tiling remain under the user's control.
+        guard !window.styleMask.contains(.fullScreen), !isInFullScreenTransition else { return }
+        if isOnboardingPresented {
+            fitOnboardingContent()
+            return
+        }
+        let target = Self.resolvedLaunchFrame(
+            savedFrame: workspaceFrameBeforeOnboarding ?? frameStore.load(),
+            fallbackOrigin: window.frame.origin,
+            visibleFrames: NSScreen.screens.map(\.visibleFrame)
+        )
+        window.setFrameAutosaveName(Self.frameAutosaveName)
+        window.contentMinSize = .zero
+        window.minSize = Self.minimumWindowSize
+        Self.applyLaunchFrame(target, to: window)
+        window.animationBehavior = .default
     }
 
     static func applyWindowLayoutFrame(_ frame: NSRect, to window: NSWindow) -> Bool {
@@ -134,6 +223,7 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
         frameObservers.forEach(NotificationCenter.default.removeObserver)
         frameObservers.removeAll()
         isInFullScreenTransition = false
+        hasFittedOnboardingContent = false
         window = nil
     }
 
@@ -188,7 +278,7 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
     }
 
     private func saveFrameImmediately() {
-        guard let window, !isInFullScreenTransition,
+        guard let window, !isOnboardingPresented, !isInFullScreenTransition,
               !window.styleMask.contains(.fullScreen), !window.isMiniaturized else { return }
         pendingFrameSave?.cancel()
         pendingFrameSave = nil
@@ -198,18 +288,28 @@ final class JarvisMainWindowController: NSObject, ObservableObject {
 
 struct JarvisMainWindowAccessor: NSViewRepresentable {
     let controller: JarvisMainWindowController
+    var isOnboardingPresented = false
+    var onboardingContentSize: CGSize?
 
     func makeNSView(context _: Context) -> NSView {
         let view = JarvisMainWindowAnchorView(frame: .zero)
         view.onResolveWindow = { [weak controller] window in
-            controller?.attach(to: window)
+            controller?.attach(
+                to: window,
+                isOnboardingPresented: isOnboardingPresented,
+                onboardingContentSize: onboardingContentSize
+            )
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context _: Context) {
         MainActor.assumeIsolated {
-            controller.attach(to: nsView.window)
+            controller.attach(
+                to: nsView.window,
+                isOnboardingPresented: isOnboardingPresented,
+                onboardingContentSize: onboardingContentSize
+            )
         }
     }
 }

@@ -175,8 +175,7 @@ final class AppVersionTests: XCTestCase {
             [
                 ["reset", "ScreenCapture", "com.jarvis.mac"],
                 ["reset", "Accessibility", "com.jarvis.mac"],
-                ["reset", "Microphone", "com.jarvis.mac"],
-                ["reset", "Camera", "com.jarvis.mac"]
+                ["reset", "Microphone", "com.jarvis.mac"]
             ]
         )
     }
@@ -185,18 +184,44 @@ final class AppVersionTests: XCTestCase {
         XCTAssertEqual(JarvisPrivacyPermission.screenCapture.settingsAnchor, "Privacy_ScreenCapture")
         XCTAssertEqual(JarvisPrivacyPermission.accessibility.settingsAnchor, "Privacy_Accessibility")
         XCTAssertEqual(JarvisPrivacyPermission.microphone.settingsAnchor, "Privacy_Microphone")
-        XCTAssertEqual(JarvisPrivacyPermission.camera.settingsAnchor, "Privacy_Camera")
     }
 
-    func testRequiredPermissionsCoverScreenAccessibilityMicrophoneAndCamera() {
+    func testRequiredPermissionsCoverScreenAccessibilityAndMicrophone() {
         XCTAssertEqual(
             JarvisRequiredPermission.allCases.map(\.id),
-            ["screenCapture", "accessibility", "microphone", "camera"]
+            ["screenCapture", "accessibility", "microphone"]
         )
         XCTAssertEqual(JarvisRequiredPermission.screenCapture.title, "屏幕录制")
         XCTAssertEqual(JarvisRequiredPermission.accessibility.privacyPermission, .accessibility)
         XCTAssertEqual(JarvisRequiredPermission.microphone.privacyPermission, .microphone)
-        XCTAssertEqual(JarvisRequiredPermission.camera.privacyPermission, .camera)
+    }
+
+    func testBundlePermissionDeclarationsMatchSupportedFeatures() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let infoData = try Data(contentsOf: root.appendingPathComponent("Resources/Info.plist"))
+        let info = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: infoData, format: nil) as? [String: Any]
+        )
+        XCTAssertEqual(info["CFBundleDisplayName"] as? String, "Jarvis")
+        XCTAssertEqual(
+            Set(info.keys.filter { $0.hasSuffix("UsageDescription") }),
+            Set([
+                "NSAudioCaptureUsageDescription",
+                "NSLocalNetworkUsageDescription",
+                "NSMicrophoneUsageDescription",
+                "NSScreenCaptureUsageDescription"
+            ])
+        )
+
+        let entitlementData = try Data(contentsOf: root.appendingPathComponent("Resources/Jarvis.entitlements"))
+        let entitlements = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: entitlementData, format: nil) as? [String: Bool]
+        )
+        XCTAssertEqual(entitlements, [
+            "com.apple.security.cs.allow-jit": true,
+            "com.apple.security.device.audio-input": true
+        ])
     }
 
     func testPrivacyPermissionResetTreatsMissingBundleAsAlreadyClean() {
@@ -240,7 +265,7 @@ final class AppVersionTests: XCTestCase {
         identifier:                 com.jarvis.mac
         --------------------------------------------------------------------------------
         bundle id:                  Jarvis Dev (0x3)
-        path:                       /Users/wesley/VibeCodingProjects/贾维斯/dist/Jarvis-Dev.app (0x5)
+        path:                       /Users/wesley/VibeCodingProjects/Jarvis/dist/Jarvis-Dev.app (0x5)
         identifier:                 com.jarvis.mac.dev
         --------------------------------------------------------------------------------
         bundle id:                  JarvisStatusBarProbe (0x5)

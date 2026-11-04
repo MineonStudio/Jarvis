@@ -16,8 +16,8 @@ final class SettingsPanelControllerTests: XCTestCase {
         XCTAssertNil(panel.parent)
         XCTAssertNil(panel.sheetParent)
         XCTAssertTrue(panel.styleMask.contains([.titled, .closable, .miniaturizable, .resizable, .nonactivatingPanel]))
-        XCTAssertTrue(panel.isFloatingPanel)
-        XCTAssertEqual(panel.level, .floating)
+        XCTAssertFalse(panel.isFloatingPanel)
+        XCTAssertEqual(panel.level, .normal)
         XCTAssertFalse(panel.hidesOnDeactivate)
         XCTAssertFalse(panel.isMovableByWindowBackground)
         let hosting = try XCTUnwrap(panel.contentView as? NSHostingView<AnyView>)
@@ -25,6 +25,22 @@ final class SettingsPanelControllerTests: XCTestCase {
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             XCTAssertTrue(try XCTUnwrap(panel.standardWindowButton(button)).isEnabled)
         }
+    }
+
+    func testFullScreenTransitionsKeepSettingsAtNormalLevel() throws {
+        let controller = SettingsPanelController()
+        defer { controller.close() }
+        controller.show { AnyView(Color.clear) }
+        let panel = try XCTUnwrap(controller.panel)
+        let notification = Notification(name: NSWindow.willEnterFullScreenNotification, object: panel)
+
+        controller.windowWillEnterFullScreen(notification)
+        XCTAssertEqual(panel.level, .normal)
+        controller.windowDidExitFullScreen(notification)
+        XCTAssertEqual(panel.level, .normal)
+        controller.windowDidFailToEnterFullScreen(panel)
+        XCTAssertEqual(panel.level, .normal)
+        XCTAssertFalse(panel.isFloatingPanel)
     }
 
     func testOpeningClosingAndReopeningSettingsKeepsTheMainWindowUntouched() async throws {

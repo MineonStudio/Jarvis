@@ -22,8 +22,7 @@ enum JarvisPrivacyPermissionReset {
         [
             ["reset", "ScreenCapture", bundleIdentifier],
             ["reset", "Accessibility", bundleIdentifier],
-            ["reset", "Microphone", bundleIdentifier],
-            ["reset", "Camera", bundleIdentifier]
+            ["reset", "Microphone", bundleIdentifier]
         ]
     }
 

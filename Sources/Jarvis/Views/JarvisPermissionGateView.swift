@@ -128,7 +128,7 @@ struct JarvisPermissionGateView: View {
                     .font(JarvisTypography.secondary)
                     .foregroundStyle(Color.jarvisTextSecondary)
                     .multilineTextAlignment(.center)
-                Text("工作搭子 Jarvis需要这四项权限才能开始工作；屏幕录制和辅助功能授权后需要重启一次。")
+                Text("Jarvis 需要这三项权限才能开始工作；屏幕录制和辅助功能授权后需要重启一次。")
                     .font(JarvisTypography.caption)
                     .foregroundStyle(Color.jarvisTextSecondary)
                     .multilineTextAlignment(.center)
@@ -150,21 +150,19 @@ enum JarvisPermissionListMode: Equatable {
     case settings
 }
 
-/// The four required permissions with their current state. The gate cannot be
-/// dismissed, so this is the only place grants are requested.
+/// The required permissions with their current state and available actions.
 struct JarvisPermissionList: View {
     var cornerRadius: CGFloat = 16
     var mode: JarvisPermissionListMode = .gate
 
     var body: some View {
         if mode == .settings {
-            // 卡片变窄后，四个等分胶囊会把「屏幕录制」挤成省略号。按内容宽度换行，文字保持完整。
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 136), spacing: JarvisSpacing.itemGap)],
-                spacing: JarvisSpacing.itemGap
-            ) {
-                ForEach(JarvisRequiredPermission.allCases) { permission in
-                    JarvisPermissionStatusCapsule(permission: permission)
+            VStack(spacing: JarvisSpacing.itemGap) {
+                ForEach(Array(JarvisRequiredPermission.allCases.enumerated()), id: \.element.id) { index, permission in
+                    JarvisPermissionSettingsRow(permission: permission)
+                    if index < JarvisRequiredPermission.allCases.count - 1 {
+                        Divider()
+                    }
                 }
             }
         } else {
@@ -186,39 +184,44 @@ struct JarvisPermissionList: View {
     }
 }
 
-private struct JarvisPermissionStatusCapsule: View {
+private struct JarvisPermissionSettingsRow: View {
     @Environment(AppModel.self) private var app
     let permission: JarvisRequiredPermission
 
     var body: some View {
         let isGranted = app.isRequiredPermissionGranted(permission)
-        return HStack(spacing: JarvisSpacing.controlGap) {
+        return HStack(spacing: JarvisSpacing.itemGap) {
             Image(systemName: permission.systemImage)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Color.jarvisTextSecondary)
                 .frame(width: 16, height: 16)
-            Text(permission.title)
-                .font(JarvisTypography.control)
-                .foregroundStyle(Color.primary)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-            Spacer(minLength: 0)
-            if isGranted {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.green)
-                    .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
+                Text(permission.title)
+                    .font(SettingsTypography.itemTitle)
+                    .foregroundStyle(Color.primary)
+                Text(isGranted ? "已开启" : "未开启")
+                    .font(SettingsTypography.itemSubtitle)
+                    .foregroundStyle(isGranted ? Color.green : Color.jarvisTextSecondary)
             }
+            Spacer(minLength: 8)
+            Button(isGranted ? "关闭" : "获取") {
+                if isGranted {
+                    if JarvisPrivacyPermissionAccess.openSettings(for: permission.privacyPermission) {
+                        app.showToast("请在系统设置中关闭\(permission.title)权限")
+                    } else {
+                        app.showToast("无法打开系统设置，请前往隐私与安全性关闭\(permission.title)权限")
+                    }
+                } else {
+                    app.requestRequiredPermission(permission)
+                }
+            }
+            .buttonStyle(JarvisSecondaryButtonStyle())
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityLabel("\(isGranted ? "关闭" : "获取")\(permission.title)权限")
+            .help(isGranted ? "前往系统设置关闭\(permission.title)权限" : "获取\(permission.title)权限")
         }
-        .padding(.horizontal, JarvisSpacing.rowInset)
         .frame(maxWidth: .infinity, minHeight: SettingsFormMetrics.controlHeight, alignment: .leading)
-        .background(Color.jarvisPanel.opacity(0.55), in: Capsule())
-        .overlay {
-            Capsule()
-                .strokeBorder(Color.primary.opacity(0.09), lineWidth: 1)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(permission.title)，\(isGranted ? "已授权" : "未授权")")
+        .accessibilityElement(children: .contain)
         .animation(JarvisMotion.selection, value: isGranted)
     }
 }

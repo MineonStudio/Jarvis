@@ -53,7 +53,7 @@ extension MahjongLANRoomService {
         let detail = "\(error.localizedDescription)（\(String(describing: error))）"
         let normalized = detail.lowercased()
         if normalized.contains("noauth") || normalized.contains("permission") || normalized.contains("not permitted") || normalized.contains("policy denied") {
-            return "\(detail)。请在系统设置›隐私与安全性›本地网络中允许工作搭子 Jarvis 访问"
+            return "\(detail)。请在系统设置›隐私与安全性›本地网络中允许Jarvis 访问"
         }
         return detail
     }

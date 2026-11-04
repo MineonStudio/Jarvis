@@ -18,7 +18,6 @@ struct JarvisApp: App {
 
     init() {
         NSApplication.shared.setActivationPolicy(JarvisApplicationPresentation.activationPolicy)
-        JarvisInstallSource.recordIfMissing()
         JarvisLog.notice(
             category: .lifecycle,
             event: "process.started",
@@ -29,6 +28,8 @@ struct JarvisApp: App {
         )
 
         let appModel = AppModel()
+        // Determine first launch before recording this installation.
+        JarvisInstallSource.recordIfMissing()
         _appModel = State(initialValue: appModel)
         ShareStore.shared.onTransferEvent = { [weak appModel] transfer in
             let fields = [
@@ -76,10 +77,6 @@ struct JarvisApp: App {
         Window(JarvisAppIdentity.displayName, id: JarvisAppIdentity.mainWindowSceneID) {
             JarvisRootView(appModel: appModel)
         }
-        .defaultSize(
-            width: JarvisMainWindowController.launchWindowSize.width,
-            height: JarvisMainWindowController.launchWindowSize.height
-        )
         .windowToolbarStyle(.unified)
         // Keep the toolbar to one row so module-specific labels cannot change
         // the main content's vertical origin as navigation changes.
@@ -97,77 +94,90 @@ private struct JarvisRootView: View {
     @ObservedObject private var shareStore = ShareStore.shared
 
     @StateObject private var mainWindowController = JarvisMainWindowController()
+    @State private var onboardingContentSize: CGSize?
 
     var body: some View {
-        ContentView(onOpenSettings: { appModel.settingsPanelController.show(app: appModel) })
-            .environment(appModel)
-            .environmentObject(appModel.resumeWorkspace)
-            .tint(appModel.accentColorPreference.resolvedColor)
-            .accentColor(appModel.accentColorPreference.resolvedColor)
-            .jarvisTheme(
-                appModel.themePreference,
-                systemColorScheme: appModel.systemColorScheme
-            )
-            .frame(
-                minWidth: JarvisMainWindowController.minimumWindowSize.width,
-                minHeight: JarvisMainWindowController.minimumWindowSize.height
-            )
-            .overlay {
-                if let prompt = appModel.taskPermissionPrompt, prompt.presentation == .mainWindow {
-                    JarvisTaskPermissionOverlay(prompt: prompt)
-                        .environment(appModel)
-                }
+        Group {
+            if appModel.onboarding.isCompleted {
+                ContentView(onOpenSettings: { appModel.settingsPanelController.show(app: appModel) })
+            } else {
+                JarvisOnboardingView { onboardingContentSize = $0 }
             }
-            .alert(shareStore.incomingOffer?.isText == true ? "接收文本" : "接收文件", isPresented: Binding(
-                get: { shareStore.incomingOffer != nil },
-                set: { _ in }
-            )) {
-                Button("取消", role: .cancel) {
-                    if let offer = shareStore.incomingOffer {
-                        shareStore.cancel(offer.id)
-                    }
-                }
-                Button(shareStore.incomingOffer?.isText == true ? "复制文本" : "下载") {
-                    if let offer = shareStore.incomingOffer {
-                        shareStore.acceptIncoming(offer.id)
-                    }
-                }
-            } message: {
+        }
+        .environment(appModel)
+        .environmentObject(appModel.resumeWorkspace)
+        .tint(appModel.accentColorPreference.resolvedColor)
+        .accentColor(appModel.accentColorPreference.resolvedColor)
+        .jarvisTheme(
+            appModel.themePreference,
+            systemColorScheme: appModel.systemColorScheme
+        )
+        .frame(
+            minWidth: appModel.onboarding.isCompleted
+                ? JarvisMainWindowController.minimumWindowSize.width : nil,
+            minHeight: appModel.onboarding.isCompleted
+                ? JarvisMainWindowController.minimumWindowSize.height : nil
+        )
+        .overlay {
+            if let prompt = appModel.taskPermissionPrompt, prompt.presentation == .mainWindow {
+                JarvisTaskPermissionOverlay(prompt: prompt)
+                    .environment(appModel)
+            }
+        }
+        .alert(shareStore.incomingOffer?.isText == true ? "接收文本" : "接收文件", isPresented: Binding(
+            get: { shareStore.incomingOffer != nil },
+            set: { _ in }
+        )) {
+            Button("取消", role: .cancel) {
                 if let offer = shareStore.incomingOffer {
-                    if let text = offer.textContent {
-                        Text(text.count > 300 ? String(text.prefix(300)) + "…" : text)
-                    } else {
-                        Text("\(offer.name) · \(ByteCountFormatter.string(fromByteCount: offer.total, countStyle: .file))")
-                    }
+                    shareStore.cancel(offer.id)
                 }
             }
-            .overlay(alignment: .bottom) {
-                JarvisToastHost(message: appModel.toastMessage)
-                    .padding(.bottom, JarvisSpacing.pageInset)
-                    .allowsHitTesting(false)
-            }
-            .animation(.easeInOut(duration: 0.2), value: appModel.taskPermissionPrompt)
-            // Keep the system title-bar region and its native window controls.
-            // Apple recommends removing only the title and toolbar background
-            // when content should extend beneath that region.
-            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-            .toolbar(removing: .title)
-            .background(JarvisMainWindowAccessor(controller: mainWindowController))
-            .background(JarvisFirstFrameProbe().frame(width: 1, height: 1))
-            .onAppear {
-                appModel.refreshPermissionStatus()
-                JarvisMenuBarController.shared.bind {
-                    openWindow(id: JarvisAppIdentity.mainWindowSceneID)
+            Button(shareStore.incomingOffer?.isText == true ? "复制文本" : "下载") {
+                if let offer = shareStore.incomingOffer {
+                    shareStore.acceptIncoming(offer.id)
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                appModel.refreshPermissionStatus()
-                if let prompt = appModel.taskPermissionPrompt,
-                   appModel.isRequiredPermissionGranted(prompt.permission)
-                {
-                    appModel.taskPermissionPrompt = nil
+        } message: {
+            if let offer = shareStore.incomingOffer {
+                if let text = offer.textContent {
+                    Text(text.count > 300 ? String(text.prefix(300)) + "…" : text)
+                } else {
+                    Text("\(offer.name) · \(ByteCountFormatter.string(fromByteCount: offer.total, countStyle: .file))")
                 }
             }
+        }
+        .overlay(alignment: .bottom) {
+            JarvisToastHost(message: appModel.toastMessage)
+                .padding(.bottom, JarvisSpacing.pageInset)
+                .allowsHitTesting(false)
+        }
+        .animation(.easeInOut(duration: 0.2), value: appModel.taskPermissionPrompt)
+        // Keep the system title-bar region and its native window controls.
+        // Apple recommends removing only the title and toolbar background
+        // when content should extend beneath that region.
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .toolbar(removing: .title)
+        .background(JarvisMainWindowAccessor(
+            controller: mainWindowController,
+            isOnboardingPresented: !appModel.onboarding.isCompleted,
+            onboardingContentSize: onboardingContentSize
+        ))
+        .background(JarvisFirstFrameProbe().frame(width: 1, height: 1))
+        .onAppear {
+            appModel.refreshPermissionStatus()
+            JarvisMenuBarController.shared.bind {
+                openWindow(id: JarvisAppIdentity.mainWindowSceneID)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            appModel.refreshPermissionStatus()
+            if let prompt = appModel.taskPermissionPrompt,
+               appModel.isRequiredPermissionGranted(prompt.permission)
+            {
+                appModel.taskPermissionPrompt = nil
+            }
+        }
     }
 }
 

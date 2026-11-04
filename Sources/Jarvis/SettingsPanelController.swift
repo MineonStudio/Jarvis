@@ -1,12 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// A standalone utility panel, matching the F3 clipboard panel. Its hosting
-/// view belongs only to this window and never enters the main window's tree.
+/// Independent settings content with normal window stacking.
 @MainActor
 final class SettingsPanelController: NSObject, ObservableObject, NSWindowDelegate {
     private(set) var panel: NSPanel?
     private weak var appModel: AppModel?
+    private var permissionRefreshTask: Task<Void, Never>?
 
     func show(app: AppModel) {
         appModel = app
@@ -25,8 +25,8 @@ final class SettingsPanelController: NSObject, ObservableObject, NSWindowDelegat
         } else if !panel.isVisible {
             panel.center()
         }
-        panel.orderFrontRegardless()
-        panel.makeKey()
+        panel.makeKeyAndOrderFront(nil)
+        startRefreshingPermissionStatus()
         JarvisLog.info(category: .window, event: "settings.window.opened")
     }
 
@@ -44,13 +44,12 @@ final class SettingsPanelController: NSObject, ObservableObject, NSWindowDelegat
         panel.title = "设置"
         JarvisWindowAppearance.configureTransparentTitlebar(for: panel)
         panel.isMovableByWindowBackground = false
-        panel.isFloatingPanel = true
-        panel.level = .floating
+        panel.isFloatingPanel = false
+        panel.level = .normal
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.becomesKeyOnlyIfNeeded = false
         panel.animationBehavior = .default
-        panel.collectionBehavior = [.canJoinAllSpaces]
         JarvisWindowAppearance.configureStandardControls(for: panel)
         panel.minSize = SettingsLayout.minimumWindowSize
         panel.delegate = self
@@ -61,10 +60,32 @@ final class SettingsPanelController: NSObject, ObservableObject, NSWindowDelegat
     }
 
     func windowWillClose(_: Notification) {
+        permissionRefreshTask?.cancel()
+        permissionRefreshTask = nil
         if appModel?.taskPermissionPrompt?.presentation == .settingsWindow {
             appModel?.dismissTaskPermissionPrompt()
         }
         JarvisLog.info(category: .window, event: "settings.window.closed")
+    }
+
+    func windowDidBecomeKey(_: Notification) {
+        // Nonactivating panels can regain focus without didBecomeActive.
+        appModel?.refreshPermissionStatus()
+    }
+
+    private func startRefreshingPermissionStatus() {
+        permissionRefreshTask?.cancel()
+        appModel?.refreshPermissionStatus()
+        guard appModel != nil else { return }
+        // Keep tracking revocations while System Settings is in front. Stop
+        // when this panel closes, and restart when it is opened again.
+        permissionRefreshTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard !Task.isCancelled, self?.panel?.isVisible == true else { return }
+                self?.appModel?.refreshPermissionStatus()
+            }
+        }
     }
 
     func windowWillEnterFullScreen(_: Notification) {
@@ -72,11 +93,11 @@ final class SettingsPanelController: NSObject, ObservableObject, NSWindowDelegat
     }
 
     func windowDidExitFullScreen(_: Notification) {
-        panel?.level = .floating
+        panel?.level = .normal
     }
 
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
-        window.level = .floating
+        window.level = .normal
     }
 }
 

@@ -239,6 +239,22 @@ struct JarvisMascotView: View {
     }
 }
 
+/// Compact branding that shares the exact vector artwork with the home mascot.
+struct JarvisMascotMark: View {
+    let diameter: CGFloat
+
+    var body: some View {
+        ZStack {
+            JarvisMascotBodyShape()
+                .fill(Color.jarvisAccent, style: FillStyle(eoFill: true))
+            JarvisMascotEyesShape()
+                .fill(Color.jarvisAccent)
+        }
+        .frame(width: diameter, height: diameter)
+        .accessibilityHidden(true)
+    }
+}
+
 private struct JarvisMascotBodyShape: Shape {
     func path(in rect: CGRect) -> Path {
         JarvisMascotVector.fittedPath(JarvisMascotVector.bodyPath, in: rect)

@@ -5,8 +5,8 @@ import Foundation
 import Security
 
 enum JarvisAppVersion {
-    private static let fallbackShortVersion = "1.9.6"
-    private static let fallbackBuild = "389"
+    private static let fallbackShortVersion = "1.9.7"
+    private static let fallbackBuild = "390"
 
     static var shortVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -68,7 +68,7 @@ enum JarvisUpdateError: LocalizedError {
         case .invalidArchive:
             "更新包格式无效"
         case .invalidApplication:
-            "更新包中的工作搭子 Jarvis 应用无效"
+            "更新包中的Jarvis 应用无效"
         case .incompatibleCodeIdentity:
             "更新包的代码签名身份与当前应用不一致，已保留当前版本。请安装使用固定发布证书签名的正式包"
         case .invalidManifest:
@@ -80,11 +80,11 @@ enum JarvisUpdateError: LocalizedError {
         case .mismatchedVersion:
             "更新包内的版本与发布信息不一致，已阻止安装"
         case .unsupportedInstallLocation:
-            "当前应用位于只读磁盘映像或临时转移路径，无法自动更新。请先将工作搭子 Jarvis 复制到“应用程序”文件夹后重试"
+            "当前应用位于只读磁盘映像或临时转移路径，无法自动更新。请先将Jarvis 复制到“应用程序”文件夹后重试"
         case .ambiguousInstallLocation:
-            "检测到多个工作搭子 Jarvis 安装副本，无法确定要更新哪一个。请保留一个安装副本后重试"
+            "检测到多个Jarvis 安装副本，无法确定要更新哪一个。请保留一个安装副本后重试"
         case .unsupportedUpdateChannel:
-            "开发版不能安装正式更新。请打开已安装的工作搭子 Jarvis 后再更新"
+            "开发版不能安装正式更新。请打开已安装的Jarvis 后再更新"
         case let .toolFailed(message):
             "解压更新包失败：\(message)"
         case .checksumMismatch:

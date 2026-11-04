@@ -13,6 +13,7 @@ enum SettingsSection: String, CaseIterable, Hashable, Identifiable {
     case wallpaperSources
     case shortcuts
     case model
+    case permissions
     case privacyCache
     case diagnostics
     case about
@@ -24,6 +25,7 @@ enum SettingsSection: String, CaseIterable, Hashable, Identifiable {
     var title: String {
         switch self {
         case .general: "常规"
+        case .permissions: "权限"
         case .privacyCache: "隐私与缓存"
         case .appearance: "外观"
         case .wallpaperSources: "壁纸源"
@@ -37,6 +39,7 @@ enum SettingsSection: String, CaseIterable, Hashable, Identifiable {
     var icon: String {
         switch self {
         case .general: "gearshape"
+        case .permissions: "hand.raised"
         case .privacyCache: "lock.shield"
         case .appearance: "paintbrush"
         case .wallpaperSources: "photo.stack"
@@ -104,9 +107,15 @@ struct SettingsView: View {
         } detail: {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
-                    Text(selection.title)
-                        .font(SettingsTypography.pageTitle)
-                        .foregroundStyle(.primary)
+                    HStack(spacing: JarvisSpacing.groupGap) {
+                        Text(selection.title)
+                            .font(SettingsTypography.pageTitle)
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 8)
+                        if selection == .permissions {
+                            clearPermissionsButton
+                        }
+                    }
 
                     detailContent
                 }
@@ -133,6 +142,8 @@ struct SettingsView: View {
             launchAtLoginSettingsCard
             WindowDragLayoutSettingsCard()
             ScreenshotLanguagePackSettingsCard()
+            onboardingSettingsCard
+        case .permissions:
             permissionSettingsCard
         case .appearance:
             themeSettingsCard
@@ -153,6 +164,28 @@ struct SettingsView: View {
             versionAndUpdateCard
             automaticUpdatesSettingsCard
             sourceRepositoryCard
+        }
+    }
+
+    private var onboardingSettingsCard: some View {
+        JarvisCard {
+            HStack(spacing: JarvisSpacing.groupGap) {
+                VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
+                    SettingsCardHeader(title: "入门引导", systemImage: "sparkles")
+                    Text("重新了解权限用途与常用功能。")
+                        .font(SettingsTypography.itemSubtitle)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                Button("查看引导") {
+                    app.settingsPanelController.close()
+                    app.taskPermissionPrompt = nil
+                    app.onboarding.restart()
+                    JarvisMenuBarController.shared.reopenMainWindow()
+                }
+                .buttonStyle(JarvisSecondaryButtonStyle())
+                .fixedSize(horizontal: true, vertical: false)
+            }
         }
     }
 
@@ -313,19 +346,16 @@ struct SettingsView: View {
 
     private var permissionSettingsCard: some View {
         JarvisCard {
-            VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
-                HStack(spacing: JarvisSpacing.groupGap) {
-                    SettingsCardHeader(title: "权限", systemImage: "lock.shield")
-                    Spacer(minLength: 8)
-                    Button("清除所有权限") {
-                        isClearPermissionsConfirmationPresented = true
-                    }
-                    .buttonStyle(JarvisSecondaryButtonStyle())
-                    .fixedSize(horizontal: true, vertical: false)
-                }
-                JarvisPermissionList(cornerRadius: 12, mode: .settings)
-            }
+            JarvisPermissionList(cornerRadius: 12, mode: .settings)
         }
+    }
+
+    private var clearPermissionsButton: some View {
+        Button("清除所有权限") {
+            isClearPermissionsConfirmationPresented = true
+        }
+        .buttonStyle(JarvisSecondaryButtonStyle())
+        .fixedSize(horizontal: true, vertical: false)
         .confirmationDialog(
             "清除所有权限？",
             isPresented: $isClearPermissionsConfirmationPresented,
@@ -336,7 +366,7 @@ struct SettingsView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("将清除屏幕录制、辅助功能、麦克风和摄像头授权，然后重新打开工作搭子 Jarvis。")
+            Text("将清除屏幕录制、辅助功能和麦克风授权，然后重新打开Jarvis。")
         }
     }
 }

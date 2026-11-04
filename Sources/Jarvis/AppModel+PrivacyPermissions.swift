@@ -1,5 +1,4 @@
 import AppKit
-import AVFoundation
 import Foundation
 
 enum JarvisPermissionPromptPresentation: Equatable {
@@ -16,7 +15,6 @@ struct JarvisTaskPermissionPrompt: Equatable {
         case .screenCapture: "截图和会议记录需要屏幕录制权限"
         case .accessibility: "窗口布局需要辅助功能权限"
         case .microphone: "会议记录和网页功能需要麦克风权限"
-        case .camera: "网页功能需要摄像头权限"
         }
     }
 
@@ -25,7 +23,6 @@ struct JarvisTaskPermissionPrompt: Equatable {
         case .screenCapture: "macOS 需要授予屏幕录制权限，Jarvis 才能截图，并采集会议的系统音频。"
         case .accessibility: "macOS 需要授予辅助功能权限，Jarvis 才能调整其他应用窗口的位置和大小。"
         case .microphone: "macOS 需要授予麦克风权限，Jarvis 才能录取会议声音或使用网页麦克风功能。"
-        case .camera: "macOS 需要授予摄像头权限，支持摄像头的网页功能才能使用摄像头。"
         }
     }
 }
@@ -36,7 +33,6 @@ extension AppModel {
         case .screenCapture: screenCapturePermissionGranted
         case .accessibility: accessibilityPermissionGranted
         case .microphone: microphonePermissionGranted
-        case .camera: cameraPermissionGranted
         }
     }
 
@@ -115,7 +111,6 @@ extension AppModel {
         screenCapturePermissionGranted = screenshotController.hasScreenCaptureAccess
         accessibilityPermissionGranted = windowLayoutController?.isAccessibilityTrusted ?? false
         microphonePermissionGranted = JarvisPrivacyPermissionAccess.isMicrophoneTrusted()
-        cameraPermissionGranted = JarvisPrivacyPermissionAccess.isCameraTrusted()
         completePendingWindowDragLayoutEnableIfAllowed()
         if let prompt = taskPermissionPrompt, isRequiredPermissionGranted(prompt.permission) {
             taskPermissionPrompt = nil
@@ -134,8 +129,6 @@ extension AppModel {
             requestAccessibilityPermission()
         case .microphone:
             requestMicrophonePermission()
-        case .camera:
-            requestCameraPermission()
         }
     }
 
@@ -145,7 +138,7 @@ extension AppModel {
         refreshPermissionStatus()
         if !granted {
             screenshotController.openScreenCaptureSettings()
-            showToast("请在系统设置的屏幕录制中开启工作搭子 Jarvis")
+            showToast("请在系统设置的屏幕录制中开启Jarvis")
         } else {
             showToast("屏幕录制权限已开启")
         }
@@ -174,42 +167,19 @@ extension AppModel {
     }
 
     func requestMicrophonePermission() {
-        requestMediaPermission(for: .audio, privacyPermission: .microphone)
-    }
-
-    func requestCameraPermission() {
-        requestMediaPermission(for: .video, privacyPermission: .camera)
-    }
-
-    private func requestMediaPermission(
-        for mediaType: AVMediaType,
-        privacyPermission: JarvisPrivacyPermission
-    ) {
-        JarvisPrivacyPermissionAccess.requestMediaAccess(for: mediaType) { [weak self] granted in
+        JarvisPrivacyPermissionAccess.requestMicrophoneAccess { [weak self] granted in
             guard let self else { return }
-            let mediaName = privacyPermission == .microphone ? "麦克风" : "摄像头"
             refreshPermissionStatus()
-            if granted, taskPermissionPrompt?.permission == privacyPermission.requiredPermission {
+            if granted, taskPermissionPrompt?.permission == .microphone {
                 taskPermissionPrompt = nil
             }
             statusMessage = granted
-                ? "\(mediaName)权限已开启"
-                : "请在系统设置中开启\(mediaName)权限"
+                ? "麦克风权限已开启"
+                : "请在系统设置中开启麦克风权限"
             showToast(statusMessage)
             if !granted {
-                JarvisPrivacyPermissionAccess.openSettings(for: privacyPermission)
+                JarvisPrivacyPermissionAccess.openSettings(for: .microphone)
             }
-        }
-    }
-}
-
-private extension JarvisPrivacyPermission {
-    var requiredPermission: JarvisRequiredPermission {
-        switch self {
-        case .screenCapture: .screenCapture
-        case .accessibility: .accessibility
-        case .microphone: .microphone
-        case .camera: .camera
         }
     }
 }
