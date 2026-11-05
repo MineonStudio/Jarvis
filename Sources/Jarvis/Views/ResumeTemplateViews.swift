@@ -48,18 +48,13 @@ private struct ResumeTemplateCard: View {
             preview: cover,
             width: ResumeTemplateThumbnail.size.width,
             height: ResumeTemplateThumbnail.size.height,
-            isSelected: false
+            isSelected: false,
+            cornerRadius: 0
         )
         .overlay(alignment: .bottom) { metadataRow }
         .overlay(alignment: .topTrailing) { useActionOverlay }
-        .clipShape(RoundedRectangle(
-            cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-            style: .continuous
-        ))
-        .contentShape(RoundedRectangle(
-            cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-            style: .continuous
-        ))
+        .clipShape(Rectangle())
+        .contentShape(Rectangle())
         .onTapGesture(count: 2) { onSelect(template) }
         .onHover { hovering in
             guard hovering != isHovered else { return }

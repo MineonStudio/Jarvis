@@ -5,6 +5,7 @@ struct JarvisOnboardingView: View {
     let onContentSizeChange: (CGSize) -> Void
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @State private var requestedPermission: JarvisRequiredPermission?
 
     private var step: JarvisOnboardingStep {
@@ -31,7 +32,7 @@ struct JarvisOnboardingView: View {
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             onContentSizeChange(size)
         }
-        .background(.background)
+        .background(colorScheme == .dark ? AnyShapeStyle(Color.jarvisBackground) : AnyShapeStyle(.background))
         .animation(JarvisMotion.animation(.easeInOut(duration: 0.24), reduceMotion: reduceMotion), value: step)
         .task {
             // Awaiting a system prompt must not advance or request the next permission.

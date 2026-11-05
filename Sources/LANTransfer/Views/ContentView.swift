@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import CoreImage.CIFilterBuiltins
+import JarvisDesignSystem
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -86,7 +87,7 @@ struct ContentView: View {
                     } label: {
                         Label(copied ? "已复制" : "复制链接", systemImage: copied ? "checkmark" : "doc.on.doc")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TransferFlatButtonStyle())
                     .fixedSize()
                 }
                 HStack(spacing: JarvisSpacing.controlGap) {
@@ -174,19 +175,33 @@ struct ContentView: View {
                 Text("发送到")
                     .font(.system(size: 14, weight: .semibold))
                     .lineLimit(1)
-                Picker("传输设备", selection: $store.selectedDeviceIP) {
-                    if store.connectedDevices.isEmpty {
-                        Text("无设备").tag(nil as String?)
-                    } else {
-                        ForEach(Array(store.connectedDevices.enumerated()), id: \.element.id) { index, device in
-                            Text("设备\(index + 1)(\(device.ipAddress))")
-                                .tag(Optional(device.id))
+                Menu {
+                    ForEach(Array(store.connectedDevices.enumerated()), id: \.element.id) { index, device in
+                        Button {
+                            store.selectedDeviceIP = device.id
+                        } label: {
+                            if store.selectedDeviceIP == device.id {
+                                Label("设备\(index + 1)(\(device.ipAddress))", systemImage: "checkmark")
+                            } else {
+                                Text("设备\(index + 1)(\(device.ipAddress))")
+                            }
                         }
                     }
+                } label: {
+                    HStack(spacing: JarvisSpacing.iconGap) {
+                        Text(selectedDeviceTitle)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .padding(.horizontal, JarvisSpacing.controlGap)
+                    .padding(.vertical, JarvisSpacing.iconGap)
+                    .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
+                    .modifier(JarvisButtonShadowModifier())
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .disabled(store.connectedDevices.isEmpty || !store.canStartTask)
+                .accessibilityLabel("传输设备")
                 .fixedSize()
                 Spacer(minLength: 0)
             }
@@ -217,6 +232,13 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var selectedDeviceTitle: String {
+        guard let index = store.connectedDevices.firstIndex(where: { $0.id == store.selectedDeviceIP }) else {
+            return store.connectedDevices.isEmpty ? "无设备" : "选择设备"
+        }
+        return "设备\(index + 1)(\(store.connectedDevices[index].ipAddress))"
     }
 
     private func transferAnimation(_ task: Transfer, tint: Color) -> some View {
@@ -252,12 +274,14 @@ struct ContentView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.accentColor.opacity(isDropTargeted ? 0.12 : 0.045), in: RoundedRectangle(cornerRadius: 10))
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
                 .overlay {
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(Color.accentColor.opacity(isDropTargeted ? 0.7 : 0.18), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
                 }
         }
         .buttonStyle(.plain)
+        .modifier(JarvisButtonShadowModifier())
         .disabled(!store.canStartTask)
         .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted) { providers in
             guard store.canStartTask,
@@ -283,7 +307,7 @@ struct ContentView: View {
                 .padding(.horizontal, JarvisSpacing.rowInset)
                 .frame(maxWidth: .infinity)
                 .frame(height: 32)
-                .background(.regularMaterial, in: Capsule())
+                .background(Color.primary.opacity(0.07), in: Capsule())
             Button {
                 sendDraft()
             } label: {
@@ -292,6 +316,8 @@ struct ContentView: View {
                     .foregroundStyle(textDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary : Color.accentColor)
                     .frame(width: 32, height: 32)
                     .background(Color.accentColor.opacity(0.10), in: Circle())
+                    .background(Color(nsColor: .controlBackgroundColor), in: Circle())
+                    .modifier(JarvisButtonShadowModifier())
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)

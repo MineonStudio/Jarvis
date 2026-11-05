@@ -1,4 +1,5 @@
 import AppKit
+import JarvisDesignSystem
 import SwiftUI
 
 @MainActor
@@ -93,7 +94,7 @@ struct FullscreenTextPreviewContent: View {
                 .padding(.vertical, FullscreenMediaPreviewSizing.textVerticalPadding)
         }
         .scrollIndicators(.automatic)
-        .background(Color.jarvisPanel)
+        .background(Color(nsColor: JarvisSurfacePalette.windowBackgroundColor(light: .controlBackgroundColor)))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)

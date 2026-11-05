@@ -21,12 +21,12 @@ struct WindowLayoutView: View {
                         JarvisCard {
                             VStack(alignment: .leading, spacing: JarvisSpacing.groupGap) {
                                 SettingsCardHeader(title: "窗口布局", systemImage: "rectangle.3.group")
-                                Text("按 F5 打开顶部布局面板，点击布局块，调整当前激活的窗口。")
+                                Text("按 \(app.windowLayoutShortcut.displayString) 打开顶部布局面板，点击布局块，调整当前激活的窗口。")
                                     .font(JarvisTypography.body)
-                                Text("支持左右分屏、上下分屏和四角分屏。按 Esc、再次按 F5 或点击面板外取消。")
+                                Text("支持左右分屏、上下分屏和四角分屏。按 Esc、再次按 \(app.windowLayoutShortcut.displayString) 或点击面板外取消。")
                                     .font(JarvisTypography.secondary)
                                     .foregroundStyle(Color.jarvisTextSecondary)
-                                Button("选择窗口布局 · F5") { app.showWindowLayoutPicker() }
+                                Button("选择窗口布局 · \(app.windowLayoutShortcut.displayString)") { app.showWindowLayoutPicker() }
                                     .buttonStyle(JarvisPrimaryButtonStyle())
                             }
                         }

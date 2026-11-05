@@ -77,6 +77,21 @@ final class AIStreamingTests: XCTestCase {
         XCTAssertLessThan(silence, 1)
     }
 
+    func testAutomaticDuplicateRequestsStayDisabledIncludingOlderEnabledPreferences() throws {
+        let suite = "jarvis.tests.no-hedge.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let configuration = AIAPIConfiguration(
+            endpoint: "https://example.com/v1/chat/completions",
+            model: "model", apiKey: "test", providerID: "custom"
+        )
+        let history = AIStreamingLatencyHistory(defaults: defaults)
+        XCTAssertFalse(AIStreamingPolicy.default.hedgingEnabled)
+        XCTAssertFalse(AIStreamingPolicy.load(defaults: defaults, configuration: configuration, history: history).hedgingEnabled)
+        defaults.set(true, forKey: AIStreamingPolicy.legacyHedgeEnabledKey)
+        XCTAssertFalse(AIStreamingPolicy.load(defaults: defaults, configuration: configuration, history: history).hedgingEnabled)
+    }
+
     func testHedgeDelayFollowsWhatTheProviderActuallyDoes() {
         let defaults = UserDefaults(suiteName: "jarvis.tests.hedge.\(UUID().uuidString)") ?? .standard
         let history = AIStreamingLatencyHistory(defaults: defaults)

@@ -73,6 +73,7 @@ struct JarvisToolbarIconButtonStyle: ButtonStyle {
                 height: JarvisToolbarMetrics.controlSize
             )
             .contentShape(Rectangle())
+            .modifier(JarvisContentIconSurfaceModifier())
             .animation(
                 JarvisMotion.animation(JarvisMotion.buttonPress, reduceMotion: reduceMotion),
                 value: configuration.isPressed
@@ -228,6 +229,7 @@ struct JarvisSegmentedControl<Item: Identifiable & Equatable, Label: View>: View
             .padding(JarvisMetrics.segmentedControlPadding)
             .frame(maxWidth: expands ? .infinity : nil)
             .jarvisGlass(in: Capsule(), interactive: true)
+            .jarvisButtonShadow()
             .onPreferenceChange(JarvisSegmentedItemFramePreferenceKey.self) { frames in
                 guard itemFrames != frames else { return }
                 itemFrames = frames

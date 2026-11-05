@@ -1,4 +1,5 @@
 import AppKit
+import JarvisDesignSystem
 import Observation
 import SwiftUI
 
@@ -180,7 +181,7 @@ private struct JarvisAccentTintModifier: ViewModifier {
 extension Color {
     // Keep these names stable for the rest of the app. Surfaces use semantic
     // macOS colors; custom accent drawing reads the observable palette below.
-    static let jarvisBackground = Color(nsColor: .textBackgroundColor)
+    static let jarvisBackground = Color(nsColor: JarvisSurfacePalette.windowBackgroundColor)
     static let jarvisPanel = Color(nsColor: .controlBackgroundColor)
     @MainActor
     static var jarvisAccent: Color {
@@ -398,6 +399,11 @@ struct JarvisContentArea<LeadingToolbar: ToolbarContent, TrailingToolbar: Toolba
 
     var body: some View {
         content
+            // Keep the policy inside the body branch so toolbar controls retain glass.
+            .buttonStyle(JarvisSecondaryButtonStyle())
+            .toggleStyle(SettingsFlatToggleStyle())
+            .environment(\.jarvisFlatControls, true)
+            .environment(\.jarvisContentButtonShadows, true)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, JarvisMetrics.shellContentSpacing)
             .padding(.horizontal, horizontalContentPadding)
@@ -458,23 +464,13 @@ struct JarvisEmptyState: View {
 
 /// Standard content-layer surface for cards and collections.
 ///
-/// Liquid Glass belongs primarily to the functional layer (toolbars,
-/// navigation, and transient controls). Content cards use a semantic macOS
-/// control background instead so dense content remains legible and calm.
+/// Content cards share the same opaque light/dark palette as settings and
+/// module panels. Controls and transient surfaces retain their own styling.
 struct JarvisContentSurfaceModifier: ViewModifier {
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
-        content
-            .background(
-                Color.jarvisPanel,
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.75)
-                    .allowsHitTesting(false)
-            }
+        content.jarvisPanelBackground(cornerRadius: cornerRadius)
     }
 }
 
@@ -497,8 +493,12 @@ struct JarvisGlassModifier: ViewModifier {
     let cornerRadius: CGFloat
     let interactive: Bool
 
+    @Environment(\.jarvisFlatControls) private var usesFlatControls
+
     func body(content: Content) -> some View {
-        if let tint {
+        if usesFlatControls {
+            content.background(tint ?? SettingsSurface.controlFill, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else if let tint {
             content.glassEffect(
                 .regular.tint(tint).interactive(interactive),
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -544,8 +544,12 @@ struct JarvisGlassShapeModifier<GlassShape: Shape>: ViewModifier {
     let shape: GlassShape
     let interactive: Bool
 
+    @Environment(\.jarvisFlatControls) private var usesFlatControls
+
     func body(content: Content) -> some View {
-        if let tint {
+        if usesFlatControls {
+            content.background(tint ?? SettingsSurface.controlFill, in: shape)
+        } else if let tint {
             content.glassEffect(
                 .regular.tint(tint).interactive(interactive),
                 in: shape
@@ -560,42 +564,30 @@ struct JarvisGlassShapeModifier<GlassShape: Shape>: ViewModifier {
 }
 
 extension View {
-    /// 模块外壳：先裁圆角再铺面板底色。
+    /// 模块外壳与设置面板共用无描边、无阴影的背景。
     ///
     /// 网页模块使用无圆角的正文区域，不使用这个 modifier。
     func jarvisModulePanel() -> some View {
         clipShape(RoundedRectangle(cornerRadius: JarvisMetrics.panelRadius, style: .continuous))
-            .jarvisFloatingPanel(cornerRadius: JarvisMetrics.panelRadius)
-    }
-}
-
-struct JarvisFloatingPanelModifier: ViewModifier {
-    let cornerRadius: CGFloat
-
-    func body(content: Content) -> some View {
-        content
-            .background(
-                Color.jarvisPanel,
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.75)
-                    .allowsHitTesting(false)
-            }
-            .shadow(color: Color.black.opacity(0.11), radius: 16, y: 6)
+            .jarvisContentSurface(cornerRadius: JarvisMetrics.panelRadius)
     }
 }
 
 /// `NSSwitch` 只在创建时读取强调色。根视图上的 tint 变了，已经出现的开关不会跟着变，
 /// 所以每个开关单独着色，并在强调色变化时重建。
 private struct JarvisSwitchAccentModifier: ViewModifier {
+    @Environment(\.jarvisFlatControls) private var usesFlatControls
+
     func body(content: Content) -> some View {
         let preference = JarvisAccentColorStore.shared.preference
-        content
-            .toggleStyle(.switch)
-            .tint(preference.resolvedColor)
-            .id(preference.rawValue)
+        if usesFlatControls {
+            content.toggleStyle(SettingsFlatToggleStyle())
+        } else {
+            content
+                .toggleStyle(.switch)
+                .tint(preference.resolvedColor)
+                .id(preference.rawValue)
+        }
     }
 }
 
@@ -628,8 +620,8 @@ extension View {
         modifier(JarvisGlassShapeModifier(tint: tint, shape: shape, interactive: interactive))
     }
 
-    func jarvisFloatingPanel(cornerRadius: CGFloat = 16) -> some View {
-        modifier(JarvisFloatingPanelModifier(cornerRadius: cornerRadius))
+    func jarvisPanelBackground(cornerRadius: CGFloat = JarvisMetrics.cardRadius) -> some View {
+        modifier(JarvisPanelBackgroundModifier(cornerRadius: cornerRadius))
     }
 
     func jarvisContentSurface(cornerRadius: CGFloat = JarvisMetrics.cardRadius) -> some View {
@@ -664,6 +656,7 @@ struct HistoryCardChrome<Preview: View>: View {
     var alignment: Alignment = .center
     /// 宫格缩到最小时一屏几十张卡，悬停放大每张都要离屏合成，滚动会跟着卡。
     var enablesHoverZoom: Bool = true
+    var cornerRadius: CGFloat = HistoryGridMetrics.clipboardCornerRadius
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -688,14 +681,14 @@ struct HistoryCardChrome<Preview: View>: View {
         .frame(maxWidth: width == nil ? .infinity : nil)
         .clipShape(
             RoundedRectangle(
-                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
+                cornerRadius: cornerRadius,
                 style: .continuous
             )
         )
-        .jarvisContentSurface(cornerRadius: HistoryGridMetrics.clipboardCornerRadius)
+        .jarvisContentSurface(cornerRadius: cornerRadius)
         .overlay {
             RoundedRectangle(
-                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
+                cornerRadius: cornerRadius,
                 style: .continuous
             )
             .stroke(
@@ -722,6 +715,68 @@ struct HistoryCardChrome<Preview: View>: View {
     }
 }
 
+extension View {
+    func jarvisButtonShadow() -> some View {
+        modifier(JarvisButtonShadowModifier())
+    }
+}
+
+/// Plain content buttons still need a surface to cast a control-shaped shadow.
+/// Outside the main content branch this preserves the original plain styling.
+private struct JarvisPlainButtonSurfaceModifier: ViewModifier {
+    @Environment(\.jarvisContentButtonShadows) private var showsShadow
+
+    func body(content: Content) -> some View {
+        if showsShadow {
+            content
+                .background(Color.jarvisPanel, in: Capsule())
+                .jarvisButtonShadow()
+        } else {
+            content
+        }
+    }
+}
+
+struct JarvisContentIconSurfaceModifier: ViewModifier {
+    @Environment(\.jarvisContentButtonShadows) private var showsShadow
+
+    func body(content: Content) -> some View {
+        if showsShadow {
+            content.background(Color.jarvisPanel, in: Circle()).jarvisButtonShadow()
+        } else {
+            content
+        }
+    }
+}
+
+struct JarvisContentPlainButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .modifier(JarvisPlainButtonSurfaceModifier())
+            .opacity(configuration.isPressed ? 0.68 : 1)
+    }
+}
+
+/// Settings and main-window content use flat capsules; toolbars retain glass.
+private struct JarvisButtonSurfaceModifier: ViewModifier {
+    let tint: Color?
+    @Environment(\.jarvisFlatControls) private var usesFlatControls
+    @Environment(\.jarvisContentButtonShadows) private var showsShadow
+
+    func body(content: Content) -> some View {
+        if usesFlatControls {
+            content
+                .background(tint ?? (showsShadow ? Color.jarvisPanel : SettingsSurface.controlFill), in: Capsule())
+                .contentShape(Capsule())
+                .jarvisButtonShadow()
+        } else {
+            content
+                .jarvisGlass(tint: tint, cornerRadius: JarvisMetrics.controlRadius)
+                .contentShape(RoundedRectangle(cornerRadius: JarvisMetrics.controlRadius, style: .continuous))
+        }
+    }
+}
+
 struct JarvisPrimaryButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isEnabled) private var isEnabled
@@ -733,11 +788,9 @@ struct JarvisPrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, JarvisSpacing.buttonHorizontalInset)
             .padding(.vertical, JarvisSpacing.buttonVerticalInset)
             .opacity(configuration.isPressed ? 0.78 : (isEnabled ? 1 : 0.78))
-            .jarvisGlass(
-                tint: isEnabled ? Color.jarvisAccent : Color.primary.opacity(0.12),
-                cornerRadius: JarvisMetrics.controlRadius
-            )
-            .contentShape(RoundedRectangle(cornerRadius: JarvisMetrics.controlRadius, style: .continuous))
+            .modifier(JarvisButtonSurfaceModifier(
+                tint: isEnabled ? Color.jarvisAccent : Color.primary.opacity(0.12)
+            ))
             .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.98 : 1))
             .animation(
                 JarvisMotion.animation(JarvisMotion.buttonPress, reduceMotion: reduceMotion),
@@ -759,13 +812,9 @@ struct JarvisCardActionPillButtonStyle: ButtonStyle {
             .padding(.horizontal, JarvisSpacing.buttonHorizontalInset)
             .padding(.vertical, JarvisSpacing.buttonVerticalInset)
             .opacity(configuration.isPressed ? 0.68 : 1)
-            .jarvisGlass(in: Capsule())
+            .background(Color.jarvisPanel, in: Capsule())
+            .jarvisButtonShadow()
             .contentShape(Capsule())
-            .shadow(
-                color: Color.black.opacity(0.24),
-                radius: 6,
-                y: 2
-            )
             .fixedSize(horizontal: true, vertical: false)
             .scaleEffect(
                 reduceMotion ? 1 : (configuration.isPressed ? 0.98 : 1)
@@ -812,6 +861,7 @@ struct JarvisToolbarButtonStyle: ButtonStyle {
             .frame(height: JarvisToolbarMetrics.controlSize)
             .opacity(isPressed ? 0.68 : 1)
             .contentShape(Capsule())
+            .modifier(JarvisPlainButtonSurfaceModifier())
             .jarvisHoverFeedback(in: Capsule(), scale: hoverScale)
             .scaleEffect(reduceMotion || !isPressed ? 1 : 0.98)
             .animation(
@@ -945,8 +995,7 @@ struct JarvisSecondaryButtonStyle: ButtonStyle {
             .padding(.horizontal, JarvisSpacing.buttonHorizontalInset)
             .padding(.vertical, JarvisSpacing.buttonVerticalInset)
             .opacity(configuration.isPressed ? 0.68 : 1)
-            .jarvisGlass(cornerRadius: JarvisMetrics.controlRadius)
-            .contentShape(RoundedRectangle(cornerRadius: JarvisMetrics.controlRadius, style: .continuous))
+            .modifier(JarvisButtonSurfaceModifier(tint: nil))
             .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.98 : 1))
             .animation(
                 JarvisMotion.animation(JarvisMotion.buttonPress, reduceMotion: reduceMotion),

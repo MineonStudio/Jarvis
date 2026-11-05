@@ -18,7 +18,7 @@ final class HTTPServerTests: XCTestCase {
         let received = root.appendingPathComponent("received")
         try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: received, withIntermediateDirectories: true)
-        let server = HTTPServer(ip: "127.0.0.1", token: "test-secret", sharedDirectory: shared, receivedDirectory: received, maxBytes: 5 * 1024 * 1024)
+        let server = HTTPServer(ip: "127.0.0.1", token: "1a2b", sharedDirectory: shared, receivedDirectory: received, maxBytes: 5 * 1024 * 1024)
         let ready = expectation(description: "listener ready")
         var port: UInt16 = 0
         server.onReady = { value in port = value; ready.fulfill() }
@@ -26,7 +26,7 @@ final class HTTPServerTests: XCTestCase {
         server.start()
         wait(for: [ready], timeout: 5)
         let base = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/"))
-        let entry = try request("?t=test-secret", base: base)
+        let entry = try request("?t=1a2b", base: base)
         let cookie = try XCTUnwrap(entry.0.value(forHTTPHeaderField: "Set-Cookie")?.components(separatedBy: ";").first)
         return Harness(server: server, root: root, shared: shared, received: received, base: base, cookie: cookie)
     }
@@ -98,16 +98,16 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(details["displaySize"] as? String, ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))
         XCTAssertEqual(try request("api/offer-upload?name=other.txt&size=1", base: harness.base, method: "POST", cookie: harness.cookie).0.statusCode, 409)
 
-        let first = try request("api/file?id=\(id.uuidString)&t=test-secret", base: harness.base, range: "bytes=0-5")
+        let first = try request("api/file?id=\(id.uuidString)&t=1a2b", base: harness.base, range: "bytes=0-5")
         XCTAssertEqual(first.0.statusCode, 206)
         XCTAssertEqual(first.1, Data("hello-".utf8))
         XCTAssertEqual(try status(id, in: harness)["status"] as? String, TransferStatus.pending.rawValue)
-        let second = try request("api/file?id=\(id.uuidString)&t=test-secret", base: harness.base, range: "bytes=6-10")
+        let second = try request("api/file?id=\(id.uuidString)&t=1a2b", base: harness.base, range: "bytes=6-10")
         XCTAssertEqual(second.0.statusCode, 206)
         XCTAssertEqual(second.1, Data("world".utf8))
         XCTAssertEqual(try status(id, in: harness)["status"] as? String, TransferStatus.completed.rawValue)
         XCTAssertEqual(try request("api/offer", base: harness.base, cookie: harness.cookie).0.statusCode, 204)
-        let preview = try request("api/file?id=\(id.uuidString)&t=test-secret&inline=1", base: harness.base)
+        let preview = try request("api/file?id=\(id.uuidString)&t=1a2b&inline=1", base: harness.base)
         XCTAssertEqual(preview.0.statusCode, 200)
         XCTAssertEqual(preview.0.value(forHTTPHeaderField: "Content-Type"), "text/plain")
         XCTAssertTrue(preview.0.value(forHTTPHeaderField: "Content-Disposition")?.hasPrefix("inline") == true)

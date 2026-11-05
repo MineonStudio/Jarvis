@@ -104,7 +104,7 @@ struct ResumeInspector: View {
                 .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(JarvisContentPlainButtonStyle())
             .accessibilityValue(expandedSection == section ? "已展开" : "已收起")
 
             if expandedSection == section {
@@ -114,15 +114,6 @@ struct ResumeInspector: View {
                     .transition(.opacity)
             }
         }
-        .background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(
-                    expandedSection == section ? Color.jarvisAccent.opacity(0.22) : Color.primary.opacity(0.06),
-                    lineWidth: 0.75
-                )
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .zIndex(expandedSection == section ? 1 : 0)
     }
 
@@ -367,7 +358,6 @@ private struct ResumeEducationEditor: View {
                     ResumeTextField(title: "时间", placeholder: "请输入时间", text: $item.period)
                 }
                 .padding(JarvisSpacing.rowInset)
-                .jarvisGlass(cornerRadius: 11, interactive: false)
             }
 
             HStack(spacing: JarvisSpacing.controlGap) {
@@ -413,7 +403,6 @@ private struct ResumeExperienceEditor: View {
                     ResumeTextField(title: "时间", placeholder: "请输入时间", text: $item.period)
                 }
                 .padding(JarvisSpacing.rowInset)
-                .jarvisGlass(cornerRadius: 11, interactive: false)
             }
 
             HStack(spacing: JarvisSpacing.controlGap) {
@@ -460,7 +449,7 @@ private struct ResumeSkillsEditor: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.red.opacity(0.78))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(JarvisContentPlainButtonStyle())
                     .padding(.top, JarvisSpacing.cardInset)
                 }
             }
@@ -516,7 +505,6 @@ private struct ResumeProjectsEditor: View {
                     ResumeBulletEditor(title: "项目要点", bullets: $project.bullets)
                 }
                 .padding(JarvisSpacing.rowInset)
-                .jarvisGlass(cornerRadius: 11, interactive: false)
             }
 
             HStack(spacing: JarvisSpacing.controlGap) {
@@ -567,7 +555,7 @@ private struct ResumeBulletEditor: View {
                         Image(systemName: "trash")
                             .foregroundStyle(.red.opacity(0.70))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(JarvisContentPlainButtonStyle())
                     .padding(.top, JarvisSpacing.cardInset)
                 }
             }
@@ -578,7 +566,7 @@ private struct ResumeBulletEditor: View {
                 Label("添加要点", systemImage: "plus")
                     .font(JarvisTypography.control)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(JarvisContentPlainButtonStyle())
             .foregroundStyle(Color.jarvisAccent)
         }
     }
@@ -608,7 +596,7 @@ private struct ResumeItemHeader: View {
                 Image(systemName: "trash")
                     .foregroundStyle(.red.opacity(0.78))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(JarvisContentPlainButtonStyle())
         }
     }
 }

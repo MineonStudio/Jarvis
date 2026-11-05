@@ -10,7 +10,7 @@ public struct HotspotGuide: View {
             step(1, "手机开启热点")
             step(2, "Mac 连接热点")
             step(3, "扫描新二维码")
-            HStack { Spacer(); Button("完成") { dismiss() }.buttonStyle(.borderedProminent) }
+            HStack { Spacer(); Button("完成") { dismiss() }.buttonStyle(TransferFlatButtonStyle(isPrimary: true)) }
         }
         .padding(JarvisSpacing.pageInset)
         .frame(width: 360)

@@ -39,6 +39,30 @@ final class AIStreamingClientTests: XCTestCase {
         XCTAssertEqual(server.requestCount, 1)
     }
 
+    func testRemovedNetworkSettingDoesNotDuplicateASlowRequest() async throws {
+        let server = try StubHTTPServer(replies: [
+            .init(chunks: [sseFrame(content: "single"), sseDone], initialDelay: 0.6)
+        ])
+        let port = try server.start()
+        defer { server.stop() }
+        let suite = "jarvis.tests.no-hedge-client.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AIStreamingPolicy.legacyHedgeEnabledKey)
+        let configuration = configuration(port: port)
+        var policy = AIStreamingPolicy.load(
+            defaults: defaults, configuration: configuration,
+            history: AIStreamingLatencyHistory(defaults: defaults)
+        )
+        policy.hedgeDelay = 0.05
+        let content = try await client().stream(
+            systemPrompt: "s", userPrompt: "u", configuration: configuration,
+            options: .meetingSummary, policy: policy, onEvent: { _ in }
+        )
+        XCTAssertEqual(content, "single")
+        XCTAssertEqual(server.requestCount, 1)
+    }
+
     func testTheDuplicateRequestWinsWhenTheFirstOneIsSlow() async throws {
         // The first request is slow to start; the duplicate, which only fires because the
         // first said nothing, answers first and is the one that counts.

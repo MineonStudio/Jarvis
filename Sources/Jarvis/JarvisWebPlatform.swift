@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import JarvisDesignSystem
 import WebKit
 
 struct JarvisWebPlatformDescriptor: Hashable, Sendable {
@@ -300,7 +301,7 @@ final class JarvisWebPlatformViewContainer: NSView {
 
     private func syncBackgroundColor() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+            layer?.backgroundColor = JarvisSurfacePalette.windowBackgroundColor(light: .controlBackgroundColor).cgColor
         }
     }
 

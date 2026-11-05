@@ -44,6 +44,11 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         action: #selector(toggleMeetingRecording),
         keyEquivalent: ""
     )
+    private let windowLayoutMenuItem = NSMenuItem(
+        title: "窗口布局…",
+        action: #selector(showWindowLayoutPicker),
+        keyEquivalent: ScreenshotShortcut.windowLayoutDefault.menuKeyEquivalent
+    )
     private let screenRecordingMenuItem = NSMenuItem(title: "屏幕录制…", action: #selector(toggleScreenRecording), keyEquivalent: "")
 
     func updateScreenRecordingState(active: Bool, paused: Bool, elapsed: TimeInterval) {
@@ -138,6 +143,7 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         configureMenuShortcut(clipboardMenuItem, with: app.clipboardShortcut)
         updateMeetingMenuItem()
         configureMenuShortcut(meetingMenuItem, with: app.meetingShortcut)
+        configureMenuShortcut(windowLayoutMenuItem, with: app.windowLayoutShortcut)
         for item in menu.items where !item.isSeparatorItem {
             item.isEnabled = true
         }
@@ -155,12 +161,8 @@ final class JarvisMenuBarController: NSObject, NSMenuDelegate {
         addMenuItem(clipboardMenuItem)
         addMenuItem(meetingMenuItem)
 
-        let layoutItem = NSMenuItem(
-            title: "窗口布局…", action: #selector(showWindowLayoutPicker),
-            keyEquivalent: ScreenshotShortcut.windowLayoutDefault.menuKeyEquivalent
-        )
-        layoutItem.keyEquivalentModifierMask = []
-        addMenuItem(layoutItem)
+        windowLayoutMenuItem.keyEquivalentModifierMask = []
+        addMenuItem(windowLayoutMenuItem)
 
         menu.addItem(.separator())
         addMenuItem(

@@ -8,7 +8,7 @@ enum WebPage {
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
       <meta name="color-scheme" content="light dark">
-      <title>局域网传输</title>
+      <title>文件传输</title>
       <style>
         :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:light dark;--accent:#2878e5;--green:#24a875;--red:#d84242;--line:color-mix(in srgb,CanvasText 12%,transparent);--surface:color-mix(in srgb,CanvasText 4%,Canvas)}
         *{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:Canvas;color:CanvasText}button{font:inherit}
@@ -21,6 +21,7 @@ enum WebPage {
         .text-composer{display:flex;align-items:center;gap:8px;margin-top:10px;margin-bottom:16px}.text-composer input{flex:1;min-width:0;height:36px;padding:0 13px;border:1px solid color-mix(in srgb,CanvasText 17%,transparent);border-radius:999px;outline:0;background:color-mix(in srgb,CanvasText 4%,Canvas);color:CanvasText;font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:inset 0 1px 2px rgba(0,0,0,.035)}.text-composer input:focus{border-color:color-mix(in srgb,var(--accent) 58%,transparent);background:Canvas;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 11%,transparent)}.text-composer input::placeholder{color:GrayText}.text-composer input:disabled{opacity:.55}.send-text{display:grid;place-items:center;width:32px;height:32px;flex:none;border:0;border-radius:50%;background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent);font-size:18px;line-height:1;cursor:pointer}.send-text:not(:disabled){background:color-mix(in srgb,var(--accent) 18%,transparent)}.send-text:disabled{color:GrayText;cursor:default}
         .empty{display:grid;place-items:center;min-height:116px;border:1px dashed var(--line);border-radius:16px;color:GrayText;font-size:14px}.empty.missing{border-color:color-mix(in srgb,#d88a28 55%,transparent);background:color-mix(in srgb,#d88a28 9%,Canvas);color:#c47b20}
         .task{display:none;padding:15px;border-radius:15px;background:color-mix(in srgb,CanvasText 5%,Canvas)}.task.visible{display:block}.task-head,.task-foot{display:flex;align-items:center;justify-content:space-between;gap:12px}.task-head strong{font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.task-head span,.task-foot span{color:GrayText;font-size:12px}.task-foot{margin-top:10px}
+        .text-history{display:flex;flex-direction:column;gap:12px;margin-top:12px}.text-record{display:block}.text-record .text-content{margin-top:10px}
         .text-content{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:Canvas}.text-content pre{margin:0;max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.text-actions{display:flex;gap:8px;margin-top:10px}.text-actions .button{min-height:34px;padding:6px 12px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
         .rail{height:7px;border-radius:99px;background:var(--line);overflow:hidden;margin:14px 0}.fill{height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,var(--accent),#70b3ff);transition:width .2s ease-out}.task.visible .fill::after{content:"";float:right;width:24px;height:100%;background:rgba(255,255,255,.7);filter:blur(5px);animation:flow 1.1s infinite}@keyframes flow{50%{opacity:.1}}
         .button{appearance:none;border:0;border-radius:11px;min-height:39px;padding:8px 15px;font-size:13px;font-weight:650;cursor:pointer;background:var(--accent);color:#fff}.button.secondary{color:CanvasText;background:color-mix(in srgb,CanvasText 10%,Canvas)}.button:disabled{opacity:.45}.task-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -32,7 +33,7 @@ enum WebPage {
     </head>
     <body>
       <main>
-        <header><h1>局域网传输 · {{DEVICE_IP}}</h1><span class="connected">已连接</span></header>
+        <header><h1>文件传输 · {{DEVICE_IP}}</h1><span class="connected">已连接</span></header>
         <section class="card send">
           <div class="heading"><span class="symbol" aria-hidden="true">↑</span><h2>发送到 Mac</h2></div>
           <div class="text-composer"><input id="textInput" type="text" maxlength="30000" placeholder="请输入要传输的文本或链接" aria-label="请输入要传输的文本或链接" autocomplete="off"><button id="sendText" class="send-text" type="button" aria-label="发送文本" disabled>↑</button></div>
@@ -55,6 +56,7 @@ enum WebPage {
             <div class="task-foot"><span id="downloadState"></span><div class="task-actions"><button id="cancelDownload" class="button secondary" type="button">取消</button><button id="openDownload" class="button" type="button" hidden>打开</button></div></div>
           </div>
           <div id="downloadNotice" class="notice" role="status" aria-live="polite"></div>
+          <div id="textHistory" class="text-history" aria-label="文本传输记录" aria-live="polite"></div>
         </section>
       </main>
       <div id="offerModal" class="scrim" hidden>
@@ -78,14 +80,35 @@ enum WebPage {
       <script>
         const picker=document.getElementById('picker'),pickLabel=document.getElementById('pickLabel'),uploadTask=document.getElementById('uploadTask'),uploadNotice=document.getElementById('uploadNotice'),downloadTask=document.getElementById('downloadTask'),downloadNotice=document.getElementById('downloadNotice'),offerModal=document.getElementById('offerModal'),filePreview=document.getElementById('filePreview'),textInput=document.getElementById('textInput'),sendTextButton=document.getElementById('sendText');
         const maxFileBytes=2*1073741824;
-        let activeUpload=null,activeDownload=null,activeTextSend=null,currentOffer=null,checkingOffer=false,dismissedOfferID=null,lastDownload=null,lastPreviewUrl=null;
+        const textHistoryKey='jarvis.file-transfer.text-history:'+location.host+location.search;
+        let textRecords=[];
+        try{const saved=JSON.parse(sessionStorage.getItem(textHistoryKey)||'[]');if(Array.isArray(saved))textRecords=saved.filter(item=>item&&typeof item.id==='string'&&typeof item.text==='string'&&['upload','download'].includes(item.direction))}catch{}
+        let activeUpload=null,activeDownload=null,activeTextSend=null,currentOffer=null,checkingOffer=false,acceptingText=false,dismissedOfferID=null,lastDownload=null,lastPreviewUrl=null;
         const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
         function size(n){if(n<1000)return n+' B';if(n<1000000)return Math.round(n/1000)+' KB';if(n<1000000000)return(n/1000000).toFixed(1)+' MB';return(n/1000000000).toFixed(2)+' GB'}
-        function syncSendControls(){const locked=!!(activeUpload||activeDownload||activeTextSend||currentOffer);picker.disabled=locked;textInput.disabled=locked;pickLabel.classList.toggle('disabled',locked);sendTextButton.disabled=locked||!textInput.value.trim()}
+        function syncSendControls(){const locked=!!(activeUpload||activeDownload||activeTextSend||currentOffer||acceptingText);picker.disabled=locked;textInput.disabled=locked;pickLabel.classList.toggle('disabled',locked);sendTextButton.disabled=locked||!textInput.value.trim()}
         function setTask(prefix,name,status,ratio){document.getElementById(prefix+'Name').textContent=name;document.getElementById(prefix+'State').textContent=status;const pct=Math.max(0,Math.min(100,Math.round(ratio*100)));document.getElementById(prefix+'Percent').textContent=pct+'%';document.getElementById(prefix+'Fill').style.width=pct+'%'}
         function linkURL(text){try{const url=new URL(text.trim());return ['http:','https:'].includes(url.protocol)?url.href:null}catch{return null}}
         function clearTextTransfer(prefix){document.getElementById(prefix+'Text').hidden=true;document.getElementById(prefix+'TextOriginal').textContent='';document.getElementById(prefix+'VisitLink').hidden=true}
         function showTextTransfer(prefix,text){const value=String(text??'');document.getElementById(prefix+'TextOriginal').textContent=value;const link=linkURL(value),visit=document.getElementById(prefix+'VisitLink');visit.hidden=!link;if(link)visit.href=link;document.getElementById(prefix+'Text').hidden=false;document.getElementById(prefix+'CopyText').onclick=async()=>{try{await copyText(value);prefix==='upload'?notice('文本已复制'):receiveNotice('文本已复制')}catch{prefix==='upload'?notice('复制失败',true):receiveNotice('复制失败',true)}}}
+        function renderTextHistory(){
+          const history=document.getElementById('textHistory');history.replaceChildren();
+          for(const record of textRecords){
+            const card=document.createElement('article');card.className='task text-record';card.dataset.transferId=record.id;card.dataset.direction=record.direction;
+            const heading=document.createElement('div');heading.className='task-head';const title=document.createElement('strong');title.textContent=record.direction==='download'?'收到的文本':'发送的文本';const state=document.createElement('span');state.textContent=record.status||'已接收';state.className=record.error?'error':'';heading.append(title,state);
+            const content=document.createElement('div');content.className='text-content';const original=document.createElement('pre');original.textContent=record.text;
+            const actions=document.createElement('div');actions.className='text-actions';const copy=document.createElement('button');copy.type='button';copy.className='button secondary';copy.textContent='复制';copy.onclick=async()=>{try{await copyText(record.text);state.textContent='文本已复制';state.className=''}catch{state.textContent='复制失败，请重试';state.className='error'}};actions.append(copy);
+            const url=linkURL(record.text);if(url){const visit=document.createElement('a');visit.className='button';visit.textContent='访问链接';visit.href=url;visit.target='_blank';visit.rel='noopener noreferrer';actions.append(visit)}
+            content.append(original,actions);card.append(heading,content);history.append(card);
+          }
+        }
+        function rememberTextTransfer(direction,id,text,status,error=false){
+          const record={direction,id:String(id),text:String(text??''),status,error};const index=textRecords.findIndex(item=>item.id===record.id&&item.direction===direction);
+          if(index<0)textRecords.unshift(record);else textRecords[index]=record;
+          try{sessionStorage.setItem(textHistoryKey,JSON.stringify(textRecords))}catch{}
+          renderTextHistory();
+        }
+        renderTextHistory();
         async function copyText(value){if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(value);return}catch{}}const field=document.createElement('textarea');field.value=value;field.style.position='fixed';field.style.opacity='0';document.body.append(field);field.select();const copied=document.execCommand('copy');field.remove();if(!copied)throw Error('复制失败')}
         function notice(text,error=false){uploadNotice.textContent=text;uploadNotice.className='notice '+(error?'error':'good')}
         function receiveNotice(text,error=false){downloadNotice.textContent=text;downloadNotice.className='notice '+(error?'error':'good')}
@@ -97,7 +120,7 @@ enum WebPage {
         function finishUpload(text,error=false){activeUpload=null;document.getElementById('cancelUpload').hidden=true;const status=text==='已取消'?'已取消':(error?'发送失败':'已完成');setTask('upload',document.getElementById('uploadName').textContent,status,error?0:1);uploadTask.classList.add('visible');uploadTask.classList.toggle('error',error);pickLabel.hidden=false;picker.value='';syncSendControls();notice(text,error)}
         async function post(url){return fetch(url,{method:'POST',cache:'no-store'})}
         async function offerUpload(file){
-          if(activeUpload||activeDownload||activeTextSend||currentOffer){notice('当前有传输任务',true);return}
+          if(activeUpload||activeDownload||activeTextSend||currentOffer||acceptingText){notice('当前有传输任务',true);return}
           if(file.size>maxFileBytes){notice('文件超过 2 GB',true);return}
           const task={id:null,file,xhr:null,finished:false,sending:false};activeUpload=task;syncSendControls();showUpload(file);notice('');
           try{const response=await post('/api/offer-upload?name='+encodeURIComponent(file.name)+'&size='+file.size);if(!response.ok)throw Error(response.status===409?'当前有传输任务':'发送失败');const result=await response.json();task.id=result.id;if(activeUpload!==task){await post('/api/cancel?id='+encodeURIComponent(task.id));return}watchUpload(task)}
@@ -107,12 +130,17 @@ enum WebPage {
         textInput.oninput=syncSendControls;
         textInput.onkeydown=event=>{if(event.key==='Enter'&&!event.isComposing){event.preventDefault();sendText()}};
         async function sendText(){
-          const text=textInput.value;if(!text.trim()||activeUpload||activeDownload||activeTextSend||currentOffer)return;
-          const task={id:null,finished:false,text};activeTextSend=task;syncSendControls();uploadTask.classList.add('visible');uploadTask.classList.remove('error');document.getElementById('cancelUpload').hidden=true;showTextTransfer('upload',text);setTask('upload','文本消息','正在发送',0);notice('正在发送文本…');
-          try{const response=await fetch('/api/offer-text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});if(!response.ok)throw Error(response.status===409?'当前有传输任务':'发送失败');task.id=(await response.json()).id;textInput.value='';notice('等待 Mac 确认');watchTextSend(task)}catch(error){activeTextSend=null;setTask('upload','文本消息',error.message||'发送失败',0);uploadTask.classList.add('error');syncSendControls();notice(error.message||'发送失败',true)}
+          const text=textInput.value;if(!text.trim()||activeUpload||activeDownload||activeTextSend||currentOffer||acceptingText)return;
+          const task={id:null,localID:'local-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),finished:false,text};activeTextSend=task;syncSendControls();uploadTask.classList.add('visible');uploadTask.classList.remove('error');document.getElementById('cancelUpload').hidden=true;showTextTransfer('upload',text);setTask('upload','文本消息','正在发送',0);notice('正在发送文本…');
+          try{const response=await fetch('/api/offer-text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});if(!response.ok)throw Error(response.status===409?'当前有传输任务':'发送失败');task.id=(await response.json()).id;textInput.value='';notice('等待 Mac 确认');watchTextSend(task)}catch(error){finishTextSend(task,error.message||'发送失败',true)}
         }
         sendTextButton.onclick=sendText;
-        async function watchTextSend(task){for(let i=0;i<600&&activeTextSend===task;i++){await wait(500);try{const response=await fetch('/api/transfer?id='+encodeURIComponent(task.id),{cache:'no-store'});if(!response.ok)throw Error();const state=await response.json();if(state.status==='已完成'){activeTextSend=null;setTask('upload','文本消息','已接收',1);syncSendControls();notice('文本已接收');return}if(state.status==='失败'||state.status==='已取消'){activeTextSend=null;setTask('upload','文本消息',state.detail||state.status,0);uploadTask.classList.add('error');syncSendControls();notice(state.detail||state.status,true);return}}catch{}}if(activeTextSend===task){activeTextSend=null;setTask('upload','文本消息','等待超时',0);uploadTask.classList.add('error');syncSendControls();notice('等待超时',true)}}
+        function finishTextSend(task,status,error=false){
+          if(activeTextSend!==task)return;activeTextSend=null;
+          rememberTextTransfer('upload',task.id||task.localID,task.text,status,error);
+          uploadTask.classList.remove('visible');clearTextTransfer('upload');syncSendControls();notice(status,error);
+        }
+        async function watchTextSend(task){for(let i=0;i<600&&activeTextSend===task;i++){await wait(500);try{const response=await fetch('/api/transfer?id='+encodeURIComponent(task.id),{cache:'no-store'});if(!response.ok)throw Error();const state=await response.json();if(state.status==='已完成'){finishTextSend(task,'已接收');return}if(state.status==='失败'||state.status==='已取消'){finishTextSend(task,state.detail||state.status,true);return}}catch{}}if(activeTextSend===task)finishTextSend(task,'等待超时',true)}
         function sendUpload(task){
           if(task.sending||task.finished)return;task.sending=true;setTask('upload',task.file.name,'正在发送',0);
           const xhr=new XMLHttpRequest();task.xhr=xhr;
@@ -133,16 +161,21 @@ enum WebPage {
         }
         document.getElementById('cancelUpload').onclick=async()=>{const task=activeUpload;if(!task)return;task.finished=true;if(task.id)try{await post('/api/cancel?id='+encodeURIComponent(task.id))}catch{}task.xhr?.abort();finishUpload('已取消')};
         async function checkOffer(){
-          if(checkingOffer||activeUpload||activeDownload||activeTextSend)return;checkingOffer=true;
+          if(checkingOffer||activeUpload||activeDownload||activeTextSend||acceptingText)return;checkingOffer=true;
           try{const response=await fetch('/api/offer',{cache:'no-store'});if(response.status===204){currentOffer=null;dismissedOfferID=null;offerModal.hidden=true;syncSendControls()}else if(response.status===200){const offer=await response.json();if(offer.id!==dismissedOfferID&&!activeUpload&&!activeDownload&&!activeTextSend){currentOffer=offer;syncSendControls();const isText=offer.type==='text';document.getElementById('offerIcon').hidden=isText;document.getElementById('offerTitle').textContent=isText?'来自 Mac 的文本':'接收文件';document.getElementById('offerName').textContent=offer.name;document.getElementById('offerName').hidden=isText;document.getElementById('offerSize').textContent=offer.displaySize||size(offer.size);document.getElementById('offerSize').hidden=isText;const text=document.getElementById('offerText');text.textContent=isText?offer.text:'';text.hidden=!isText;document.getElementById('accept').textContent=isText?'复制':'下载';offerModal.hidden=false}}}catch{}finally{checkingOffer=false}
         }
         setInterval(checkOffer,700);checkOffer();
         document.getElementById('decline').onclick=async()=>{const offer=currentOffer;if(!offer)return;currentOffer=null;dismissedOfferID=offer.id;offerModal.hidden=true;syncSendControls();try{await post('/api/cancel?id='+encodeURIComponent(offer.id))}catch{}};
         document.getElementById('accept').onclick=async()=>{
-          const offer=currentOffer;if(!offer)return;currentOffer=null;offerModal.hidden=true;
+          const offer=currentOffer;if(!offer)return;currentOffer=null;dismissedOfferID=offer.id;offerModal.hidden=true;
           if(offer.type==='text'){
-            try{await copyText(offer.text);await post('/api/accept-text?id='+encodeURIComponent(offer.id));setTask('download','文本消息','已复制到剪贴板',1);downloadTask.classList.add('visible');downloadTask.classList.remove('error');document.getElementById('cancelDownload').hidden=true;document.getElementById('openDownload').hidden=true;showTextTransfer('download',offer.text);receiveNotice('')}catch{setTask('download','文本消息','复制失败',0);downloadTask.classList.add('visible','error');document.getElementById('cancelDownload').hidden=true;document.getElementById('openDownload').hidden=true;showTextTransfer('download',offer.text);receiveNotice('复制失败',true)}
-            syncSendControls();return
+            acceptingText=true;syncSendControls();rememberTextTransfer('download',offer.id,offer.text,'已接收');
+            let copied=false;try{await copyText(offer.text);copied=true}catch{}
+            try{
+              const response=await post('/api/accept-text?id='+encodeURIComponent(offer.id));if(!response.ok)throw Error('接收确认失败');
+              rememberTextTransfer('download',offer.id,offer.text,copied?'已复制到剪贴板':'已接收，可手动复制');receiveNotice(copied?'':'文本已保留，可在记录中复制');
+            }catch{dismissedOfferID=null;rememberTextTransfer('download',offer.id,offer.text,'文本已保留，接收确认失败',true);receiveNotice('接收确认失败，请重试',true)}
+            acceptingText=false;syncSendControls();return
           }
           clearTextTransfer('download');
           const task={id:offer.id,name:offer.name,finished:false};activeDownload=task;syncSendControls();lastDownload=task;downloadTask.style.display='';downloadTask.classList.add('visible');downloadTask.classList.remove('error');document.getElementById('cancelDownload').hidden=false;document.getElementById('openDownload').hidden=true;receiveNotice('');setTask('download',offer.name,'等待系统确认',0);

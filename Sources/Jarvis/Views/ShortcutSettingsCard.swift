@@ -7,149 +7,136 @@ struct ShortcutSettingsCard: View {
     @State private var screenRecordingShortcut = ScreenshotShortcut.screenRecordingDefault
     @State private var clipboardShortcut = ScreenshotShortcut.clipboardDefault
     @State private var meetingShortcut = ScreenshotShortcut.meetingDefault
-    @State private var isRecordingScreenshotShortcut = false
-    @State private var isRecordingScreenRecordingShortcut = false
-    @State private var isRecordingClipboardShortcut = false
-    @State private var isRecordingMeetingShortcut = false
+    @State private var windowLayoutShortcut = ScreenshotShortcut.windowLayoutDefault
+    @State private var recordingAction: Action?
+
+    private enum Action {
+        case screenshot, screenRecording, clipboard, meeting, windowLayout
+    }
 
     var body: some View {
-        JarvisCard {
-            content
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
+            HStack(spacing: JarvisSpacing.groupGap) {
+                Text("快捷键")
+                    .font(SettingsTypography.cardTitle)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                Button("恢复默认") {
+                    recordingAction = nil
+                    _ = app.restoreFunctionShortcutDefaults()
+                    loadShortcuts()
+                }
+                .buttonStyle(JarvisSecondaryButtonStyle())
+                .fixedSize(horizontal: true, vertical: false)
+            }
+            SettingsContentPanel {
+                content
+            }
         }
         .onAppear {
-            screenshotShortcut = app.screenshotShortcut
-            screenRecordingShortcut = app.screenRecording.shortcuts.bindings[ScreenRecordingShortcutAction.open.rawValue]
-                ?? .screenRecordingDefault
-            clipboardShortcut = app.clipboardShortcut
-            meetingShortcut = app.meetingShortcut
+            loadShortcuts()
             _ = app.validateScreenshotShortcut(screenshotShortcut)
             _ = app.validateClipboardShortcut(clipboardShortcut)
             _ = app.validateMeetingShortcut(meetingShortcut)
+            _ = app.validateWindowLayoutShortcut(windowLayoutShortcut)
         }
         .onChange(of: screenshotShortcut) { _, newValue in
-            guard isRecordingScreenshotShortcut else { return }
-            if app.validateScreenshotShortcut(newValue) {
-                guard newValue != app.screenshotShortcut else { return }
-                _ = app.updateScreenshotShortcut(newValue)
-            }
+            guard recordingAction == .screenshot else { return }
+            _ = app.updateScreenshotShortcut(newValue)
         }
         .onChange(of: screenRecordingShortcut) { _, newValue in
-            guard isRecordingScreenRecordingShortcut,
-                  newValue != app.screenRecording.shortcuts.bindings[ScreenRecordingShortcutAction.open.rawValue]
-            else { return }
+            guard recordingAction == .screenRecording else { return }
             _ = app.screenRecording.shortcuts.set(newValue, for: .open)
         }
         .onChange(of: clipboardShortcut) { _, newValue in
-            guard isRecordingClipboardShortcut else { return }
-            if app.validateClipboardShortcut(newValue) {
-                guard newValue != app.clipboardShortcut else { return }
-                _ = app.updateClipboardShortcut(newValue)
-            }
+            guard recordingAction == .clipboard else { return }
+            _ = app.updateClipboardShortcut(newValue)
         }
         .onChange(of: meetingShortcut) { _, newValue in
-            guard isRecordingMeetingShortcut else { return }
-            if app.validateMeetingShortcut(newValue) {
-                guard newValue != app.meetingShortcut else { return }
-                _ = app.updateMeetingShortcut(newValue)
-            }
+            guard recordingAction == .meeting else { return }
+            _ = app.updateMeetingShortcut(newValue)
+        }
+        .onChange(of: windowLayoutShortcut) { _, newValue in
+            guard recordingAction == .windowLayout else { return }
+            _ = app.updateWindowLayoutShortcut(newValue)
         }
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: SettingsFormMetrics.cardContentSpacing) {
-            SettingsCardHeader(title: "快捷键", systemImage: "keyboard")
-
             shortcutRow(
                 title: "截图",
                 shortcut: $screenshotShortcut,
-                isRecording: $isRecordingScreenshotShortcut,
+                action: .screenshot,
                 conflictMessage: app.screenshotShortcutConflictMessage
-            ) {
-                let previous = screenshotShortcut
-                if !app.updateScreenshotShortcut(.default) {
-                    screenshotShortcut = previous
-                } else {
-                    screenshotShortcut = .default
-                }
-            }
-
+            )
             shortcutRow(
                 title: "屏幕录制",
                 shortcut: $screenRecordingShortcut,
-                isRecording: $isRecordingScreenRecordingShortcut,
+                action: .screenRecording,
                 conflictMessage: app.screenRecording.shortcuts.error
-            ) {
-                if app.screenRecording.shortcuts.set(.screenRecordingDefault, for: .open) {
-                    screenRecordingShortcut = .screenRecordingDefault
-                }
-            }
-
+            )
             shortcutRow(
                 title: "剪贴板",
                 shortcut: $clipboardShortcut,
-                isRecording: $isRecordingClipboardShortcut,
+                action: .clipboard,
                 conflictMessage: app.clipboardShortcutConflictMessage
-            ) {
-                let previous = clipboardShortcut
-                if !app.updateClipboardShortcut(.clipboardDefault) {
-                    clipboardShortcut = previous
-                } else {
-                    clipboardShortcut = .clipboardDefault
-                }
-            }
-
+            )
             shortcutRow(
                 title: "会议录制",
                 shortcut: $meetingShortcut,
-                isRecording: $isRecordingMeetingShortcut,
+                action: .meeting,
                 conflictMessage: app.meetingShortcutConflictMessage
-            ) {
-                let previous = meetingShortcut
-                if !app.updateMeetingShortcut(.meetingDefault) {
-                    meetingShortcut = previous
-                } else {
-                    meetingShortcut = .meetingDefault
-                }
-            }
-
-            HStack(spacing: JarvisSpacing.groupGap) {
-                Text("窗口布局")
-                    .font(SettingsTypography.itemTitle)
-                Spacer(minLength: 8)
-                Text(ScreenshotShortcut.windowLayoutDefault.displayString)
-                    .font(JarvisTypography.monospaced)
-                    .foregroundStyle(Color.jarvisTextSecondary)
-            }
-            .frame(minHeight: 32)
-            .help("按 F5 打开顶部布局面板，点击选择布局；按 Esc 取消。")
+            )
+            shortcutRow(
+                title: "窗口布局",
+                shortcut: $windowLayoutShortcut,
+                action: .windowLayout,
+                conflictMessage: app.windowLayoutShortcutConflictMessage
+            )
         }
+    }
+
+    private func loadShortcuts() {
+        screenshotShortcut = app.screenshotShortcut
+        screenRecordingShortcut = app.screenRecording.shortcuts.bindings[ScreenRecordingShortcutAction.open.rawValue]
+            ?? .screenRecordingDefault
+        clipboardShortcut = app.clipboardShortcut
+        meetingShortcut = app.meetingShortcut
+        windowLayoutShortcut = app.windowLayoutShortcut
     }
 
     private func shortcutRow(
         title: String,
         shortcut: Binding<ScreenshotShortcut>,
-        isRecording: Binding<Bool>,
-        conflictMessage: String,
-        onRestore: @escaping () -> Void
+        action: Action,
+        conflictMessage: String
     ) -> some View {
         HStack(spacing: JarvisSpacing.groupGap) {
             Text(title)
                 .font(SettingsTypography.itemTitle)
                 .fixedSize(horizontal: true, vertical: false)
             Spacer(minLength: 8)
-            ShortcutRecorderControl(
-                shortcut: shortcut,
-                isRecording: isRecording
-            )
-            .frame(width: 170, height: 32)
             if !conflictMessage.isEmpty {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
                     .help(conflictMessage)
             }
-            Button("恢复默认", action: onRestore)
-                .buttonStyle(JarvisSecondaryButtonStyle())
-                .fixedSize(horizontal: true, vertical: false)
+            ShortcutRecorderControl(
+                shortcut: shortcut,
+                isRecording: Binding(
+                    get: { recordingAction == action },
+                    set: { isRecording in
+                        if isRecording {
+                            recordingAction = action
+                        } else if recordingAction == action {
+                            recordingAction = nil
+                        }
+                    }
+                )
+            )
+            .frame(width: 170, height: 32)
+            .accessibilityLabel("\(title)快捷键")
         }
     }
 }
