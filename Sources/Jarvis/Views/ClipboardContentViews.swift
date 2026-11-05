@@ -176,14 +176,7 @@ struct ClipboardCategoryFilterSelector: View {
 }
 
 struct ClipboardView: View {
-    private let alignsContentToToolbar: Bool
-
-    init(alignsContentToToolbar: Bool = true) {
-        self.alignsContentToToolbar = alignsContentToToolbar
-    }
-
     @Environment(AppModel.self) private var app
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var searchText = ""
     @State private var selectedTimeFilter: ClipboardTimeFilter = .threeDays
     @State private var selectedCategory: ClipboardViewFilter = .all
@@ -239,35 +232,24 @@ struct ClipboardView: View {
             },
             content: {
                 ScrollView {
-                    VStack(spacing: 0) {
-                        if filteredItems.isEmpty {
-                            ClipboardEmptyState(
-                                hasQuery: !searchText.isEmpty
-                                    || selectedTimeFilter != .all
-                                    || selectedCategory != .all
-                            )
-                            .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
-                        } else {
-                            ClipboardGrid(
-                                items: filteredItems,
-                                gridZoom: gridZoom,
-                                selectedItemID: selectedItemID,
-                                onSelect: { selectedItemID = $0.id },
-                                onDoubleClick: { item in
-                                    guard item.canFullscreenPreview else { return }
-                                    app.showClipboardMediaPreview(item)
-                                },
-                                onCopy: { app.copyClipboard($0) },
-                                onPreview: { app.showClipboardMediaPreview($0) },
-                                onPin: { app.toggleClipboardPin($0) },
-                                onDelete: { app.deleteClipboardItem($0) }
-                            )
-                            .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, alignsContentToToolbar ? toolbarAlignment.leadingInset : JarvisMetrics.shellHorizontalPadding)
-                    .padding(.trailing, alignsContentToToolbar ? toolbarAlignment.trailingInset : JarvisMetrics.shellHorizontalPadding)
+                    ClipboardHistoryGallery(
+                        items: filteredItems,
+                        gridZoom: gridZoom,
+                        selectedItemID: selectedItemID,
+                        hasQuery: !searchText.isEmpty || selectedTimeFilter != .all || selectedCategory != .all,
+                        onSelect: { selectedItemID = $0.id },
+                        onDoubleClick: { item in
+                            if item.canFullscreenPreview {
+                                app.showClipboardMediaPreview(item)
+                            }
+                        },
+                        onCopy: { app.copyClipboard($0) },
+                        onPreview: { app.showClipboardMediaPreview($0) },
+                        onPin: { app.toggleClipboardPin($0) },
+                        onDelete: { app.deleteClipboardItem($0) }
+                    )
+                    .padding(.leading, toolbarAlignment.leadingInset)
+                    .padding(.trailing, toolbarAlignment.trailingInset)
                     .padding(.bottom, HistoryGridMetrics.historyPanelInset)
                 }
                 .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .content))
@@ -825,18 +807,15 @@ struct ClipboardGrid: View {
         self.onDelete = onDelete
     }
 
+    private var columns: [GridItem] {
+        let spacing = HistoryGridMetrics.clipboardGridSpacing
+        // The main window and F3 shelf share the same adaptive layout and zoom.
+        return [GridItem(.adaptive(minimum: gridZoom.cardWidth, maximum: .infinity), spacing: spacing)]
+    }
+
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(
-                // 列数由最小宽度决定，剩余空间让列自己撑满——和截图宫格、壁纸模块
-                // 一样不量宽度、不存状态：缩放时没有滞后一帧的空档，也没有每帧
-                // 状态更新带来的闪烁与卡顿。
-                .adaptive(
-                    minimum: gridZoom.cardWidth,
-                    maximum: .infinity
-                ),
-                spacing: HistoryGridMetrics.clipboardGridSpacing
-            )],
+            columns: columns,
             alignment: .leading,
             spacing: HistoryGridMetrics.clipboardGridSpacing
         ) {
@@ -857,24 +836,5 @@ struct ClipboardGrid: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-struct ClipboardPanelView: View {
-    @Environment(AppModel.self) private var app
-
-    var body: some View {
-        // Window buttons occupy the leading toolbar slot in a standalone panel.
-        // Keep their reserved width out of the gallery's content inset.
-        ClipboardView(alignsContentToToolbar: false)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.jarvisBackground)
-            .jarvisTheme(
-                app.themePreference,
-                systemColorScheme: app.systemColorScheme
-            )
-            .jarvisToastOverlay(app.toastMessage)
-            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-            .toolbar(removing: .title)
     }
 }
