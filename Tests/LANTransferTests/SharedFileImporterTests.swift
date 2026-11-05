@@ -11,6 +11,14 @@ final class SharedFileImporterTests: XCTestCase {
         XCTAssertEqual(ShareStore.maxFileBytes, 2 * 1_073_741_824)
     }
 
+    func testAccessTokenUsesFourHexadecimalCharacters() throws {
+        for _ in 0 ..< 32 {
+            let token = try XCTUnwrap(FileTransferAccessToken.generate())
+            XCTAssertEqual(token.count, 4)
+            XCTAssertTrue(token.allSatisfy { "0123456789abcdef".contains($0) })
+        }
+    }
+
     func testImportCopiesFilesAndKeepsExistingNames() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let source = root.appendingPathComponent("source")

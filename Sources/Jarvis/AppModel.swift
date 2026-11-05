@@ -44,7 +44,7 @@ enum AppSection: Hashable, Identifiable {
         case .skill(.resume): "简历制作"
         case .skill(.wallpaper): "桌面壁纸"
         case .skill(.meetingNotes): "会议记录"
-        case .skill(.lanTransfer): "局域网传输"
+        case .skill(.lanTransfer): "文件传输"
         }
     }
 
@@ -83,6 +83,8 @@ final class AppModel {
     var clipboardShortcutConflictMessage = ""
     var meetingShortcut = ScreenshotShortcut.meetingDefault
     var meetingShortcutConflictMessage = ""
+    var windowLayoutShortcut = ScreenshotShortcut.windowLayoutDefault
+    var windowLayoutShortcutConflictMessage = ""
     var windowDragLayoutEnabled = WindowDragLayoutPreference.load(from: .standard)
     var themePreference: JarvisTheme = .system
     var accentColorPreference: JarvisAccentColor = .system
@@ -230,6 +232,7 @@ final class AppModel {
     @ObservationIgnored let screenshotShortcutDefaultMigrationKey = "jarvis.screenshot.shortcut.f1.migrated"
     @ObservationIgnored let clipboardShortcutKey = "jarvis.clipboard.shortcut"
     @ObservationIgnored let meetingShortcutKey = "jarvis.meeting.shortcut"
+    @ObservationIgnored let windowLayoutShortcutKey = WindowLayoutShortcutPreference.key
     @ObservationIgnored let themePreferenceKey = "jarvis.theme.preference"
     @ObservationIgnored let accentColorPreferenceKey = "jarvis.accent-color.preference"
     @ObservationIgnored let clipboardCacheAutoCleanupEnabledKey = "jarvis.clipboard.cache.auto-cleanup.enabled"
@@ -296,6 +299,7 @@ final class AppModel {
         loadScreenshotShortcut()
         loadClipboardShortcut()
         loadMeetingShortcut()
+        loadWindowLayoutShortcut()
         WindowLayoutShortcutMigration.apply()
         loadAIAPISettings()
         loadThemePreference()
@@ -342,7 +346,7 @@ final class AppModel {
         if let windowLayoutController {
             windowLayoutPickerController = WindowLayoutPickerController(layoutController: windowLayoutController)
         }
-        windowLayoutShortcutManager = ScreenshotShortcutManager(binding: .windowLayoutDefault, hotKeyID: 3) { [weak self] in
+        windowLayoutShortcutManager = ScreenshotShortcutManager(binding: windowLayoutShortcut, hotKeyID: 3) { [weak self] in
             self?.showWindowLayoutPicker()
         }
         loadSelectedAIProvider()

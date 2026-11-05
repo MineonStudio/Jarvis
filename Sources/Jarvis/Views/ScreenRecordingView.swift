@@ -122,8 +122,8 @@ struct ScreenRecordingView: View {
                     Image(systemName: "info.circle")
                     Text(message).font(.callout).textSelection(.enabled)
                     Spacer()
-                    Button { recorder.message = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
-                }.padding(JarvisSpacing.rowInset).background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 10))
+                    Button { recorder.message = nil } label: { Image(systemName: "xmark") }.buttonStyle(JarvisContentPlainButtonStyle())
+                }.padding(JarvisSpacing.rowInset).jarvisPanelBackground(cornerRadius: 10)
                     .padding(.leading, toolbarAlignment.leadingInset)
                     .padding(.trailing, toolbarAlignment.trailingInset)
             }
@@ -138,7 +138,7 @@ struct ScreenRecordingView: View {
                 } description: {
                     Text(selectedTimeFilter == .all ? "录制整个屏幕、指定窗口，或自定义区域。" : "尝试更改时间筛选。")
                 } actions: {
-                    Button("新建录制") { recorder.present() }.buttonStyle(.borderedProminent).disabled(recorder.isActive)
+                    Button("新建录制") { recorder.present() }.buttonStyle(JarvisPrimaryButtonStyle()).disabled(recorder.isActive)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 historyGrid
@@ -198,7 +198,7 @@ struct ScreenRecordingView: View {
                     Button(role: .destructive) { pendingDelete = record } label: { Image(systemName: "trash") }
                 }.disabled(recorder.isActive)
             }
-        }.padding(JarvisSpacing.rowInset).background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 12))
+        }.padding(JarvisSpacing.rowInset).jarvisPanelBackground(cornerRadius: 12)
     }
 
     @ViewBuilder

@@ -4,7 +4,7 @@ struct MeetingModelSettingsCard: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        JarvisCard {
+        SettingsSectionCard("会议识别模型") {
             content
         }
         .onAppear {
@@ -14,8 +14,6 @@ struct MeetingModelSettingsCard: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: SettingsFormMetrics.sectionSpacing) {
-            SettingsCardHeader(title: "会议识别模型", systemImage: "waveform.and.person.filled")
-
             ForEach(MeetingModelPreparationStage.allCases) { stage in
                 MeetingModelSettingsRow(stage: stage)
             }

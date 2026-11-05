@@ -8,7 +8,6 @@ struct AIAPISettingsCard: View {
     @State private var model = ""
     @State private var apiKey = ""
     @State private var showingDeleteConfirmation = false
-    @AppStorage(AIStreamingPolicy.hedgeEnabledKey) private var hedgeEnabled = true
 
     private var hasStoredConfiguration: Bool {
         app.aiAPIKeyConfigured || AIAPIConfiguration.hasStoredAPIEndpoint()
@@ -40,9 +39,8 @@ struct AIAPISettingsCard: View {
     }
 
     var body: some View {
-        JarvisCard {
+        SettingsSectionCard("API 配置") {
             VStack(alignment: .leading, spacing: SettingsFormMetrics.sectionSpacing) {
-                SettingsCardHeader(title: "API 配置", systemImage: "key")
                 fieldsSection
                 if let error = app.aiModelsRefreshError {
                     errorRow(error)
@@ -118,42 +116,22 @@ struct AIAPISettingsCard: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
-                HStack(alignment: .center) {
-                    Text("模型")
-                        .font(SettingsTypography.itemTitle)
-                    Spacer(minLength: 8)
+            apiField(title: "模型") {
+                HStack(spacing: JarvisSpacing.controlGap) {
+                    apiControl {
+                        apiMenu(
+                            title: "模型",
+                            selection: $model,
+                            options: modelOptions,
+                            emptyTitle: "未选择模型",
+                            isDisabled: isLocked || app.aiModelsLoading
+                        )
+                    }
+                    .layoutPriority(1)
+
                     refreshModelsButton
+                        .fixedSize(horizontal: true, vertical: false)
                 }
-
-                apiControl {
-                    apiMenu(
-                        title: "模型",
-                        selection: $model,
-                        options: modelOptions,
-                        emptyTitle: "未选择模型",
-                        isDisabled: isLocked || app.aiModelsLoading
-                    )
-                }
-            }
-
-            VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
-                Text("网络")
-                    .font(SettingsTypography.itemTitle)
-
-                Toggle("服务商排队时自动补发一次请求", isOn: $hedgeEnabled)
-                    .toggleStyle(.switch)
-                    .disabled(isLocked)
-
-                Text(
-                    """
-                    模型服务在高峰期会把请求压住不发。打开后，首字超过一段时间仍没有 \
-                    返回，就并发补发同样的一次请求，谁先出内容用谁，另一份立刻取消；\
-                    已经开始输出的请求不会被补发。关掉可以完全避免重复消耗额度。
-                    """
-                )
-                .font(SettingsTypography.itemSubtitle)
-                .foregroundStyle(Color.jarvisTextSecondary)
             }
 
             apiField(title: "Key") {
@@ -309,14 +287,7 @@ struct AIAPISettingsCard: View {
         content()
             .frame(maxWidth: .infinity, minHeight: SettingsFormMetrics.controlHeight, alignment: .leading)
             .padding(.horizontal, JarvisSpacing.rowInset)
-            .background(
-                Color.jarvisPanel.opacity(0.72),
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
-            }
+            .modifier(SettingsCapsuleFieldModifier())
     }
 
     private func loadDraft() {

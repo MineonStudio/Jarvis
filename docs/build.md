@@ -27,3 +27,13 @@
 ```
 
 验收脚本使用固定路径 `/Users/Shared/Jarvis/Development/Jarvis-Dev.app`。CI 在一次性独立钥匙串中创建临时开发证书，不持有正式私钥。发版见 [update-release.md](update-release.md)。
+
+## 分支约定
+
+远程仓库只保留 `main`，正式版本从 `main` 发布。本地保留 `main` 和 `dev`：日常开发在 `dev`，验收后将改动合并到 `main` 并推送；发版完成后将本地 `dev` 同步到最新 `main`，继续下一轮开发。
+
+本地 `main` 跟踪 `origin/main`，`dev` 不设置远程上游。可将默认推送限制为 `main`，避免日常开发时重新创建远程 `dev`：
+
+```bash
+git config --local remote.origin.push refs/heads/main:refs/heads/main
+```

@@ -72,6 +72,7 @@ private struct PermissionCapsuleButtonStyle: ButtonStyle {
                 Capsule(style: .continuous)
                     .strokeBorder(isPrimary ? Color.clear : Color.primary.opacity(0.08), lineWidth: 1)
             }
+            .jarvisButtonShadow()
             .opacity(configuration.isPressed ? 0.82 : 1)
     }
 }
@@ -191,18 +192,17 @@ private struct JarvisPermissionSettingsRow: View {
     var body: some View {
         let isGranted = app.isRequiredPermissionGranted(permission)
         return HStack(spacing: JarvisSpacing.itemGap) {
-            Image(systemName: permission.systemImage)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.jarvisTextSecondary)
-                .frame(width: 16, height: 16)
-            VStack(alignment: .leading, spacing: JarvisSpacing.controlGap) {
+            HStack(spacing: JarvisSpacing.controlGap) {
                 Text(permission.title)
                     .font(SettingsTypography.itemTitle)
                     .foregroundStyle(Color.primary)
-                Text(isGranted ? "已开启" : "未开启")
-                    .font(SettingsTypography.itemSubtitle)
+                Image(systemName: isGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(isGranted ? Color.green : Color.jarvisTextSecondary)
+                    .accessibilityHidden(true)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(isGranted ? "已开启" : "未开启")
             Spacer(minLength: 8)
             Button(isGranted ? "关闭" : "获取") {
                 if isGranted {

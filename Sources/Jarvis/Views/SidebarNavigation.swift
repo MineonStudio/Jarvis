@@ -152,7 +152,7 @@ struct JarvisSidebarNavigation<
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.jarvisBackground)
+        .background(Color.jarvisBackground.ignoresSafeArea())
     }
 
     private func itemGroup(_ items: [Item]) -> some View {

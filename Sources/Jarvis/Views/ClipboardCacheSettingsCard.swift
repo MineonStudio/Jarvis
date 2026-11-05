@@ -4,7 +4,7 @@ struct ClipboardPrivacySettingsCard: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        JarvisCard {
+        SettingsSectionCard("剪贴板") {
             VStack(alignment: .leading, spacing: SettingsFormMetrics.cardContentSpacing) {
                 preferenceRow(
                     title: "自动记录剪贴板",
@@ -26,10 +26,8 @@ struct ClipboardPrivacySettingsCard: View {
 
     private func preferenceRow(title: String, isOn: Binding<Bool>) -> some View {
         HStack(spacing: JarvisSpacing.groupGap) {
-            Text(title).font(SettingsTypography.itemTitle)
-            Spacer(minLength: 8)
             Toggle(title, isOn: isOn)
-                .labelsHidden()
+                .font(SettingsTypography.itemTitle)
                 .jarvisSwitchAccent()
         }
     }
@@ -41,9 +39,8 @@ struct ClipboardCacheSettingsCard: View {
     private let capacityOptions = ClipboardCacheStore.supportedMaximumBytes
 
     var body: some View {
-        JarvisCard {
+        SettingsSectionCard("缓存") {
             VStack(alignment: .leading, spacing: SettingsFormMetrics.cardContentSpacing) {
-                SettingsCardHeader(title: "缓存", systemImage: "internaldrive")
                 folderRow
                 VStack(alignment: .leading, spacing: SettingsFormMetrics.cardContentSpacing) {
                     capacitySection
@@ -95,7 +92,12 @@ struct ClipboardCacheSettingsCard: View {
                         value: app.clipboardCacheMaximumBytes
                     )
             }
-            Slider(value: capacityBinding, in: 0 ... Double(capacityOptions.count - 1), step: 1)
+            SettingsFlatSlider(
+                value: capacityBinding,
+                bounds: 0 ... Double(capacityOptions.count - 1),
+                accessibilityTitle: "缓存空间上限",
+                accessibilityValue: ClipboardCacheFormatting.capacityDescription(app.clipboardCacheMaximumBytes)
+            )
         }
     }
 

@@ -50,7 +50,7 @@ struct ScreenRecordingHistoryCard: View, Equatable {
             .frame(maxWidth: .infinity)
             .overlay {
                 ZStack {
-                    Rectangle().fill(Color.jarvisInsetSurface)
+                    Color.clear.jarvisPanelBackground(cornerRadius: 0)
                     if let image {
                         Image(nsImage: image).interpolation(.medium).resizable().scaledToFit()
                     } else {

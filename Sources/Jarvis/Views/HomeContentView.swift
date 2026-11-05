@@ -97,7 +97,7 @@ struct JarvisHomeView: View {
                     .offset(x: 12, y: -15)
             }
             .contentShape(Rectangle())
-            .shadow(color: .black.opacity(0.10), radius: 15, y: 6)
+            .jarvisButtonShadow()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(prompt.message)

@@ -24,7 +24,7 @@ struct LANTransferModuleView: View {
                     .buttonStyle(JarvisToolbarButtonStyle.menu(
                         tint: store.running ? .red : nil
                     ))
-                    .help(store.running ? "停止局域网传输" : "启动局域网传输")
+                    .help(store.running ? "停止文件传输" : "启动文件传输")
                 }
             },
             trailingToolbar: {

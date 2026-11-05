@@ -1,7 +1,6 @@
 import AppKit
 import Combine
 import Foundation
-import Security
 
 @MainActor public final class ShareStore: ObservableObject {
     public static let shared = ShareStore()
@@ -42,7 +41,7 @@ import Security
             try fileManager.createDirectory(at: sharedDirectory, withIntermediateDirectories: true)
             try fileManager.createDirectory(at: receivedDirectory, withIntermediateDirectories: true)
         } catch {
-            errorMessage = "无法建立局域网传输目录：\(error.localizedDescription)"
+            errorMessage = "无法建立文件传输目录：\(error.localizedDescription)"
         }
         if let data = try? Data(contentsOf: historyURL),
            var saved = try? JSONDecoder().decode([Transfer].self, from: data)
@@ -60,12 +59,10 @@ import Security
         guard !running, server == nil else { return }
         guard FileManager.default.fileExists(atPath: sharedDirectory.path),
               FileManager.default.fileExists(atPath: receivedDirectory.path)
-        else { errorMessage = "局域网传输目录不可用。"; return }
+        else { errorMessage = "文件传输目录不可用。"; return }
         guard let ip = NetworkAddress.localIPv4() else { errorMessage = "找不到局域网 IPv4 地址。请先连接 Wi-Fi 或手机热点。"; return }
         errorMessage = ""
-        var tokenBytes = [UInt8](repeating: 0, count: 4)
-        guard SecRandomCopyBytes(kSecRandomDefault, tokenBytes.count, &tokenBytes) == errSecSuccess else { errorMessage = "无法生成访问令牌。"; return }
-        let token = tokenBytes.map { String(format: "%02x", $0) }.joined()
+        guard let token = FileTransferAccessToken.generate() else { errorMessage = "无法生成访问令牌。"; return }
         let server = HTTPServer(ip: ip, token: token, sharedDirectory: sharedDirectory, receivedDirectory: receivedDirectory, maxBytes: Self.maxFileBytes)
         server.onReady = { [weak self, weak server] port in Task { @MainActor in
             guard let self, let server, self.server === server else { return }
@@ -158,10 +155,11 @@ import Security
     }
 
     @discardableResult
-    public func copyResource(_ transfer: Transfer) -> Bool {
+    public func copyResource(_ transfer: Transfer, pasteboard: NSPasteboard? = nil) -> Bool {
+        let destination = pasteboard ?? .general
         if let text = transfer.textContent {
-            NSPasteboard.general.clearContents()
-            return NSPasteboard.general.setString(text, forType: .string)
+            destination.clearContents()
+            return destination.setString(text, forType: .string)
         }
         guard let url = transfer.resourceURL,
               let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
@@ -169,8 +167,8 @@ import Security
         else {
             return false
         }
-        NSPasteboard.general.clearContents()
-        return NSPasteboard.general.writeObjects([url as NSURL])
+        destination.clearContents()
+        return destination.writeObjects([url as NSURL])
     }
 
     public func sendText(_ text: String) {

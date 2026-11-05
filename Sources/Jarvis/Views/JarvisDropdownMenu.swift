@@ -263,6 +263,7 @@ struct JarvisDropdownPillMenuList: View {
     var maximumHeight: CGFloat = 400
     let onSelect: (String) -> Void
 
+    @Environment(\.jarvisFlatControls) private var usesFlatControls
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var revealsOptions = false
     @State private var highlightedOptionID: String?
@@ -300,7 +301,14 @@ struct JarvisDropdownPillMenuList: View {
                     }
                 }
                 .padding(JarvisSpacing.controlGap)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .background(
+                    usesFlatControls
+                        ? AnyShapeStyle(SettingsSurface.controlFill)
+                        : AnyShapeStyle(.regularMaterial),
+                    in: usesFlatControls
+                        ? AnyShape(Capsule())
+                        : AnyShape(RoundedRectangle(cornerRadius: 8))
+                )
                 Text("\(visibleOptions.count) / \(options.count) 个模型")
                     .font(JarvisTypography.caption)
                     .foregroundStyle(.secondary)
@@ -343,6 +351,12 @@ struct JarvisDropdownPillMenuList: View {
         }
         .frame(width: controlWidth, alignment: .leading)
         .padding(JarvisDropdownMetrics.menuEdgePadding)
+        .background {
+            if usesFlatControls {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.jarvisPanel)
+            }
+        }
         .task {
             await Task.yield()
             revealsOptions = true
@@ -430,6 +444,7 @@ private struct JarvisDropdownPillButtonStyle: ButtonStyle {
     let isSelected: Bool
     let isHighlighted: Bool
 
+    @Environment(\.jarvisFlatControls) private var usesFlatControls
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
@@ -448,15 +463,10 @@ private struct JarvisDropdownPillButtonStyle: ButtonStyle {
                 alignment: .leading
             )
             .contentShape(Capsule())
-            .jarvisGlass(
-                // Keep the material identity stable while the pointer
-                // moves between options. Changing a glass tint on every
-                // hover asks macOS to rebuild the material and briefly
-                // exposes the transparent intermediate state.
-                tint: isSelected ? Color.jarvisAccent : nil,
-                in: Capsule(),
-                interactive: false
-            )
+            .modifier(JarvisDropdownOptionSurface(
+                usesFlatControls: usesFlatControls,
+                isSelected: isSelected
+            ))
             .overlay {
                 if isHighlighted, !isSelected {
                     Capsule()
@@ -466,7 +476,7 @@ private struct JarvisDropdownPillButtonStyle: ButtonStyle {
             }
             .opacity(configuration.isPressed ? 0.78 : 1)
             .scaleEffect(
-                reduceMotion
+                reduceMotion || usesFlatControls
                     ? 1
                     : (isHighlighted ? JarvisDropdownMetrics.hoverScale : (configuration.isPressed ? 0.98 : 1)),
                 anchor: .center
@@ -488,7 +498,32 @@ private struct JarvisDropdownPillButtonStyle: ButtonStyle {
     }
 }
 
+/// Settings menu rows have no resting fill; the menu owns the solid backdrop.
+/// Other dropdowns retain their existing glass option surfaces.
+private struct JarvisDropdownOptionSurface: ViewModifier {
+    let usesFlatControls: Bool
+    let isSelected: Bool
+
+    func body(content: Content) -> some View {
+        if usesFlatControls {
+            content.background(
+                isSelected ? Color.jarvisAccent : .clear,
+                in: Capsule()
+            )
+        } else {
+            // Keep the glass identity stable while the pointer moves between rows.
+            content.jarvisGlass(
+                tint: isSelected ? Color.jarvisAccent : nil,
+                in: Capsule(),
+                interactive: false
+            )
+        }
+    }
+}
+
 private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
+    @Environment(\.jarvisFlatControls) private var usesFlatControls
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var isPresented: Bool
     let options: [JarvisDropdownOption]
     let selectionID: String?
@@ -512,6 +547,8 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
             showsSelectedOption: showsSelectedOption,
             controlWidth: controlWidth,
             searchThreshold: searchThreshold,
+            usesFlatControls: usesFlatControls,
+            colorScheme: colorScheme,
             onSelect: onSelect,
             dismiss: { isPresented = false }
         )
@@ -543,6 +580,8 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
             showsSelectedOption: Bool,
             controlWidth: CGFloat,
             searchThreshold: Int?,
+            usesFlatControls: Bool,
+            colorScheme: ColorScheme,
             onSelect: @escaping (String) -> Void,
             dismiss: @escaping () -> Void
         ) {
@@ -561,6 +600,8 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
                     showsSelectedOption: showsSelectedOption,
                     controlWidth: controlWidth,
                     searchThreshold: searchThreshold,
+                    usesFlatControls: usesFlatControls,
+                    colorScheme: colorScheme,
                     onSelect: onSelect,
                     dismiss: dismiss
                 )
@@ -590,6 +631,8 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
             showsSelectedOption: Bool,
             controlWidth: CGFloat,
             searchThreshold: Int?,
+            usesFlatControls: Bool,
+            colorScheme: ColorScheme,
             onSelect: @escaping (String) -> Void,
             dismiss: @escaping () -> Void
         ) {
@@ -621,7 +664,10 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
                     }
                 }
             )
-            let hostingView = NSHostingView(rootView: menu.jarvisAccentAware())
+            let hostingView = NSHostingView(rootView: menu
+                .jarvisAccentAware()
+                .environment(\.jarvisFlatControls, usesFlatControls)
+                .environment(\.colorScheme, colorScheme))
             let fittingSize = hostingView.fittingSize
             hostingView.frame = NSRect(origin: .zero, size: fittingSize)
 

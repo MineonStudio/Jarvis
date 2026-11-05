@@ -107,16 +107,6 @@ struct SettingsView: View {
         } detail: {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
-                    HStack(spacing: JarvisSpacing.groupGap) {
-                        Text(selection.title)
-                            .font(SettingsTypography.pageTitle)
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 8)
-                        if selection == .permissions {
-                            clearPermissionsButton
-                        }
-                    }
-
                     detailContent
                 }
                 .frame(maxWidth: SettingsLayout.contentMaxWidth, alignment: .leading)
@@ -125,8 +115,10 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.jarvisBackground)
+            .environment(\.jarvisFlatControls, true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.jarvisBackground.ignoresSafeArea())
         .onAppear {
             app.refreshPermissionStatus()
         }
@@ -168,10 +160,10 @@ struct SettingsView: View {
     }
 
     private var onboardingSettingsCard: some View {
-        JarvisCard {
+        SettingsContentPanel {
             HStack(spacing: JarvisSpacing.groupGap) {
                 VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
-                    SettingsCardHeader(title: "入门引导", systemImage: "sparkles")
+                    Text("入门引导").font(SettingsTypography.itemTitle)
                     Text("重新了解权限用途与常用功能。")
                         .font(SettingsTypography.itemSubtitle)
                         .foregroundStyle(.secondary)
@@ -190,18 +182,17 @@ struct SettingsView: View {
     }
 
     private var versionAndUpdateCard: some View {
-        JarvisCard {
+        SettingsContentPanel {
             VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
-                SettingsCardHeader(
-                    title: "版本与更新",
-                    systemImage: "arrow.triangle.2.circlepath"
-                )
-
                 HStack(alignment: .center, spacing: JarvisSpacing.groupGap) {
-                    Text("Jarvis V\(JarvisAppVersion.shortVersion)")
-                        .font(SettingsTypography.itemSubtitle)
-                        .foregroundStyle(Color.jarvisTextSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
+                        Text("版本与更新")
+                            .font(SettingsTypography.itemTitle)
+                        Text("Jarvis V\(JarvisAppVersion.shortVersion)")
+                            .font(SettingsTypography.itemSubtitle)
+                            .foregroundStyle(Color.jarvisTextSecondary)
+                    }
+                    Spacer(minLength: 8)
                     updateActionButton
                 }
             }
@@ -247,9 +238,9 @@ struct SettingsView: View {
     }
 
     private var themeSettingsCard: some View {
-        JarvisCard {
+        SettingsContentPanel {
             HStack(spacing: JarvisSpacing.groupGap) {
-                SettingsCardHeader(title: "主题", systemImage: "circle.lefthalf.filled")
+                Text("主题").font(SettingsTypography.itemTitle)
                 Spacer(minLength: 8)
                 JarvisThemePicker(selection: Binding(
                     get: { app.themePreference },
@@ -261,9 +252,9 @@ struct SettingsView: View {
     }
 
     private var accentColorSettingsCard: some View {
-        JarvisCard {
+        SettingsContentPanel {
             HStack(spacing: JarvisSpacing.groupGap) {
-                SettingsCardHeader(title: "强调色", systemImage: "paintpalette")
+                Text("强调色").font(SettingsTypography.itemTitle)
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(1)
                 JarvisAccentColorPicker(selection: Binding(
@@ -276,15 +267,13 @@ struct SettingsView: View {
     }
 
     private var launchAtLoginSettingsCard: some View {
-        JarvisCard {
+        SettingsContentPanel {
             HStack(spacing: JarvisSpacing.groupGap) {
-                SettingsCardHeader(title: "开机自启", systemImage: "power")
-                Spacer(minLength: 8)
-                Toggle("", isOn: Binding(
+                Toggle("开机自启", isOn: Binding(
                     get: { app.launchAtLoginEnabled },
                     set: { app.updateLaunchAtLogin($0) }
                 ))
-                .labelsHidden()
+                .font(SettingsTypography.itemTitle)
                 .jarvisSwitchAccent()
                 .animation(
                     JarvisMotion.animation(JarvisMotion.selection, reduceMotion: reduceMotion),
@@ -295,15 +284,13 @@ struct SettingsView: View {
     }
 
     private var automaticUpdatesSettingsCard: some View {
-        JarvisCard {
+        SettingsContentPanel {
             HStack(spacing: JarvisSpacing.groupGap) {
-                SettingsCardHeader(title: "自动更新", systemImage: "arrow.clockwise")
-                Spacer(minLength: 8)
                 Toggle("自动更新", isOn: Binding(
                     get: { app.automaticUpdatesEnabled },
                     set: { app.updateAutomaticUpdatesEnabled($0) }
                 ))
-                .labelsHidden()
+                .font(SettingsTypography.itemTitle)
                 .jarvisSwitchAccent()
                 .animation(
                     JarvisMotion.animation(JarvisMotion.selection, reduceMotion: reduceMotion),
@@ -315,19 +302,19 @@ struct SettingsView: View {
     }
 
     private var sourceRepositoryCard: some View {
-        JarvisCard {
+        SettingsContentPanel {
             VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
-                SettingsCardHeader(
-                    title: "开源仓库",
-                    systemImage: "chevron.left.forwardslash.chevron.right"
-                )
                 HStack(spacing: JarvisSpacing.groupGap) {
-                    Text("github.com/MineonStudio/Jarvis")
-                        .font(JarvisTypography.monospacedSmall)
-                        .foregroundStyle(Color.jarvisTextSecondary)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .layoutPriority(1)
+                    VStack(alignment: .leading, spacing: SettingsFormMetrics.labelSpacing) {
+                        Text("开源仓库")
+                            .font(SettingsTypography.itemTitle)
+                        Text("github.com/MineonStudio/Jarvis")
+                            .font(JarvisTypography.monospacedSmall)
+                            .foregroundStyle(Color.jarvisTextSecondary)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .layoutPriority(1)
                     Spacer(minLength: 8)
                     Button {
                         guard let url = URL(string: "https://github.com/MineonStudio/Jarvis") else {
@@ -345,8 +332,17 @@ struct SettingsView: View {
     }
 
     private var permissionSettingsCard: some View {
-        JarvisCard {
-            JarvisPermissionList(cornerRadius: 12, mode: .settings)
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
+            HStack(spacing: JarvisSpacing.groupGap) {
+                Text("权限管理")
+                    .font(SettingsTypography.cardTitle)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                clearPermissionsButton
+            }
+            SettingsContentPanel {
+                JarvisPermissionList(cornerRadius: 12, mode: .settings)
+            }
         }
     }
 

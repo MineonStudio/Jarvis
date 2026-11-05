@@ -43,11 +43,13 @@ struct ContentView: View {
             loadedSectionView
                 .id(loadedSection)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.jarvisBackground)
                 .onContinuousHover(
                     coordinateSpace: .named(Self.homePointerCoordinateSpace),
                     perform: updateHomePointer
                 )
         }
+        .background(Color.jarvisBackground.ignoresSafeArea())
         .jarvisToastOverlay(app.toastMessage)
         .tint(app.accentColorPreference.resolvedColor)
         .coordinateSpace(name: Self.homePointerCoordinateSpace)

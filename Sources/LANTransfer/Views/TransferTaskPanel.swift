@@ -1,3 +1,4 @@
+import JarvisDesignSystem
 import SwiftUI
 
 @MainActor
@@ -15,6 +16,9 @@ struct TransferTaskPanel: View {
             HStack(spacing: JarvisSpacing.controlGap) {
                 Text("传输列表")
                     .font(.system(size: 17, weight: .semibold))
+                Text("\(filteredTransfers.count) 条")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
                 TransferTaskFilterBar(selection: $filter)
             }
@@ -25,23 +29,33 @@ struct TransferTaskPanel: View {
                 emptyState("没有符合筛选的任务")
             } else {
                 GeometryReader { geometry in
-                    ScrollView {
-                        LazyVGrid(columns: columns(for: geometry.size.width), spacing: JarvisSpacing.itemGap) {
-                            ForEach(filteredTransfers) { transfer in
-                                TransferRow(
-                                    transfer: transfer,
-                                    canResend: store.canStartTask,
-                                    onCancel: { store.cancel(transfer.id) },
-                                    onOpen: { store.openResource(transfer) },
-                                    onResend: { store.resend(transfer) },
-                                    onCopy: { store.copyResource(transfer) },
-                                    onDelete: { pendingDelete = transfer }
-                                )
+                    ScrollView(.horizontal) {
+                        VStack(spacing: 0) {
+                            columnHeader
+                            ScrollView(.vertical) {
+                                LazyVStack(spacing: 0) {
+                                    ForEach(filteredTransfers) { transfer in
+                                        TransferRow(
+                                            transfer: transfer,
+                                            canResend: store.canStartTask,
+                                            onCancel: { store.cancel(transfer.id) },
+                                            onOpen: { store.openResource(transfer) },
+                                            onResend: { store.resend(transfer) },
+                                            onCopy: { store.copyResource(transfer) },
+                                            onDelete: { pendingDelete = transfer }
+                                        )
+                                        Divider()
+                                            .overlay(Color.primary.opacity(0.04))
+                                            .padding(.leading, TransferListMetrics.rowInset + TransferListMetrics.thumbnail + JarvisSpacing.itemGap)
+                                    }
+                                }
+                                .padding(.bottom, JarvisSpacing.controlGap)
                             }
+                            .scrollIndicators(.automatic)
                         }
-                        .padding(.bottom, JarvisSpacing.textGap)
+                        .frame(width: max(geometry.size.width, TransferListMetrics.minimumWidth), height: geometry.size.height)
                     }
-                    .scrollIndicators(.hidden)
+                    .scrollIndicators(.automatic)
                 }
             }
         }
@@ -85,9 +99,30 @@ struct TransferTaskPanel: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func columns(for width: CGFloat) -> [GridItem] {
-        let count = width >= 960 ? 3 : (width >= 620 ? 2 : 1)
-        return Array(repeating: GridItem(.flexible(), spacing: JarvisSpacing.itemGap), count: count)
+    private var columnHeader: some View {
+        HStack(spacing: TransferListMetrics.columnGap) {
+            Text("文件")
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("类型")
+                .frame(width: TransferListMetrics.typeWidth, alignment: .leading)
+            Text("接收 / 发送")
+                .frame(width: TransferListMetrics.directionWidth, alignment: .leading)
+            Text("设备")
+                .frame(width: TransferListMetrics.deviceWidth, alignment: .leading)
+            Text("状态")
+                .frame(width: TransferListMetrics.statusWidth, alignment: .leading)
+            Text("大小")
+                .frame(width: TransferListMetrics.sizeWidth, alignment: .leading)
+            Text("操作")
+                .frame(width: TransferListMetrics.actionsWidth, alignment: .leading)
+        }
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, TransferListMetrics.rowInset)
+        .padding(.vertical, JarvisSpacing.controlGap)
+        .overlay(alignment: .bottom) { Divider() }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -132,7 +167,8 @@ private struct TransferTaskFilterBar: View {
         }
         .padding(JarvisSpacing.textGap)
         .frame(height: 32)
-        .glassEffect(.regular.interactive(false), in: Capsule())
+        .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
+        .modifier(JarvisButtonShadowModifier())
         .accessibilityElement(children: .contain)
         .accessibilityLabel("任务筛选")
     }

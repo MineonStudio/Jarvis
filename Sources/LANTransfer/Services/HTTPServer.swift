@@ -242,7 +242,7 @@ final class HTTPServer: @unchecked Sendable {
         do {
             let listener = try NWListener(using: parameters)
             self.listener = listener
-            listener.service = NWListener.Service(name: "局域网传输", type: "_http._tcp")
+            listener.service = NWListener.Service(name: "文件传输", type: "_http._tcp")
             listener.stateUpdateHandler = { [weak self, weak listener] state in
                 guard let self, self.listener === listener, !self.stopped else { return }
                 switch state {

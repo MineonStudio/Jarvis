@@ -14,17 +14,17 @@ private struct HistoryCardMetadataModifier: ViewModifier {
             .padding(.bottom, JarvisSpacing.controlGap)
             .background {
                 LinearGradient(
-                    // Ease into the scrim over a wider area so its upper edge
-                    // blends into bright previews without a visible band.
+                    // Keep a soft fade for every grid's metadata. The bottom
+                    // caps at 48% black so the preview remains visible.
                     stops: [
                         .init(color: .black.opacity(0), location: 0),
-                        .init(color: .black.opacity(0.015), location: 0.15),
-                        .init(color: .black.opacity(0.06), location: 0.30),
-                        .init(color: .black.opacity(0.16), location: 0.45),
-                        .init(color: .black.opacity(0.31), location: 0.60),
-                        .init(color: .black.opacity(0.49), location: 0.75),
-                        .init(color: .black.opacity(0.65), location: 0.90),
-                        .init(color: .black.opacity(0.72), location: 1)
+                        .init(color: .black.opacity(0.01), location: 0.15),
+                        .init(color: .black.opacity(0.04), location: 0.30),
+                        .init(color: .black.opacity(0.10), location: 0.45),
+                        .init(color: .black.opacity(0.20), location: 0.60),
+                        .init(color: .black.opacity(0.32), location: 0.75),
+                        .init(color: .black.opacity(0.43), location: 0.90),
+                        .init(color: .black.opacity(0.48), location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom

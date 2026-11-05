@@ -393,7 +393,7 @@ private struct MeetingSpeakerSection: View {
                                 systemImage: isMergePanelExpanded ? "xmark" : "arrow.triangle.merge"
                             )
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(JarvisContentPlainButtonStyle())
                         .foregroundStyle(Color.jarvisAccent)
                         .font(JarvisTypography.captionEmphasis)
                     }
@@ -517,7 +517,7 @@ private struct MeetingSpeakerSection: View {
             }
         }
         .padding(JarvisSpacing.rowInset)
-        .background(Color.jarvisInsetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .jarvisPanelBackground(cornerRadius: 12)
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
@@ -602,7 +602,7 @@ private struct MeetingSpeakerSection: View {
                 } label: {
                     Image(systemName: clips.playingSpeakerID == speaker.id ? "stop.fill" : "play.fill")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(JarvisContentPlainButtonStyle())
                 .disabled(!hasPlayableAudio)
                 .help("试听这个人第一次说的话")
                 .accessibilityLabel(
@@ -1040,7 +1040,7 @@ private struct MeetingDetailPane: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Color.jarvisBackground)
+        .jarvisPanelBackground(cornerRadius: 0)
         .onAppear {
             draftTitle = record?.title ?? ""
         }
@@ -1545,7 +1545,7 @@ private struct MeetingAudioPlayer: View {
                     .font(.system(size: 27, weight: .regular))
                     .frame(width: 40, height: 40)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(JarvisContentPlainButtonStyle())
             .accessibilityLabel("倒退 15 秒")
 
             Button {
@@ -1556,7 +1556,7 @@ private struct MeetingAudioPlayer: View {
                     .font(.system(size: 30, weight: .medium))
                     .frame(width: 40, height: 40)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(JarvisContentPlainButtonStyle())
             .accessibilityLabel(controller.isPlaying ? "暂停原始录音" : "播放原始录音")
 
             Button {
@@ -1566,7 +1566,7 @@ private struct MeetingAudioPlayer: View {
                     .font(.system(size: 27, weight: .regular))
                     .frame(width: 40, height: 40)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(JarvisContentPlainButtonStyle())
             .accessibilityLabel("快进 15 秒")
         }
         .frame(maxWidth: .infinity)
@@ -1627,7 +1627,7 @@ private struct MeetingProcessingCard: View {
                     Button("停止") {
                         app.cancelMeetingProcessing()
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(JarvisContentPlainButtonStyle())
                     .accessibilityHint("停止当前处理，已经完成的部分会保留")
                 }
                 if case let .processing(_, progress) = state {
@@ -1739,7 +1739,7 @@ private struct MeetingMinutesSection: View {
                 Button("重新生成") {
                     isRegenerationConfirmationPresented = true
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(JarvisContentPlainButtonStyle())
                 .disabled(app.meetingActiveProcessingID != nil)
                 .accessibilityHint("根据当前逐字稿重新生成会议纪要")
             }
@@ -1776,7 +1776,7 @@ private struct MeetingMinutesSection: View {
                             Button("恢复此版本") {
                                 app.restoreMeetingMinutesVersion(recordID: record.id, versionID: version.id)
                             }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(JarvisContentPlainButtonStyle())
                         }
                     }
                 }
@@ -1934,7 +1934,7 @@ private struct MeetingActionItemsPanel: View {
                     .font(.system(size: 16))
                     .foregroundStyle(item.isCompleted ? Color.jarvisAccent : Color.secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(JarvisContentPlainButtonStyle())
             .accessibilityLabel(item.isCompleted ? "标记待办为未完成" : "标记待办为已完成：\(item.task)")
 
             VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
@@ -2046,7 +2046,7 @@ private struct MeetingCitedSentence: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .multilineTextAlignment(.leading)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(JarvisContentPlainButtonStyle())
             .help(isPlaying ? "停止播放" : "播放原文 \(formatMeetingTimestamp(playTime))")
             .accessibilityLabel(accessibilityText)
             .accessibilityHint(isPlaying ? "停止播放" : "从对应位置播放录音")

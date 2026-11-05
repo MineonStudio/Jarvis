@@ -260,6 +260,30 @@ final class ScreenshotShortcutManager {
         return registerHotKey()
     }
 
+    /// Apply a set of bindings as one synchronous operation, including swaps.
+    /// If any registration fails, restore every manager's previous binding.
+    @MainActor
+    static func updateTogether(
+        _ updates: [(manager: ScreenshotShortcutManager, shortcut: ScreenshotShortcut)]
+    ) -> Bool {
+        let previous = updates.map { (manager: $0.manager, shortcut: $0.manager.binding) }
+        for update in updates {
+            update.manager.unregisterHotKey()
+        }
+        for update in updates {
+            guard update.manager.update(update.shortcut) else {
+                for update in updates {
+                    update.manager.unregisterHotKey()
+                }
+                for original in previous {
+                    _ = original.manager.update(original.shortcut)
+                }
+                return false
+            }
+        }
+        return true
+    }
+
     func validate(_ candidate: ScreenshotShortcut) -> ScreenshotShortcutValidation {
         // 当前绑定直接算可用，不能去探测：同一个进程里重复注册同一个键码+修饰键，
         // Carbon 一律返回 eventHotKeyExistsErr（-9878），探测结果是「冲突」——
@@ -511,7 +535,8 @@ final class ShortcutRecorderNSView: NSView {
             ? NSColor.controlAccentColor.withAlphaComponent(0.22)
             : NSColor.controlBackgroundColor
         background.setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
+        let radius = min(bounds.width, bounds.height) / 2
+        NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
 
         let title = isRecording ? "按下快捷键…" : shortcut.displayString
         let attributes: [NSAttributedString.Key: Any] = [

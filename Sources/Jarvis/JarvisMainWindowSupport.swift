@@ -1,10 +1,11 @@
 import AppKit
+import JarvisDesignSystem
 
 @MainActor
 enum JarvisWindowAppearance {
     static func configure(for window: NSWindow) {
         window.titlebarSeparatorStyle = .none
-        window.backgroundColor = .textBackgroundColor
+        window.backgroundColor = JarvisSurfacePalette.windowBackgroundColor
         window.sharingType = .readOnly
     }
 

@@ -13,7 +13,8 @@ enum AIStreamEvent: Equatable, Sendable {
 /// time thinking before it emits anything; once tokens are flowing, a gap means the
 /// connection is dead rather than slow.
 struct AIStreamingPolicy: Equatable, Sendable {
-    static let hedgeEnabledKey = "jarvis.ai.stream.hedge"
+    /// Retained only to identify older preferences; removed settings no longer enable duplicates.
+    static let legacyHedgeEnabledKey = "jarvis.ai.stream.hedge"
     static let defaultHedgeDelay: TimeInterval = 12
     static let minimumHedgeDelay: TimeInterval = 8
     static let maximumHedgeDelay: TimeInterval = 45
@@ -33,7 +34,7 @@ struct AIStreamingPolicy: Equatable, Sendable {
     var totalTimeout: TimeInterval
 
     static let `default` = Self(
-        hedgingEnabled: true,
+        hedgingEnabled: false,
         hedgeDelay: defaultHedgeDelay,
         firstDeltaTimeout: 60,
         idleTimeout: 25,
@@ -41,14 +42,11 @@ struct AIStreamingPolicy: Equatable, Sendable {
     )
 
     static func load(
-        defaults: UserDefaults = .standard,
+        defaults _: UserDefaults = .standard,
         configuration: AIAPIConfiguration,
         history: AIStreamingLatencyHistory = .shared
     ) -> Self {
         var policy = Self.default
-        if defaults.object(forKey: hedgeEnabledKey) != nil {
-            policy.hedgingEnabled = defaults.bool(forKey: hedgeEnabledKey)
-        }
         policy.hedgeDelay = history.suggestedHedgeDelay(for: configuration)
         return policy
     }

@@ -1,4 +1,5 @@
 import AppKit
+import JarvisDesignSystem
 import LANTransfer
 import SwiftUI
 
@@ -122,6 +123,8 @@ private struct JarvisRootView: View {
             if let prompt = appModel.taskPermissionPrompt, prompt.presentation == .mainWindow {
                 JarvisTaskPermissionOverlay(prompt: prompt)
                     .environment(appModel)
+                    .environment(\.jarvisFlatControls, true)
+                    .environment(\.jarvisContentButtonShadows, true)
             }
         }
         .alert(shareStore.incomingOffer?.isText == true ? "接收文本" : "接收文件", isPresented: Binding(

@@ -113,9 +113,10 @@ final class TransferHistoryTests: XCTestCase {
         try JSONEncoder().encode([saved]).write(to: root.appendingPathComponent("transfers.json"))
 
         let store = ShareStore(rootDirectory: root)
-        NSPasteboard.general.clearContents()
-        XCTAssertTrue(store.copyResource(store.transfers[0]))
-        let copied = NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        XCTAssertTrue(store.copyResource(store.transfers[0], pasteboard: pasteboard))
+        let copied = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]
         XCTAssertEqual(
             copied?.first?.resolvingSymlinksInPath(),
             file.resolvingSymlinksInPath()

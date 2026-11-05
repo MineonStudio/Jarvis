@@ -504,7 +504,7 @@ struct ClipboardCard: View, Equatable {
                                     isSensitiveRevealed = true
                                 }
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(JarvisSecondaryButtonStyle())
                             .controlSize(.small)
                             .accessibilityHint("仅临时显示，离开卡片后会重新隐藏")
                         } else if presentation.sensitivity != nil,
@@ -567,7 +567,7 @@ struct ClipboardCard: View, Equatable {
                 isTextExpanded.toggle()
             }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(JarvisContentPlainButtonStyle())
         .font(JarvisTypography.captionEmphasis)
         .foregroundStyle(Color.jarvisAccent)
         .accessibilityLabel(isTextExpanded ? "收起长文本" : "展开长文本")

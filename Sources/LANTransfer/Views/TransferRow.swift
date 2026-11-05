@@ -2,17 +2,22 @@ import AppKit
 import AVFoundation
 import Combine
 import ImageIO
+import JarvisDesignSystem
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum TransferCardMetrics {
-    static let height: CGFloat = 112
-    static let padding = JarvisSpacing.rowInset
-    static var thumb: CGFloat {
-        height - padding * 2
-    }
-
-    static let corner: CGFloat = 14
+enum TransferListMetrics {
+    static let thumbnail: CGFloat = 40
+    static let rowInset = JarvisSpacing.rowInset
+    static let rowHeight: CGFloat = 76
+    static let columnGap = JarvisSpacing.itemGap
+    static let typeWidth: CGFloat = 56
+    static let directionWidth: CGFloat = 72
+    static let deviceWidth: CGFloat = 118
+    static let statusWidth: CGFloat = 110
+    static let sizeWidth: CGFloat = 80
+    static let actionsWidth: CGFloat = 298
+    static let minimumWidth: CGFloat = 1040
 }
 
 @MainActor
@@ -25,7 +30,6 @@ public struct TransferRow: View {
     public let onCopy: () -> Bool
     public let onDelete: () -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
     @State private var copied = false
     @State private var resourceCheck = 0
@@ -56,7 +60,8 @@ public struct TransferRow: View {
         case .completed: return .green
         case .failed: return .red
         case .cancelled: return .secondary
-        case .pending, .accepted, .active: return .secondary
+        case .pending, .accepted: return .secondary
+        case .active: return .accentColor
         }
     }
 
@@ -78,70 +83,84 @@ public struct TransferRow: View {
         transfer.isText || hasFile
     }
 
-    private var showsStatus: Bool {
-        resourceMissing || transfer.status == .failed || transfer.status == .cancelled
-    }
-
     private var statusText: String {
         resourceMissing ? "文件已移除" : transfer.status.rawValue
     }
 
+    private var statusIcon: String {
+        if resourceMissing {
+            return "exclamationmark.circle.fill"
+        }
+        switch transfer.status {
+        case .completed: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.circle.fill"
+        case .cancelled: return "minus.circle"
+        case .pending, .accepted: return "clock"
+        case .active: return "arrow.triangle.2.circlepath"
+        }
+    }
+
+    private var title: String {
+        guard let text = transfer.textContent else { return transfer.name }
+        let preview = String(text.prefix(160))
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return preview.isEmpty ? "空文本" : preview
+    }
+
+    private var subtitle: String? {
+        if transfer.status == .failed, !transfer.detail.isEmpty {
+            return transfer.detail
+        }
+        return nil
+    }
+
+    private var fileType: String {
+        if transfer.isText {
+            return "文本"
+        }
+        let ext = (transfer.name as NSString).pathExtension.uppercased()
+        return ext.isEmpty ? "文件" : ext
+    }
+
     private var sizeText: String {
-        "\(TransferByteCount.string(from: transfer.done)) / \(TransferByteCount.string(from: transfer.total))"
+        if transfer.status == .active {
+            return "\(TransferByteCount.string(from: transfer.done)) / \(TransferByteCount.string(from: transfer.total))"
+        }
+        return TransferByteCount.string(from: transfer.total)
     }
 
     public var body: some View {
-        HStack(alignment: .top, spacing: JarvisSpacing.itemGap) {
-            TransferFilePreview(url: resourceMissing ? nil : transfer.resourceURL, name: transfer.name, isText: transfer.isText)
-                .frame(width: TransferCardMetrics.thumb, height: TransferCardMetrics.thumb)
-
-            VStack(alignment: .leading, spacing: JarvisSpacing.iconGap) {
-                Text(transfer.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 0)
-                HStack(spacing: JarvisSpacing.itemGap) {
-                    Text(transfer.isText ? (transfer.textContent ?? "").replacingOccurrences(of: "\n", with: " ") : sizeText)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    if showsStatus {
-                        Text(statusText)
-                            .foregroundStyle(statusColor)
-                            .fixedSize()
-                    }
-                }
-                HStack(spacing: JarvisSpacing.itemGap) {
-                    progressBar
-                    Text("\(Int(transfer.fraction * 100))%")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
-                }
-                .font(.system(size: 11, weight: .medium))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        HStack(spacing: TransferListMetrics.columnGap) {
+            identity
+            Text(fileType)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: TransferListMetrics.typeWidth, alignment: .leading)
+            Label(transfer.direction.rawValue, systemImage: transfer.direction == .upload ? "arrow.down.left" : "arrow.up.right")
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: TransferListMetrics.directionWidth, alignment: .leading)
+            device.frame(width: TransferListMetrics.deviceWidth, alignment: .leading)
+            status.frame(width: TransferListMetrics.statusWidth, alignment: .leading)
+            Text(sizeText)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .frame(width: TransferListMetrics.sizeWidth, alignment: .leading)
+            actions
         }
-        .padding(TransferCardMetrics.padding)
-        .frame(maxWidth: .infinity, minHeight: TransferCardMetrics.height, maxHeight: TransferCardMetrics.height, alignment: .leading)
-        .background(resourceMissing ? Color.orange.opacity(0.09) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: TransferCardMetrics.corner))
-        .overlay {
-            if resourceMissing {
-                RoundedRectangle(cornerRadius: TransferCardMetrics.corner).strokeBorder(Color.orange.opacity(0.35))
-            }
+        .padding(.horizontal, TransferListMetrics.rowInset)
+        .padding(.vertical, JarvisSpacing.itemGap)
+        .frame(maxWidth: .infinity, minHeight: TransferListMetrics.rowHeight, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(isHovered ? 0.035 : 0))
         }
-        .overlay(alignment: .bottom) {
-            actionOverlay
-        }
-        .clipShape(RoundedRectangle(cornerRadius: TransferCardMetrics.corner, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: TransferCardMetrics.corner, style: .continuous))
+        .contentShape(Rectangle())
         .onHover { hovering in
-            guard hovering != isHovered else { return }
-            withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.16)) {
-                isHovered = hovering
-            }
+            isHovered = hovering
             if !hovering {
                 copied = false
             }
@@ -153,11 +172,7 @@ public struct TransferRow: View {
         }
         .contextMenu { contextActions }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(
-            showsStatus
-                ? "\(transfer.name)，\(statusText)，\(Int(transfer.fraction * 100))%"
-                : "\(transfer.name)，\(Int(transfer.fraction * 100))%"
-        )
+        .accessibilityLabel("\(title)，\(transfer.direction.rawValue)，\(statusText)")
         .accessibilityAction(named: "打开") {
             if hasFile {
                 onOpen()
@@ -169,55 +184,122 @@ public struct TransferRow: View {
         }
     }
 
-    private var progressBar: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.accentColor.opacity(0.18))
-                Capsule()
-                    .fill(Color.accentColor)
-                    .frame(width: max(2, geometry.size.width * transfer.fraction))
+    private var identity: some View {
+        HStack(spacing: JarvisSpacing.itemGap) {
+            TransferFilePreview(url: resourceMissing ? nil : transfer.resourceURL, name: transfer.name, isText: transfer.isText)
+                .frame(width: TransferListMetrics.thumbnail, height: TransferListMetrics.thumbnail)
+                .background(Color.accentColor.opacity(transfer.isText ? 0.08 : 0.035), in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(transfer.isText ? .tail : .middle)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .help(transfer.textContent ?? transfer.name)
+    }
+
+    private var device: some View {
+        Text(transfer.targetDeviceIP ?? "其他设备")
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+    }
+
+    private var status: some View {
+        VStack(alignment: .leading, spacing: JarvisSpacing.textGap) {
+            HStack(spacing: JarvisSpacing.iconGap) {
+                Image(systemName: statusIcon)
+                    .foregroundStyle(statusColor)
+                Text(statusText)
+                    .foregroundStyle(resourceMissing || transfer.status == .failed ? statusColor : .primary)
+                if transfer.status == .active {
+                    Spacer(minLength: 0)
+                    Text("\(Int(transfer.fraction * 100))%")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            .font(.system(size: 12, weight: .medium))
+            .lineLimit(1)
+
+            if transfer.status == .active {
+                progressBar
+            }
+            if transfer.status == .active, transfer.bytesPerSecond.isFinite, transfer.bytesPerSecond > 0 {
+                Text("\(TransferByteCount.string(from: Int64(min(transfer.bytesPerSecond, 1e15))))/s")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
-        .frame(height: 2)
-        .frame(maxWidth: .infinity)
+        .help(transfer.detail.isEmpty ? statusText : transfer.detail)
+    }
+
+    private var progressBar: some View {
+        GeometryReader { geometry in
+            Capsule()
+                .fill(Color.accentColor.opacity(0.15))
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: geometry.size.width * transfer.fraction)
+                }
+        }
+        .frame(height: 3)
         .accessibilityHidden(true)
     }
 
-    @ViewBuilder
-    private var actionOverlay: some View {
-        if isHovered {
-            HStack(spacing: JarvisSpacing.iconGap) {
-                Spacer(minLength: 0)
-                pill("打开", enabled: hasFile, action: onOpen)
-                pill(copied ? "已复制" : "复制", enabled: canCopy, action: copyFile)
-                if transfer.isInProgress {
-                    pill("取消", action: onCancel)
-                } else {
-                    pill("重新发送", enabled: canCopy && canResend, action: onResend)
-                }
-                pill("删除", destructive: true, action: onDelete)
-            }
-            .padding(JarvisSpacing.controlGap)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 8)))
+    private var actions: some View {
+        HStack(spacing: JarvisSpacing.controlGap) {
+            actionButton("打开", width: 44, enabled: hasFile, action: onOpen)
+            actionButton(copied ? "已复制" : "复制", width: 56, enabled: canCopy, action: copyFile)
+            actionButton("重新发送", width: 68, enabled: canCopy && canResend && !transfer.isInProgress, action: onResend)
+            actionButton("取消传输", width: 68, enabled: transfer.isInProgress, action: onCancel)
+            actionButton("删除", icon: "trash", width: 30, destructive: true, action: onDelete)
         }
+        .frame(width: TransferListMetrics.actionsWidth, alignment: .leading)
     }
 
-    private func pill(
+    private func actionButton(
         _ title: String,
-        destructive: Bool = false,
+        icon: String? = nil,
+        width: CGFloat,
         enabled: Bool = true,
+        destructive: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Text(title)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+            Group {
+                if let icon {
+                    Image(systemName: icon)
+                } else {
+                    Text(title)
+                        .lineLimit(1)
+                }
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(destructive ? Color.red : Color.primary)
+            .frame(width: width, height: 30)
+            .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
+            .modifier(JarvisButtonShadowModifier())
+            .contentShape(Capsule())
         }
-        .buttonStyle(TransferCardActionPillButtonStyle(destructive: destructive))
+        .buttonStyle(.plain)
         .disabled(!enabled)
-        .help(title == "重新发送" && !enabled ? "启动共享并等待当前任务结束后可重新发送" : title)
+        .opacity(enabled ? 1 : 0.4)
+        .help(title)
+        .accessibilityLabel(title)
     }
 
     @ViewBuilder
@@ -243,26 +325,6 @@ public struct TransferRow: View {
     }
 }
 
-private struct TransferCardActionPillButtonStyle: ButtonStyle {
-    var destructive = false
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(destructive ? Color.red : Color.primary)
-            .padding(.horizontal, JarvisSpacing.cardInset)
-            .padding(.vertical, JarvisSpacing.controlGap)
-            .opacity(configuration.isPressed ? 0.68 : (isEnabled ? 1 : 0.45))
-            .glassEffect(.regular.interactive(true), in: Capsule())
-            .contentShape(Capsule())
-            .shadow(color: .black.opacity(0.24), radius: 6, y: 2)
-            .fixedSize(horizontal: true, vertical: false)
-            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.98 : 1))
-    }
-}
-
 private struct TransferFilePreview: View {
     let url: URL?
     let name: String
@@ -271,11 +333,11 @@ private struct TransferFilePreview: View {
 
     var body: some View {
         Color.clear
-            .frame(width: TransferCardMetrics.thumb, height: TransferCardMetrics.thumb)
+            .frame(width: TransferListMetrics.thumbnail, height: TransferListMetrics.thumbnail)
             .overlay {
                 if isText {
                     Image(systemName: "text.alignleft")
-                        .font(.system(size: 26, weight: .medium))
+                        .font(.system(size: 19, weight: .medium))
                         .foregroundStyle(.tint)
                 } else if let image {
                     Image(nsImage: image)
@@ -284,14 +346,14 @@ private struct TransferFilePreview: View {
                         .scaledToFit()
                 } else {
                     Image(systemName: "doc")
-                        .font(.system(size: 28, weight: .medium))
+                        .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
             }
             .task(id: "\(url?.path ?? "")|\(name)") {
                 let fileURL = url
                 let fileName = name
-                let pixelSize = TransferCardMetrics.thumb * 2
+                let pixelSize = TransferListMetrics.thumbnail * 2
                 image = await Task.detached(priority: .utility) {
                     await TransferFileIcon.image(url: fileURL, name: fileName, pixelSize: pixelSize)
                 }.value

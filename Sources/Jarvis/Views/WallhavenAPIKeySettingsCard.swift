@@ -25,6 +25,9 @@ struct WallhavenAPIKeySettingsCard: View {
                         Image(systemName: "info.circle")
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(Color.jarvisTextSecondary)
+                            .frame(width: 24, height: 24)
+                            .background(SettingsSurface.controlFill, in: Capsule())
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Wallhaven API Key 帮助")
@@ -36,7 +39,7 @@ struct WallhavenAPIKeySettingsCard: View {
                                 .fixedSize(horizontal: false, vertical: true)
 
                             Link("去获取", destination: URL(string: "https://wallhaven.cc/settings/account")!)
-                                .font(SettingsTypography.itemSubtitle)
+                                .buttonStyle(JarvisSecondaryButtonStyle())
                         }
                         .padding(JarvisSpacing.rowInset)
                         .frame(width: 260, alignment: .leading)
@@ -116,14 +119,7 @@ struct WallhavenAPIKeySettingsCard: View {
         content()
             .frame(maxWidth: .infinity, minHeight: SettingsFormMetrics.controlHeight, alignment: .leading)
             .padding(.horizontal, JarvisSpacing.rowInset)
-            .background(
-                Color.jarvisPanel.opacity(0.72),
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
-            }
+            .modifier(SettingsCapsuleFieldModifier())
     }
 
     private func refreshStatus() {

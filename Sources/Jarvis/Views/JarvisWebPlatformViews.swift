@@ -126,7 +126,7 @@ struct JarvisWebPlatformBrowserPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Keep the page unmasked to avoid compositing every keystroke and video frame.
-        .background(Color.jarvisPanel)
+        .jarvisPanelBackground(cornerRadius: 0)
     }
 }
 
@@ -157,7 +157,7 @@ private struct JarvisWebPlatformPageStatusOverlay: View {
                     Button("重新加载") {
                         controller.reloadOrStop()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(JarvisPrimaryButtonStyle())
                 }
                 .padding(JarvisSpacing.pageInset)
                 .frame(maxWidth: 420)

@@ -28,7 +28,7 @@ public struct LANTransferCommands: Commands {
 
     public var body: some Commands {
         CommandGroup(after: .appSettings) {
-            Button(store.running ? "停止局域网共享" : "启动局域网共享") {
+            Button(store.running ? "停止文件共享" : "启动文件共享") {
                 if store.running {
                     store.stop()
                 } else {

@@ -827,13 +827,9 @@ private struct WallpaperCircleButtonStyle: ButtonStyle {
                 height: JarvisToolbarMetrics.controlSize
             )
             .opacity(configuration.isPressed ? 0.68 : 1)
-            .jarvisGlass(in: Circle())
+            .background(Color.jarvisPanel, in: Circle())
+            .jarvisButtonShadow()
             .contentShape(Circle())
-            .shadow(
-                color: Color.black.opacity(0.24),
-                radius: 6,
-                y: 2
-            )
             .scaleEffect(
                 reduceMotion ? 1 : (configuration.isPressed ? 0.94 : 1)
             )
@@ -915,15 +911,6 @@ private struct WallpaperCard: View {
                 .foregroundStyle(Color.red)
         }
         .buttonStyle(JarvisToolbarIconButtonStyle())
-        .background(
-            Color.black.opacity(0.46),
-            in: Circle()
-        )
-        .shadow(
-            color: Color.black.opacity(0.24),
-            radius: 6,
-            y: 2
-        )
         .accessibilityLabel("删除")
     }
 
@@ -1025,7 +1012,7 @@ private struct WallpaperThumbnail: View {
 
     var body: some View {
         ZStack {
-            Color.jarvisInsetSurface
+            Color.clear.jarvisPanelBackground(cornerRadius: 0)
             if let image {
                 Image(nsImage: image)
                     .resizable()

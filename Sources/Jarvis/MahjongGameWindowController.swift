@@ -1,4 +1,5 @@
 import AppKit
+import JarvisDesignSystem
 import SwiftUI
 
 /// Settlement text and the exit hooks for the table window.
@@ -108,7 +109,7 @@ final class MahjongGameWindowController: NSObject, NSWindowDelegate {
         )
         window.collectionBehavior.insert(.fullScreenPrimary)
         window.setContentSize(contentSize)
-        window.backgroundColor = MahjongTableSettings.shared.style.color
+        window.backgroundColor = JarvisSurfacePalette.windowBackgroundColor(light: MahjongTableSettings.shared.style.color)
         let hosting = NSHostingView(rootView: MahjongTableView(model: model))
         hosting.sizingOptions = []
         window.contentView = hosting

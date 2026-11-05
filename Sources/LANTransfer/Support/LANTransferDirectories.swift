@@ -16,6 +16,7 @@ enum LANTransferDirectories {
         case "com.jarvis.mac": "Jarvis"
         default: "Jarvis-Test"
         }
+        // Keep the legacy storage path stable so existing files and history remain available.
         return support
             .appendingPathComponent(jarvisDirectory, isDirectory: true)
             .appendingPathComponent("局域网传输", isDirectory: true)

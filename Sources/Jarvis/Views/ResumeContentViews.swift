@@ -108,12 +108,9 @@ struct ResumeAddButtonStyle: ButtonStyle {
             .foregroundStyle(tint ?? Color.primary)
             .padding(.horizontal, JarvisSpacing.rowInset)
             .frame(minHeight: 34)
+            .background(Color.jarvisPanel, in: Capsule())
+            .jarvisButtonShadow()
             .contentShape(Capsule())
-            .shadow(
-                color: (tint ?? Color.primary).opacity(configuration.isPressed ? 0.18 : 0.08),
-                radius: 4,
-                y: 1
-            )
             .opacity(configuration.isPressed ? 0.68 : 1)
             .scaleEffect(reduceMotion || !configuration.isPressed ? 1 : 0.985)
             .animation(
@@ -137,8 +134,6 @@ private extension ResumeContentView {
     var resumeEditorLayout: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                resumeEditorHeader
-
                 ResumeInspector(
                     draft: $workspace.document,
                     expandedSection: $expandedSection,
@@ -154,18 +149,12 @@ private extension ResumeContentView {
             documentCanvas
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .jarvisModulePanel()
     }
 
     @ToolbarContentBuilder
     var resumeLeadingToolbar: some ToolbarContent {
-        JarvisLeadingToolbarItem(id: "resume.new") {
-            Button {
-                requestNewResume()
-            } label: {
-                Text("新建简历")
-            }
-            .buttonStyle(JarvisToolbarButtonStyle.menu())
+        JarvisLeadingToolbarSurface(id: "resume.document") {
+            resumeDocumentToolbar
         }
         ToolbarSpacer(.fixed, placement: .automatic)
 
@@ -178,6 +167,14 @@ private extension ResumeContentView {
     var resumeTrailingToolbar: some ToolbarContent {
         ToolbarItem(id: "resume.zoom", placement: .automatic) {
             resumeZoomToolbar
+        }
+        ToolbarSpacer(.fixed, placement: .automatic)
+
+        ToolbarItem(id: "resume.new", placement: .automatic) {
+            Button("新建简历") {
+                requestNewResume()
+            }
+            .buttonStyle(JarvisToolbarButtonStyle.menu())
         }
         ToolbarSpacer(.fixed, placement: .automatic)
 
@@ -230,7 +227,7 @@ private extension ResumeContentView {
         )
     }
 
-    var resumeEditorHeader: some View {
+    var resumeDocumentToolbar: some View {
         HStack(alignment: .center, spacing: JarvisSpacing.itemGap) {
             resumeFilenameEditor
 
@@ -244,47 +241,31 @@ private extension ResumeContentView {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, JarvisSpacing.cardInset)
-        .padding(.top, JarvisSpacing.cardInset)
-        .padding(.bottom, JarvisSpacing.rowInset)
+        .frame(height: JarvisToolbarMetrics.controlSize)
     }
 
     var resumeFilenameEditor: some View {
-        let displayTitle = workspace.document.title.isEmpty ? "未命名简历" : workspace.document.title
-
-        return ZStack(alignment: .leading) {
-            Text(displayTitle)
-                .font(JarvisTypography.cardTitle)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, ResumeFilenameMetrics.horizontalPadding)
-                .frame(height: JarvisToolbarMetrics.controlSize)
-                .opacity(0)
-
-            TextField("", text: $workspace.document.title)
-                .textFieldStyle(.plain)
-                .font(JarvisTypography.cardTitle)
-                .lineLimit(1)
-                .focused($isFilenameFocused)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, ResumeFilenameMetrics.horizontalPadding)
-                .frame(height: JarvisToolbarMetrics.controlSize)
-                .accessibilityLabel("简历名称")
-        }
-        .contentShape(Capsule())
-        .onTapGesture {
-            isFilenameFocused = true
-        }
-        .background(Color.primary.opacity(0.07), in: Capsule())
-        .background(
-            ResumeFilenameOutsideClickMonitor(
-                isFocused: isFilenameFocused,
-                onDismiss: { finishFilenameEditing() }
+        TextField("未命名简历", text: $workspace.document.title)
+            .textFieldStyle(.plain)
+            .font(JarvisTypography.controlEmphasis)
+            .lineLimit(1)
+            .focused($isFilenameFocused)
+            .frame(width: ResumeFilenameMetrics.toolbarWidth)
+            .padding(.horizontal, ResumeFilenameMetrics.horizontalPadding)
+            .frame(height: JarvisToolbarMetrics.controlSize)
+            .accessibilityLabel("简历名称")
+            .contentShape(Capsule())
+            .onTapGesture {
+                isFilenameFocused = true
+            }
+            .background(Color.primary.opacity(0.07), in: Capsule())
+            .background(
+                ResumeFilenameOutsideClickMonitor(
+                    isFocused: isFilenameFocused,
+                    onDismiss: { finishFilenameEditing() }
+                )
             )
-        )
     }
 
     var documentCanvas: some View {
@@ -318,7 +299,6 @@ private extension ResumeContentView {
                     alignment: .top
                 )
                 .clipShape(Rectangle())
-                .shadow(color: .black.opacity(0.10), radius: 20, y: 8)
             }
             .padding(.vertical, JarvisSpacing.panelInset)
             .padding(.horizontal, JarvisSpacing.pageInset)
@@ -443,6 +423,7 @@ private extension ResumeContentView {
 }
 
 private enum ResumeFilenameMetrics {
+    static let toolbarWidth: CGFloat = 160
     static let horizontalPadding = JarvisSpacing.rowInset
 }
 
