@@ -324,7 +324,7 @@ final class AppModel {
             hotKeyID: 2
         ) { [weak self] in
             Task { @MainActor [weak self] in
-                self?.showClipboardPanel()
+                self?.toggleClipboardPanel()
             }
         }
 

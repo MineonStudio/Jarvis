@@ -13,7 +13,7 @@ macOS 26 及以上。
 或者：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MineonStudio/Jarvis/dev/install.sh | zsh
+curl -fsSL https://raw.githubusercontent.com/MineonStudio/Jarvis/main/install.sh | zsh
 ```
 
 安装包已使用固定发布证书签名。安装和更新无需在你的电脑生成证书或重新签名，正常更新不会主动清除权限。首次安装可能需要在系统设置“隐私与安全性”中允许打开。
@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/MineonStudio/Jarvis/dev/install.sh 
 卸载：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MineonStudio/Jarvis/dev/install.sh | zsh -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/MineonStudio/Jarvis/main/install.sh | zsh -s -- --uninstall
 ```
 
 卸载脚本只移除应用，保留数据和钥匙串。新版不再兼容旧版本的本机改签流程；首次切换需要手动安装并重新授权。
@@ -32,11 +32,11 @@ curl -fsSL https://raw.githubusercontent.com/MineonStudio/Jarvis/dev/install.sh 
 | --- | --- |
 | F1 | 截图 |
 | F2 | 屏幕录制（打开准备面板 / 开始 / 停止） |
-| F3 | 剪贴板 |
+| F3 | 打开或收起剪贴板面板 |
 | F4 | 开始或停止会议录音 |
 | F5 | 打开窗口布局面板，点击布局块调整当前激活窗口 |
 
-F1–F4 可以在设置里改，窗口布局固定使用 F5。剪贴板面板里，⌘1–9 或回车会粘贴。
+F1–F5 可以在设置里修改。剪贴板面板可按 F3 打开或收起，也可按 Esc 或点击面板外收起。
 
 窗口布局支持左右、上下和四角分屏，按 Esc、再次按 F5 或点击面板外取消。在设置中开启窗口拖拽布局后，拖动窗口 1000ms 会显示同一组布局面板，将鼠标移入目标布局块后松手即可应用。
 
@@ -44,7 +44,7 @@ F1–F4 可以在设置里改，窗口布局固定使用 F5。剪贴板面板里
 
 - 截图。框选，或点一个窗口。图留在原地，可以画箭头、打马赛克、写字，然后复制或另存。
 - 屏幕录制。支持全屏、窗口和自定义区域，系统声音和麦克风可独立开关，窗口隐藏时自动暂停并在恢复后继续，支持历史回看和未完成片段恢复。使用说明见 [docs/screen-recording.md](docs/screen-recording.md)。
-- 剪贴板。文本、图片、文件、视频。可以筛选、搜索、收藏。超过 1GB 的文件只记住原路径。
+- 剪贴板。文本、图片、文件、视频。可以筛选、搜索、收藏。F3 面板固定在屏幕顶部并与屏幕等宽，采用 Liquid Glass 底板和居中工具栏；时间与类型可直接分组筛选，宫格自适应铺满并保持两行展示，支持平滑展开、收起和缩放。超过 1GB 的文件只记住原路径。
 - 会议记录。麦克风和系统声音留在本机，转写也在本机。总结用设置里填的模型。第一次用要先下载本地识别模型。
 - 文件传输。在同一 Wi-Fi 或手机热点下启动共享，手机扫描二维码或输入带有 4 位访问码的共享链接，即可通过浏览器传输文件与文本；多条文本会分别保留在浏览器的传输记录中。Mac 端可选择文件或拖拽到共享区。共享目录是 `~/Library/Application Support/Jarvis/局域网传输/共享`，接收目录是同级的 `接收`，单文件上限固定为 2 GB。传输使用局域网 HTTP，请在可信网络中使用。
 - 自动更新。关于页面默认开启自动检查更新，发现新版本时在主窗口提示，可选稍后更新或立马更新。
