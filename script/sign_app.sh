@@ -21,6 +21,11 @@ else
   print -ru2 -- "Unknown signing mode: $SIGNING_MODE"
   exit 2
 fi
+# Sign the embedded native engine before sealing the application bundle.
+if [[ -f "$APP_DIR/Contents/Helpers/jarvis-meeting-engine" ]]; then
+  codesign --force --options runtime --timestamp=none --keychain "$KEYCHAIN" \
+    --sign "$FINGERPRINT" "$APP_DIR/Contents/Helpers/jarvis-meeting-engine"
+fi
 # Bound an unanswered macOS Keychain prompt; never leave a build hung forever.
 codesign --force --options runtime --timestamp=none --keychain "$KEYCHAIN" \
   --entitlements "$ROOT_DIR/Resources/Jarvis.entitlements" --sign "$FINGERPRINT" "$APP_DIR" &

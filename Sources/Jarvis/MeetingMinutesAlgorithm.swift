@@ -10,7 +10,7 @@ enum MeetingMinutesAlgorithm {
     static let uncertainSpeakerName = "说话人不确定"
     static let ownerMissingLabel = "未指定"
     static let dueMissingLabel = "未提及"
-    static let summaryCharacterRange = 200 ... 400
+    static let summaryCharacterRange = 1 ... 400
 
     struct SpeakerTurn: Equatable, Sendable {
         var speakerID: String
@@ -586,72 +586,7 @@ enum MeetingMinutesAlgorithm {
         if text.isEmpty || text == dueMissingLabel || isSpokenTimeFiller(text) {
             return AcceptedField(value: "", missing: dueMissingLabel)
         }
-        guard let absolute = absoluteDate(in: text, meetingDate: meetingDate, calendar: calendar) else {
-            return AcceptedField(value: text, missing: nil)
-        }
-        let meetingDay = dayString(meetingDate, calendar: calendar)
-        let absoluteDay = dayString(absolute, calendar: calendar)
-        if text.contains(absoluteDay) {
-            return AcceptedField(value: text, missing: nil)
-        }
-        return AcceptedField(
-            value: "\(text)（由会议日期 \(meetingDay) 换算为 \(absoluteDay)）",
-            missing: nil
-        )
-    }
-
-    private static func absoluteDate(
-        in text: String,
-        meetingDate: Date,
-        calendar: Calendar
-    ) -> Date? {
-        if text.contains("今天") {
-            return calendar.startOfDay(for: meetingDate)
-        }
-        if text.contains("明天") {
-            return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: meetingDate))
-        }
-        if text.contains("后天") {
-            return calendar.date(byAdding: .day, value: 2, to: calendar.startOfDay(for: meetingDate))
-        }
-        guard let weekday = weekday(in: text) else { return nil }
-        let wantsNextWeek = text.contains("下周")
-        let wantsThisWeek = text.contains("本周") || text.contains("这周")
-        guard wantsNextWeek || wantsThisWeek else { return nil }
-        var weekCalendar = calendar
-        weekCalendar.firstWeekday = 2
-        let start = weekCalendar.startOfDay(for: meetingDate)
-        let weekdayOfMeeting = weekCalendar.component(.weekday, from: start)
-        let daysFromMonday = (weekdayOfMeeting + 5) % 7
-        guard let monday = weekCalendar.date(byAdding: .day, value: -daysFromMonday, to: start) else {
-            return nil
-        }
-        let weekStart = wantsNextWeek
-            ? weekCalendar.date(byAdding: .day, value: 7, to: monday) ?? monday
-            : monday
-        let offset = (weekday + 5) % 7
-        return weekCalendar.date(byAdding: .day, value: offset, to: weekStart)
-    }
-
-    private static func weekday(in text: String) -> Int? {
-        let names: [(String, Int)] = [
-            ("周一", 2), ("周二", 3), ("周三", 4), ("周四", 5), ("周五", 6), ("周六", 7), ("周日", 1),
-            ("星期一", 2), ("星期二", 3), ("星期三", 4), ("星期四", 5), ("星期五", 6), ("星期六", 7), ("星期日", 1),
-            ("周天", 1), ("星期天", 1)
-        ]
-        for (name, weekday) in names where text.contains(name) {
-            return weekday
-        }
-        return nil
-    }
-
-    private static func dayString(_ date: Date, calendar: Calendar) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return AcceptedField(value: MeetingDueDate.label(text, meetingDate: meetingDate, calendar: calendar), missing: nil)
     }
 
     private static func ownerCorpus(

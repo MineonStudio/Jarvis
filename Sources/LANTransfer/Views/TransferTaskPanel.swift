@@ -128,48 +128,12 @@ struct TransferTaskPanel: View {
 
 private struct TransferTaskFilterBar: View {
     @Binding var selection: TransferTaskFilter
-    @State private var hovered: TransferTaskFilter?
-
     var body: some View {
-        HStack(spacing: JarvisSpacing.hairline) {
-            ForEach(TransferTaskFilter.allCases) { item in
-                let isSelected = selection == item
-                Button {
-                    selection = item
-                } label: {
-                    Text(item.title)
-                        .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                        .foregroundStyle(isSelected ? Color.white : Color.secondary)
-                        .padding(.horizontal, JarvisSpacing.controlGap)
-                        .frame(height: 26)
-                        .background {
-                            Capsule().fill(
-                                isSelected
-                                    ? Color.accentColor
-                                    : (hovered == item ? Color.primary.opacity(0.08) : .clear)
-                            )
-                        }
-                        .overlay {
-                            Capsule()
-                                .strokeBorder(
-                                    Color.accentColor.opacity(isSelected ? 0.42 : 0),
-                                    lineWidth: 0.75
-                                )
-                        }
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    hovered = hovering ? item : (hovered == item ? nil : hovered)
-                }
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
-            }
-        }
-        .padding(JarvisSpacing.textGap)
-        .frame(height: 32)
-        .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
-        .modifier(JarvisButtonShadowModifier())
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("任务筛选")
+        JarvisCapsuleFilterBar(
+            items: TransferTaskFilter.allCases,
+            selection: $selection,
+            accessibilityTitle: "任务筛选",
+            title: { $0.title }
+        )
     }
 }

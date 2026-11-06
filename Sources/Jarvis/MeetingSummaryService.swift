@@ -759,7 +759,7 @@ struct MeetingSummaryService: Sendable {
     只输出一个 JSON 对象，不要 Markdown，不要解释。
 
     {
-      "summary": "200到400字的概要",
+      "summary": "用一句话概括会议最重要的结论",
       "points": [
         {
           "id": "P1",
@@ -794,6 +794,7 @@ struct MeetingSummaryService: Sendable {
     - owner 只能使用逐字稿、keyword 或说话人显示名里出现过的名字。没有明确负责人时 owner 为 null，owner_missing 为「未指定」。不要猜测或编造人名。
     - 没有明确期限时 due 为 null，due_missing 为「未提及」。「待会」「回头」「尽快」不是期限。
     - 相对时间保留原话，例如「下周三」，不要改成你自己推算的日期。
+    - 按议题整理讨论；已拍板的事项以「决议：」开头，未解决的问题以「待定与风险：」开头。
     - 讨论要点写结论和分歧。不要把寒暄、确认能否听到、卡顿、散会写成要点。
     - 没有依据的 point 或 todo 不要输出。
     """
@@ -830,6 +831,8 @@ struct MeetingSummaryService: Sendable {
         会议：\(context.record.title)
         会议日期：\(context.record.createdAt.formatted(date: .numeric, time: .omitted))
         说话人：\(context.speakerNames.joined(separator: "、"))
+        术语与人名：\(MeetingRecordingPreferences.hotwords)
+        术语只用于纠正纪要中的同音错字，不据此补充事实。引用 keyword 仍保留逐字稿原文。
         \(scope)
 
         逐字稿每一行的格式是 [片段编号] 说话人：原文

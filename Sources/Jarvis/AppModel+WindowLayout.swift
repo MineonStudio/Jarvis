@@ -66,6 +66,7 @@ extension AppModel {
     }
 
     func showWindowLayoutPicker() {
+        toolUsage.recordOpen(.windowLayout)
         if windowLayoutPickerController?.isPresented == true {
             windowLayoutPickerController?.cancel(animated: true)
             return

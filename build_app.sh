@@ -34,11 +34,12 @@ JARVIS_BUNDLE_IDENTIFIER="${JARVIS_BUNDLE_IDENTIFIER:-$DEFAULT_BUNDLE_IDENTIFIER
 JARVIS_DISPLAY_NAME="${JARVIS_DISPLAY_NAME:-$DEFAULT_DISPLAY_NAME}"
 JARVIS_BUNDLE_NAME="${JARVIS_BUNDLE_NAME:-$DEFAULT_BUNDLE_NAME}"
 JARVIS_INSTALL_SOURCE="${JARVIS_INSTALL_SOURCE:-$DEFAULT_INSTALL_SOURCE}"
-JARVIS_VERSION="${JARVIS_VERSION:-1.9.9}"
-JARVIS_BUILD="${JARVIS_BUILD:-392}"
+JARVIS_VERSION="${JARVIS_VERSION:-2.0}"
+JARVIS_BUILD="${JARVIS_BUILD:-393}"
 ICON_ASSET_NAME="jarvis-${JARVIS_VERSION//./-}"
 
 cd "$ROOT_DIR"
+./script/build_meeting_engine.sh
 SWIFT_BUILD_ARGUMENTS=(-c release --scratch-path "$SWIFTPM_SCRATCH_DIR")
 if [[ "${JARVIS_WARNINGS_AS_ERRORS:-0}" == 1 ]]; then
   SWIFT_BUILD_ARGUMENTS+=(-Xswiftc -warnings-as-errors)
@@ -49,6 +50,9 @@ mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 # Remove codesign's unfinished executable left by a cancelled Keychain prompt.
 rm -f "$APP_DIR/Contents/MacOS/Jarvis.cstemp"
 cp "$BUILD_DIR/Jarvis" "$APP_DIR/Contents/MacOS/Jarvis"
+mkdir -p "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources/Licenses"
+cp "${JARVIS_ENGINE_BUILD_DIR:-/Users/Shared/Jarvis/MeetingEngine}/release/jarvis-meeting-engine" "$APP_DIR/Contents/Helpers/"
+cp "$ROOT_DIR/Engine/Meeting/vendor/Tingo-LICENSE" "$APP_DIR/Contents/Resources/Licenses/"
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 
 if [[ -d "$ROOT_DIR/Resources/AIProviderIcons" ]]; then
@@ -94,6 +98,21 @@ if [[ -d "$ROOT_DIR/Resources/GameArtwork" ]]; then
     cp "$ROOT_DIR/Resources/GameArtwork/Avatars"/*.png \
        "$APP_DIR/Contents/Resources/GameArtwork/Avatars/"
   fi
+fi
+
+if [[ -d "$ROOT_DIR/Resources/MacModels" ]]; then
+  mkdir -p "$APP_DIR/Contents/Resources/MacModels"
+  cp "$ROOT_DIR/Resources/MacModels/"*.json "$APP_DIR/Contents/Resources/MacModels/"
+fi
+
+if [[ -d "$ROOT_DIR/Resources/Calendar" ]]; then
+  mkdir -p "$APP_DIR/Contents/Resources/Calendar"
+  cp "$ROOT_DIR/Resources/Calendar/"*.json "$APP_DIR/Contents/Resources/Calendar/"
+fi
+
+if [[ -d "$ROOT_DIR/Resources/HomeTips" ]]; then
+  mkdir -p "$APP_DIR/Contents/Resources/HomeTips"
+  cp "$ROOT_DIR/Resources/HomeTips/"*.png "$APP_DIR/Contents/Resources/HomeTips/"
 fi
 
 if [[ -d "$ROOT_DIR/Resources/MahjongAudio" ]]; then

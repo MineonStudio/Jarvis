@@ -991,6 +991,7 @@ private struct WallpaperCard: View {
 
     var body: some View {
         previewContent
+            .jarvisGridCardShadow()
             .onTapGesture(count: 2, perform: onDoubleClick)
             .onHover { hovering in
                 guard hovering != isHovered else { return }

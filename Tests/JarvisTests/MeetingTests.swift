@@ -147,9 +147,10 @@ final class MeetingTests: XCTestCase {
         XCTAssertEqual(repository.loadDetail(for: record.id)?.transcript.first?.text, "先确认范围。")
     }
 
-    func testMeetingMarkdownIncludesSummaryAndTranscript() {
-        let record = MeetingRecord(
+    func testMeetingMarkdownIncludesSummaryAndTranscript() throws {
+        let record = try MeetingRecord(
             title: "周会",
+            createdAt: XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 6, hour: 12))),
             audioFileName: "meeting-\(UUID().uuidString).m4a",
             speakers: [MeetingSpeaker(id: "S1", name: "小王", colorIndex: 0)],
             transcript: [
@@ -181,7 +182,7 @@ final class MeetingTests: XCTestCase {
         XCTAssertTrue(markdown.contains("## 待办"))
         XCTAssertTrue(markdown.contains("整理接口"))
         XCTAssertTrue(markdown.contains("负责人：小王"))
-        XCTAssertTrue(markdown.contains("期限：周五"))
+        XCTAssertTrue(markdown.contains("期限：2026-11-06"))
         XCTAssertTrue(markdown.contains("**小王** 01:05"))
         XCTAssertTrue(markdown.contains("周五前给方案。"))
 
@@ -365,26 +366,29 @@ final class MeetingTests: XCTestCase {
                 )
             ]
         )
+        let record = try MeetingRecord(
+            title: "待办",
+            createdAt: XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 6, hour: 12))),
+            audioFileName: "meeting.m4a",
+            speakers: [MeetingSpeaker(id: "S1", name: "说话人 1", colorIndex: 0)],
+            transcript: [segment]
+        )
         let summary = try await MeetingSummaryService(
             api: MeetingTestAPI(summaryResponse: response)
         ).summarize(
-            record: meetingRecord(
-                title: "待办",
-                segments: [segment],
-                speakers: [MeetingSpeaker(id: "S1", name: "说话人 1", colorIndex: 0)]
-            ),
+            record: record,
             configuration: testSummaryConfiguration
         )
 
         XCTAssertEqual(summary.actionItems.map(\.owner), ["", "说话人 1"])
         XCTAssertEqual(summary.actionItems.map(\.ownerMissing), ["未指定", nil])
-        XCTAssertEqual(summary.actionItems.map(\.dueDate), ["", "周五"])
+        XCTAssertEqual(summary.actionItems.map(\.dueDate), ["", "2026-11-06"])
         XCTAssertEqual(summary.actionItems.map(\.dueMissing), ["未提及", nil])
         XCTAssertEqual(summary.actionItems.map(\.ownerLabel), ["未指定", "说话人 1"])
-        XCTAssertEqual(summary.actionItems.map(\.dueLabel), ["未提及", "周五"])
+        XCTAssertEqual(summary.actionItems.map(\.dueLabel), ["未提及", "2026-11-06"])
     }
 
-    func testRelativeDueDateKeepsSpokenWordsAndAddsMeetingDate() throws {
+    func testRelativeDueDateBecomesConcreteDate() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
         calendar.locale = Locale(identifier: "zh_CN")
@@ -424,7 +428,7 @@ final class MeetingTests: XCTestCase {
         )
         XCTAssertEqual(
             result.summary.actionItems.first?.dueDate,
-            "下周三（由会议日期 2026-10-07 换算为 2026-10-14）"
+            "2026-10-14"
         )
     }
 

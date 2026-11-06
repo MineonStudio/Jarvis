@@ -26,6 +26,11 @@ enum JarvisMotion {
         reduceMotion ? nil : animation
     }
 
+    /// Reveal a history card's metadata and actions in the same hover transaction.
+    static func cardOverlayTransition(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .identity : .opacity.combined(with: .offset(y: 8))
+    }
+
     static func contentTransition(reduceMotion: Bool) -> AnyTransition {
         reduceMotion
             ? .identity

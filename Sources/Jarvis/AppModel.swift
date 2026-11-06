@@ -70,6 +70,7 @@ enum AppSection: Hashable, Identifiable {
 @Observable
 final class AppModel {
     var selectedSection: AppSection = .home
+    let toolUsage = HomeToolUsageStore()
     var screenRecording = ScreenRecordingCoordinator()
     var clipboardItems: [ClipboardItem] = []
     var latestScreenshotData: Data?
@@ -114,6 +115,13 @@ final class AppModel {
     /// Minutes still arriving from the model, keyed by meeting. Kept out of the records so
     /// a preview is never stored, exported or searched before the finished answer lands.
     var meetingLiveSummaries: [UUID: MeetingSummary] = [:]
+    var meetingImportInProgress = false
+    var meetingFinalizingIDs: Set<UUID> = []
+    @ObservationIgnored var meetingLiveGeneration: UUID?
+    var meetingLiveLines: [MeetingLiveLine] = []
+    var meetingCaptureMode: MeetingCaptureMode = .dual
+    @ObservationIgnored var meetingLiveEngine: MeetingLiveEngine?
+    @ObservationIgnored var meetingCompletedTranscriptions: [UUID: MeetingTranscriptionResult] = [:]
     var meetingElapsed: TimeInterval = 0
     var meetingElapsedOrigin = Date()
     var meetingElapsedAccumulated: TimeInterval = 0
@@ -134,8 +142,7 @@ final class AppModel {
     var meetingModelDownloadTotalBytes: Int64 = 0
     var meetingModelState: MeetingModelPreparationState = .checking
     var meetingModelAvailability = MeetingModelAvailability(
-        speakerDiarizationReady: false,
-        chineseTranscriptionReady: false
+        paraformerReady: false
     )
     var canManageMeetingModels: Bool {
         guard meetingModelPreparationTask == nil,
@@ -219,6 +226,8 @@ final class AppModel {
     @ObservationIgnored var meetingRecordingTimer: Task<Void, Never>?
     @ObservationIgnored var meetingPreserveUserEdits = true
     @ObservationIgnored var meetingProcessingTask: Task<Void, Never>?
+    @ObservationIgnored var meetingTitleTasks: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored var meetingTitleGenerationIDs: [UUID: UUID] = [:]
     @ObservationIgnored var meetingModelPreparationTask: Task<Void, Never>?
     @ObservationIgnored var meetingModelAvailabilityTask: Task<Void, Never>?
     @ObservationIgnored var meetingCurrentRecordingID: UUID?
@@ -246,7 +255,7 @@ final class AppModel {
     init(
         aiAPIConnectionTester: any AIAPIConnectionTesting = OpenAICompatibleAPIClient(),
         aiTextCompletionAPI: any AITextCompletionAPI = OpenAICompatibleAPIClient(),
-        meetingTranscriptionService: any MeetingTranscribing = FluidAudioMeetingTranscriptionService()
+        meetingTranscriptionService: any MeetingTranscribing = SherpaMeetingTranscriptionService()
     ) {
         self.aiAPIConnectionTester = aiAPIConnectionTester
         self.aiTextCompletionAPI = aiTextCompletionAPI
@@ -375,6 +384,7 @@ final class AppModel {
         aiModelsRefreshTask?.cancel()
         meetingRecordingTimer?.cancel()
         meetingProcessingTask?.cancel()
+        meetingTitleTasks.values.forEach { $0.cancel() }
         meetingModelPreparationTask?.cancel()
         meetingModelAvailabilityTask?.cancel()
     }

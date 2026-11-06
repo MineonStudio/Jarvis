@@ -285,6 +285,7 @@ extension AppModel {
     }
 
     func showClipboardPanel() {
+        toolUsage.recordOpen(.clipboard)
         clipboardPanelController.show(app: self)
     }
 

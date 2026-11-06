@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shared bottom overlay for screenshot, recording, clipboard, and resume cards.
+/// Shared hover metadata overlay for screenshot, recording, and clipboard cards.
 /// It stays fixed while the preview underneath keeps its hover animation.
 private struct HistoryCardMetadataModifier: ViewModifier {
     func body(content: Content) -> some View {
@@ -15,16 +15,16 @@ private struct HistoryCardMetadataModifier: ViewModifier {
             .background {
                 LinearGradient(
                     // Keep a soft fade for every grid's metadata. The bottom
-                    // caps at 48% black so the preview remains visible.
+                    // caps at 28% black so the preview remains visible.
                     stops: [
                         .init(color: .black.opacity(0), location: 0),
-                        .init(color: .black.opacity(0.01), location: 0.15),
-                        .init(color: .black.opacity(0.04), location: 0.30),
-                        .init(color: .black.opacity(0.10), location: 0.45),
-                        .init(color: .black.opacity(0.20), location: 0.60),
-                        .init(color: .black.opacity(0.32), location: 0.75),
-                        .init(color: .black.opacity(0.43), location: 0.90),
-                        .init(color: .black.opacity(0.48), location: 1)
+                        .init(color: .black.opacity(0.005), location: 0.15),
+                        .init(color: .black.opacity(0.02), location: 0.30),
+                        .init(color: .black.opacity(0.05), location: 0.45),
+                        .init(color: .black.opacity(0.10), location: 0.60),
+                        .init(color: .black.opacity(0.17), location: 0.75),
+                        .init(color: .black.opacity(0.24), location: 0.90),
+                        .init(color: .black.opacity(0.28), location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
