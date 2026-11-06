@@ -6,6 +6,32 @@ import XCTest
 
 @MainActor
 final class ClipboardPanelControllerTests: XCTestCase {
+    func testEscapeClosesShelfWhenFocusedTextEditorConsumesCancel() throws {
+        _ = NSApplication.shared
+        let controller = ClipboardPanelController(animationsEnabled: false)
+        defer { controller.hide() }
+        controller.show { AnyView(Color.clear) }
+        let panel = try XCTUnwrap(controller.panel)
+        let editor = ClipboardEscapeConsumingEditor(frame: NSRect(x: 0, y: 0, width: 200, height: 30))
+        panel.contentView = editor
+        XCTAssertTrue(panel.makeFirstResponder(editor))
+        func key(_ code: UInt16, characters: String) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code
+            ))
+        }
+        try panel.sendEvent(key(0, characters: "a"))
+        XCTAssertEqual(editor.receivedKeys, [0])
+        XCTAssertTrue(controller.isPresented)
+
+        try panel.sendEvent(key(JarvisKeyCode.escape, characters: "\u{1b}"))
+        XCTAssertFalse(controller.isPresented)
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertEqual(editor.receivedKeys, [0], "Escape should dismiss before the text editor consumes it")
+    }
+
     func testShelfHasNoWindowControlsAndCanCloseAndReopenWithoutRecreatingContent() throws {
         _ = NSApplication.shared
         let controller = ClipboardPanelController(animationsEnabled: false)
@@ -178,4 +204,14 @@ final class ClipboardPanelControllerTests: XCTestCase {
             }
         }
     }
+}
+
+@MainActor
+private final class ClipboardEscapeConsumingEditor: NSTextView {
+    var receivedKeys: [UInt16] = []
+    override func keyDown(with event: NSEvent) {
+        receivedKeys.append(event.keyCode)
+    }
+
+    override func cancelOperation(_: Any?) {}
 }

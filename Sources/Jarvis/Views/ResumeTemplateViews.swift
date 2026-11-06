@@ -44,16 +44,20 @@ private struct ResumeTemplateCard: View {
     }
 
     var body: some View {
-        HistoryCardChrome(
-            preview: cover,
-            width: ResumeTemplateThumbnail.size.width,
-            height: ResumeTemplateThumbnail.size.height,
-            isSelected: false,
-            cornerRadius: 0
-        )
-        .overlay(alignment: .bottom) { metadataRow }
-        .overlay(alignment: .topTrailing) { useActionOverlay }
-        .clipShape(Rectangle())
+        VStack(spacing: JarvisSpacing.controlGap) {
+            HistoryCardChrome(
+                preview: cover,
+                width: ResumeTemplateThumbnail.size.width,
+                height: ResumeTemplateThumbnail.size.height,
+                isSelected: false,
+                cornerRadius: 0
+            )
+            .overlay(alignment: .topTrailing) { useActionOverlay }
+            .clipShape(Rectangle())
+            .jarvisGridCardShadow(cornerRadius: 0)
+            metadataRow
+        }
+        .frame(width: ResumeTemplateThumbnail.size.width)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { onSelect(template) }
         .onHover { hovering in
@@ -96,11 +100,13 @@ private struct ResumeTemplateCard: View {
                 .lineLimit(1)
             Spacer(minLength: JarvisSpacing.textGap)
             Text(template.title)
-                .font(JarvisTypography.caption)
+                .font(JarvisTypography.captionEmphasis)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
-        .historyCardMetadata()
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, JarvisSpacing.textGap)
     }
 
     @ViewBuilder

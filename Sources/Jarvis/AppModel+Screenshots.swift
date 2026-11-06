@@ -20,6 +20,7 @@ extension AppModel {
     /// inside the main window can select the screenshot tab themselves before
     /// invoking this method.
     func captureScreenshot() {
+        toolUsage.recordOpen(.screenshot)
         refreshPermissionStatus()
         guard screenCapturePermissionGranted else {
             promptForTaskPermission(.screenCapture)

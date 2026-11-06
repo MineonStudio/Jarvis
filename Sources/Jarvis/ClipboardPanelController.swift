@@ -283,6 +283,20 @@ private final class ClipboardShelfPanel: NSPanel {
     override func cancelOperation(_: Any?) {
         onCancel?()
     }
+
+    override func sendEvent(_ event: NSEvent) {
+        // SwiftUI's search field can consume cancelOperation before it reaches
+        // the panel. Handle bare Escape before dispatching to the focused view.
+        if event.type == .keyDown, event.keyCode == JarvisKeyCode.escape,
+           event.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift]),
+           attachedSheet == nil,
+           (firstResponder as? NSTextInputClient)?.hasMarkedText() != true
+        {
+            onCancel?()
+            return
+        }
+        super.sendEvent(event)
+    }
 }
 
 /// Keep the window silhouette rounded synchronously with AppKit resizing,
@@ -324,6 +338,7 @@ private final class ClipboardShelfHostingView: NSHostingView<AnyView> {
 
 extension AppModel {
     func toggleClipboardPanel() {
+        toolUsage.recordOpen(.clipboard)
         clipboardPanelController.toggle(app: self)
     }
 }

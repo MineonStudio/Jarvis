@@ -18,3 +18,5 @@ DerivedData/
 /测试报告.md
 /会议记录模块审计.md
 .codex/
+
+Engine/Meeting/target/

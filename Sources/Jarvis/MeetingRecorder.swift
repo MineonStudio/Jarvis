@@ -14,274 +14,87 @@ struct MeetingRecordingStopResult: Sendable {
 
 @MainActor
 final class MeetingRecorder {
-    private let systemAudioRecorder = MeetingSystemAudioRecorder()
-    private var systemAudioStarted = false
-    /// 上一次 stop() 的异步收尾是否在途。App 层在发起 stop 时同步立起（Task 调度有窗口），
-    /// stop() 返回时由 defer 落下。start 前必须检查：否则旧 stop 恢复后会清掉新会话的
-    /// 采集状态，新录音收不到系统音频但 UI 显示正常（S-3）。
+    private var capture: MeetingCaptureSession?
     private(set) var isStopping = false
     private(set) var isPaused = false
+    private(set) var directory: URL?
+    private var mode: MeetingCaptureMode = .dual
     var onAudioEvent: (@MainActor (MeetingAudioEvent) -> Void)?
-
-    private var meetingID: UUID?
-    private var directoryURL: URL?
-    private var canonicalSystemURL: URL?
-    private var closedChunks: [MeetingAudioChunk] = []
-    private var systemChunkIndex = 0
-    private var wallAnchor = Date()
-    private var pausedDuration: TimeInterval = 0
-    private var pauseBegan: Date?
-    private var accountedGap: TimeInterval = 0
-
     var isRecording: Bool {
-        systemAudioStarted && isSessionOpen && !isPaused
+        capture != nil && !isPaused
+    }
+
+    var captureFailure: String? {
+        capture?.failureMessage
     }
 
     var isSessionOpen: Bool {
-        meetingID != nil
+        capture != nil
     }
 
     func systemAveragePower() -> Float? {
-        systemAudioRecorder.latestPower
+        capture?.latestPower
     }
 
     func writtenByteCount() -> Int64 {
-        guard let directoryURL, meetingID != nil else { return 0 }
-        let names = closedChunks.map(\.fileName) + [currentSystemFileName].compactMap { $0 }
-        return names.reduce(into: Int64(0)) { total, name in
-            let url = directoryURL.appendingPathComponent(name)
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
-            total += size
+        guard let directory else { return 0 }
+        return ["system.wav", "mic.wav"].reduce(0) { total, name in
+            total + Int64((try? directory.appendingPathComponent(name).resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         }
     }
 
     func snapshotChunks() -> [MeetingAudioChunk] {
-        var chunks = closedChunks
-        if let open = openSystemChunk() {
-            chunks.append(open)
-        }
-        return chunks
+        []
     }
 
     func closedChunksSnapshot() -> [MeetingAudioChunk] {
-        closedChunks
+        []
     }
 
-    func start(
-        meetingID: UUID,
-        systemAudioURL: URL
-    ) async throws {
-        guard !isStopping else {
-            throw MeetingRecorderError.stopInProgress
-        }
-        guard !isSessionOpen else { return }
-
-        self.meetingID = meetingID
-        directoryURL = systemAudioURL.deletingLastPathComponent()
-        canonicalSystemURL = systemAudioURL
-        closedChunks = []
-        systemChunkIndex = 0
-        pausedDuration = 0
-        pauseBegan = nil
-        accountedGap = 0
-        isPaused = false
-        wallAnchor = Date()
-
-        do {
-            let chunkURL = try systemChunkURL(index: 0)
-            try await systemAudioRecorder.start(to: chunkURL)
-            systemAudioStarted = true
-        } catch {
-            await discard()
-            throw error
-        }
+    func rotateIfDue() -> [MeetingAudioChunk] {
+        []
     }
 
-    /// stop() 被丢进 Task 时同步立 flag：Task 调度有个窗口，不提前立的话
-    /// start 能从窗口溜进去。stop() 返回时由 defer 落下。
     func markStopInFlight() {
         isStopping = true
     }
 
-    /// Closes the open slice once it reaches 30 seconds. Returns slices that just closed.
-    func rotateIfDue() -> [MeetingAudioChunk] {
-        guard isSessionOpen, !isPaused else { return [] }
-        var closed: [MeetingAudioChunk] = []
-        if systemAudioStarted, systemAudioRecorder.currentDuration >= MeetingAudioChunkFile.sliceDuration {
-            if let chunk = finalizeSystemChunk() {
-                closedChunks.append(chunk)
-                closed.append(chunk)
-            }
-        }
-        if let event = gapEventIfNeeded() {
-            onAudioEvent?(event)
-        }
-        return closed
+    func start(meetingID: UUID, systemAudioURL: URL, mode: MeetingCaptureMode = .dual) async throws {
+        guard !isStopping else { throw MeetingRecorderError.stopInProgress }
+        guard capture == nil else { return }
+        let directory = systemAudioURL.deletingLastPathComponent().appendingPathComponent("meeting-\(meetingID.uuidString).capture")
+        self.directory = directory; self.mode = mode
+        let session = try MeetingCaptureSession()
+        do { try await session.start(directory: directory, mode: mode); capture = session } catch { _ = await session.stop(); throw error }
     }
 
     func pauseRecording() {
-        guard isSessionOpen, !isPaused else { return }
-        if systemAudioStarted, let chunk = finalizeSystemChunk() {
-            closedChunks.append(chunk)
-        }
-        systemAudioRecorder.setDroppingSamples(true)
-        pauseBegan = Date()
-        isPaused = true
+        capture?.setPaused(true); isPaused = true
     }
 
     func resumeRecording() throws {
-        guard isPaused else { return }
-        if let pauseBegan {
-            pausedDuration += Date().timeIntervalSince(pauseBegan)
-        }
-        pauseBegan = nil
-        isPaused = false
-        systemAudioRecorder.setDroppingSamples(false)
+        capture?.setPaused(false); isPaused = false
     }
 
     func stop() async -> MeetingRecordingStopResult {
         isStopping = true
-        defer { isStopping = false }
-        let stats = await systemAudioRecorder.stop()
-        if systemAudioStarted, stats.didWriteAudio, let chunk = takeOpenSystemChunk(duration: stats.duration) {
-            closedChunks.append(chunk)
-        }
-        let finishedChunks = closedChunks
-        let capturedSystemAudio = systemAudioStarted && stats.didWriteAudio
-            && finishedChunks.contains { $0.kind == .system }
-        var duration = finishedChunks.filter { $0.kind == .system }.reduce(0) { $0 + $1.duration }
-        if capturedSystemAudio, let systemURL = canonicalSystemURL {
-            let systemURLs = chunkURLs(kind: .system)
-            if let assembled = try? await MeetingAudioAssembler.concatenate(urls: systemURLs, outputURL: systemURL) {
-                duration = max(duration, assembled)
-                removeChunkFiles(kind: .system)
-            }
-        }
-        let result = MeetingRecordingStopResult(
-            duration: max(duration, 0),
-            systemAudioStarted: capturedSystemAudio,
-            systemAudioErrorMessage: stats.failureMessage,
-            chunks: finishedChunks
+        defer { isStopping = false; isPaused = false; capture = nil }
+        let session = capture
+        let duration = await session?.stop() ?? 0
+        return MeetingRecordingStopResult(
+            duration: duration,
+            systemAudioStarted: mode != .microphone,
+            systemAudioErrorMessage: session?.failureMessage,
+            chunks: []
         )
-        resetSession()
-        return result
     }
 
-    /// Drops a session that never became a meeting. Does not write the canonical files.
     func discard() async {
-        isStopping = true
-        defer { isStopping = false }
-        _ = await systemAudioRecorder.stop()
-        if let directoryURL, let meetingID {
-            let prefix = "meeting-\(meetingID.uuidString)."
-            let files = (try? FileManager.default.contentsOfDirectory(
-                at: directoryURL,
-                includingPropertiesForKeys: nil
-            )) ?? []
-            for url in files where url.lastPathComponent.hasPrefix(prefix) {
-                try? FileManager.default.removeItem(at: url)
-            }
+        _ = await stop()
+        if let directory {
+            try? FileManager.default.removeItem(at: directory)
         }
-        if let canonicalSystemURL {
-            try? FileManager.default.removeItem(at: canonicalSystemURL)
-        }
-        resetSession()
-    }
-
-    private var currentSystemFileName: String? {
-        guard let meetingID, systemAudioStarted || systemChunkIndex > 0 else { return nil }
-        return MeetingAudioChunkFile.systemName(meetingID: meetingID, index: systemChunkIndex)
-    }
-
-    private func finalizeSystemChunk() -> MeetingAudioChunk? {
-        guard let meetingID, let directoryURL else { return nil }
-        let duration = systemAudioRecorder.currentDuration
-        let closedName = MeetingAudioChunkFile.systemName(meetingID: meetingID, index: systemChunkIndex)
-        let closedIndex = systemChunkIndex
-        systemChunkIndex += 1
-        let nextURL = directoryURL.appendingPathComponent(
-            MeetingAudioChunkFile.systemName(meetingID: meetingID, index: systemChunkIndex)
-        )
-        systemAudioRecorder.rotate(to: nextURL)
-        guard duration > 0 else { return nil }
-        return MeetingAudioChunk(
-            kind: .system,
-            index: closedIndex,
-            fileName: closedName,
-            startOffset: closedChunks.filter { $0.kind == .system }.reduce(0) { $0 + $1.duration },
-            duration: duration,
-            closed: true
-        )
-    }
-
-    private func takeOpenSystemChunk(duration: TimeInterval) -> MeetingAudioChunk? {
-        guard let meetingID, duration > 0 else { return nil }
-        return MeetingAudioChunk(
-            kind: .system,
-            index: systemChunkIndex,
-            fileName: MeetingAudioChunkFile.systemName(meetingID: meetingID, index: systemChunkIndex),
-            startOffset: closedChunks.filter { $0.kind == .system }.reduce(0) { $0 + $1.duration },
-            duration: duration,
-            closed: true
-        )
-    }
-
-    private func openSystemChunk() -> MeetingAudioChunk? {
-        guard let meetingID, systemAudioStarted else { return nil }
-        let duration = systemAudioRecorder.currentDuration
-        guard duration > 0 else { return nil }
-        return MeetingAudioChunk(
-            kind: .system,
-            index: systemChunkIndex,
-            fileName: MeetingAudioChunkFile.systemName(meetingID: meetingID, index: systemChunkIndex),
-            startOffset: closedChunks.filter { $0.kind == .system }.reduce(0) { $0 + $1.duration },
-            duration: duration,
-            closed: false
-        )
-    }
-
-    private func chunkURLs(kind: MeetingAudioChunkKind) -> [URL] {
-        guard let directoryURL else { return [] }
-        return closedChunks.filter { $0.kind == kind }.map { directoryURL.appendingPathComponent($0.fileName) }
-    }
-
-    private func removeChunkFiles(kind: MeetingAudioChunkKind) {
-        for url in chunkURLs(kind: kind) {
-            try? FileManager.default.removeItem(at: url)
-        }
-        closedChunks.removeAll { $0.kind == kind }
-    }
-
-    private func systemChunkURL(index: Int) throws -> URL {
-        guard let meetingID, let directoryURL else { throw MeetingRecorderError.cannotStart }
-        let name = MeetingAudioChunkFile.systemName(meetingID: meetingID, index: index)
-        return directoryURL.appendingPathComponent(name)
-    }
-
-    private func gapEventIfNeeded() -> MeetingAudioEvent? {
-        let recorded = closedChunks.filter { $0.kind == .system }.reduce(0) { $0 + $1.duration }
-            + (systemAudioStarted ? systemAudioRecorder.currentDuration : 0)
-        var wall = Date().timeIntervalSince(wallAnchor) - pausedDuration
-        if let pauseBegan {
-            wall -= Date().timeIntervalSince(pauseBegan)
-        }
-        let gap = wall - recorded
-        guard gap > accountedGap + 5 else { return nil }
-        accountedGap = gap
-        return MeetingAudioEvent(
-            at: recorded,
-            kind: .gap,
-            message: "录音中断超过 5 秒，已写入恢复标记"
-        )
-    }
-
-    private func resetSession() {
-        meetingID = nil
-        directoryURL = nil
-        canonicalSystemURL = nil
-        closedChunks = []
-        systemAudioStarted = false
-        isPaused = false
+        directory = nil
     }
 }
 
@@ -310,290 +123,6 @@ struct MeetingSystemLevelState: Equatable {
     mutating func freezeSilent() {
         frozen = true
         power = Self.silentFloor
-    }
-}
-
-private final class MeetingSystemAudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
-    enum Error: LocalizedError {
-        case permissionDenied
-        case noDisplay
-        case captureFailed(String)
-
-        var errorDescription: String? {
-            switch self {
-            case .permissionDenied:
-                "未开启屏幕录制权限，无法采集系统音频。请到系统设置 > 隐私与安全性 > 屏幕录制，允许Jarvis。"
-            case .noDisplay:
-                "未找到可用于系统音频采集的显示器"
-            case let .captureFailed(message):
-                "系统音频采集失败：\(message)"
-            }
-        }
-    }
-
-    private let stateLock = NSLock()
-    private let writeQueue = DispatchQueue(
-        label: "com.jarvis.meeting.system-audio-writer",
-        qos: .userInitiated
-    )
-    private var stream: SCStream?
-    private var outputURL: URL?
-    private var audioFile: AVAudioFile?
-    private var didWriteAudio = false
-    private var failureMessage: String?
-    private var stopRequested = false
-    private var levelState = MeetingSystemLevelState()
-
-    func start(to url: URL) async throws {
-        guard CGPreflightScreenCaptureAccess() else {
-            throw Error.permissionDenied
-        }
-
-        let content: SCShareableContent
-        do {
-            content = try await SCShareableContent.excludingDesktopWindows(
-                false,
-                onScreenWindowsOnly: false
-            )
-        } catch {
-            throw Error.captureFailed(error.localizedDescription)
-        }
-
-        guard let display = content.displays.first else {
-            throw Error.noDisplay
-        }
-
-        try? FileManager.default.removeItem(at: url)
-        let filter = SCContentFilter(
-            display: display,
-            excludingApplications: [],
-            exceptingWindows: []
-        )
-        let configuration = SCStreamConfiguration()
-        configuration.width = 2
-        configuration.height = 2
-        configuration.capturesAudio = true
-        configuration.sampleRate = 48000
-        configuration.channelCount = 2
-        // Do not record Jarvis's own sounds into a meeting source track.
-        configuration.excludesCurrentProcessAudio = true
-
-        let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
-        do {
-            try stream.addStreamOutput(
-                self,
-                type: .audio,
-                sampleHandlerQueue: writeQueue
-            )
-            setCaptureState(stream: stream, outputURL: url)
-
-            try await stream.startCapture()
-        } catch {
-            clearCaptureState()
-            throw Error.captureFailed(error.localizedDescription)
-        }
-    }
-
-    struct CaptureStats: Sendable {
-        let didWriteAudio: Bool
-        let failureMessage: String?
-        let duration: TimeInterval
-    }
-
-    private var droppingSamples = false
-    private var framesWritten: AVAudioFramePosition = 0
-    private var sampleRate: Double = 48000
-
-    var latestPower: Float? {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return levelState.power
-    }
-
-    var currentDuration: TimeInterval {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        guard sampleRate > 0 else { return 0 }
-        return Double(framesWritten) / sampleRate
-    }
-
-    func setDroppingSamples(_ dropping: Bool) {
-        stateLock.lock()
-        droppingSamples = dropping
-        stateLock.unlock()
-    }
-
-    private func markStopRequested() {
-        stateLock.lock()
-        stopRequested = true
-        stateLock.unlock()
-    }
-
-    func rotate(to url: URL) {
-        writeQueue.sync {
-            stateLock.lock()
-            audioFile = nil
-            outputURL = url
-            framesWritten = 0
-            stateLock.unlock()
-        }
-    }
-
-    func stop() async -> CaptureStats {
-        markStopRequested()
-        let stream = currentStream()
-
-        if let stream {
-            try? await stream.stopCapture()
-        }
-
-        // stopCapture finishes callbacks asynchronously. This synchronization
-        // drains queued sample buffers before the CAF is used for transcription.
-        writeQueue.sync {}
-        let stats = captureStats()
-        clearCaptureState()
-        return stats
-    }
-
-    private func captureStats() -> CaptureStats {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return CaptureStats(
-            didWriteAudio: didWriteAudio,
-            failureMessage: failureMessage,
-            duration: sampleRate > 0 ? Double(framesWritten) / sampleRate : 0
-        )
-    }
-
-    func stream(
-        _: SCStream,
-        didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
-        of type: SCStreamOutputType
-    ) {
-        guard type == .audio, sampleBuffer.isValid else { return }
-        guard let outputURL = lockedOutputURL() else { return }
-
-        try? sampleBuffer.withAudioBufferList { audioBufferList, _ in
-            guard let formatDescription = sampleBuffer.formatDescription,
-                  let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(
-                      formatDescription
-                  ),
-                  let format = AVAudioFormat(streamDescription: streamDescription),
-                  let buffer = AVAudioPCMBuffer(
-                      pcmFormat: format,
-                      bufferListNoCopy: audioBufferList.unsafePointer
-                  )
-            else { return }
-
-            self.stateLock.lock()
-            let dropping = self.droppingSamples
-            self.stateLock.unlock()
-            if let packet = MeetingPCMPacket(buffer: buffer) {
-                let power = Self.powerDB(samples: packet.samples)
-                self.stateLock.lock()
-                self.levelState.observe(power)
-                self.stateLock.unlock()
-            }
-            if dropping {
-                return
-            }
-
-            // #13：audioFile 引用的创建与读取统一走 stateLock——writeQueue 与
-            // stop() 路径（clearCaptureState 置 nil）并发访问，类是 @unchecked Sendable。
-            // 锁内不调 recordFailure（它自己也拿锁，会死锁），先解锁再记失败。
-            self.stateLock.lock()
-            if self.audioFile == nil {
-                do {
-                    self.audioFile = try AVAudioFile(
-                        forWriting: outputURL,
-                        settings: format.settings
-                    )
-                    self.sampleRate = format.sampleRate
-                } catch {
-                    self.stateLock.unlock()
-                    self.recordFailure("无法写入系统音频：\(error.localizedDescription)")
-                    return
-                }
-            }
-            let audioFile = self.audioFile
-            self.stateLock.unlock()
-
-            do {
-                try audioFile?.write(from: buffer)
-                self.stateLock.lock()
-                didWriteAudio = true
-                framesWritten += AVAudioFramePosition(buffer.frameLength)
-                self.stateLock.unlock()
-            } catch {
-                self.recordFailure("系统音频写入中断：\(error.localizedDescription)")
-            }
-        }
-    }
-
-    func stream(_ stream: SCStream, didStopWithError error: Swift.Error) {
-        stateLock.lock()
-        let current = self.stream
-        let stopping = stopRequested
-        stateLock.unlock()
-        guard stream === current, MeetingSystemLevelState.shouldFreeze(stopRequested: stopping) else {
-            return
-        }
-        recordFailure("系统音频采集中断：\(error.localizedDescription)")
-        stateLock.lock()
-        levelState.freezeSilent()
-        stateLock.unlock()
-    }
-
-    private static func powerDB(samples: [Float]) -> Float {
-        guard !samples.isEmpty else { return -160 }
-        var sum: Float = 0
-        for sample in samples {
-            sum += sample * sample
-        }
-        let rms = sqrt(sum / Float(samples.count))
-        return 20 * log10(max(rms, 0.000_000_1))
-    }
-
-    private func recordFailure(_ message: String) {
-        stateLock.lock()
-        if failureMessage == nil {
-            failureMessage = message
-        }
-        stateLock.unlock()
-    }
-
-    private func lockedOutputURL() -> URL? {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return outputURL
-    }
-
-    private func currentStream() -> SCStream? {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return stream
-    }
-
-    private func setCaptureState(stream: SCStream, outputURL: URL) {
-        stateLock.lock()
-        self.stream = stream
-        self.outputURL = outputURL
-        audioFile = nil
-        didWriteAudio = false
-        failureMessage = nil
-        framesWritten = 0
-        stopRequested = false
-        levelState = MeetingSystemLevelState()
-        droppingSamples = false
-        stateLock.unlock()
-    }
-
-    private func clearCaptureState() {
-        stateLock.lock()
-        audioFile = nil
-        stream = nil
-        outputURL = nil
-        stateLock.unlock()
     }
 }
 

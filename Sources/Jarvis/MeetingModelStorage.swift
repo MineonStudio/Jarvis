@@ -1,38 +1,26 @@
-import FluidAudio
 import Foundation
 
 enum MeetingModelStorage {
-    static func availability(fileManager: FileManager = .default) -> MeetingModelAvailability {
-        MeetingModelAvailability(
-            speakerDiarizationReady: isOfflineDiarizationReady(fileManager: fileManager),
-            chineseTranscriptionReady: false
-        )
+    static let requiredFiles = ["paraformer/model.int8.onnx", "paraformer/tokens.txt", "silero_vad.onnx", "punct/model.int8.onnx", "campplus_zh.onnx", "verified.json"]
+    static func availability(fileManager _: FileManager = .default) -> MeetingModelAvailability {
+        let ready = requiredFiles.allSatisfy { name in
+            let url = MeetingEnginePaths.models.appendingPathComponent(name)
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            return size > 0
+        }
+        return MeetingModelAvailability(paraformerReady: ready)
     }
 
-    static func removeModel(
-        for stage: MeetingModelPreparationStage,
-        fileManager: FileManager = .default
-    ) throws {
-        guard stage == .speakerDiarization else { return }
-        let directory = diarizerDirectory
-        guard fileManager.fileExists(atPath: directory.path) else { return }
-        try fileManager.removeItem(at: directory)
+    static func markVerified() throws {
+        let directory = MeetingEnginePaths.models
+        JarvisProtectedStorage.prepareDirectory(directory)
+        try Data("{\"pipeline\":1,\"model\":\"Paraformer-large\"}".utf8)
+            .write(to: directory.appendingPathComponent("verified.json"), options: .atomic)
     }
 
-    private static var diarizerDirectory: URL {
-        MLModelConfigurationUtils.defaultModelsDirectory(for: .diarizer)
-    }
-
-    private static func isOfflineDiarizationReady(fileManager: FileManager) -> Bool {
-        let directory = diarizerDirectory
-        return ModelNames.OfflineDiarizer.requiredModels.allSatisfy { name in
-            let url = directory.appendingPathComponent(name, isDirectory: name.hasSuffix(".mlmodelc"))
-            if name.hasSuffix(".mlmodelc") {
-                return fileManager.fileExists(
-                    atPath: url.appendingPathComponent("coremldata.bin").path
-                )
-            }
-            return fileManager.fileExists(atPath: url.path)
+    static func removeModel(for _: MeetingModelPreparationStage, fileManager: FileManager = .default) throws {
+        if fileManager.fileExists(atPath: MeetingEnginePaths.models.path) {
+            try fileManager.removeItem(at: MeetingEnginePaths.models)
         }
     }
 }

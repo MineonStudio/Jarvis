@@ -286,7 +286,7 @@ struct SettingsView: View {
     private var automaticUpdatesSettingsCard: some View {
         SettingsContentPanel {
             HStack(spacing: JarvisSpacing.groupGap) {
-                Toggle("自动更新", isOn: Binding(
+                Toggle("自动检测更新", isOn: Binding(
                     get: { app.automaticUpdatesEnabled },
                     set: { app.updateAutomaticUpdatesEnabled($0) }
                 ))

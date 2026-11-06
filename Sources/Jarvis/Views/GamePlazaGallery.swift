@@ -67,6 +67,7 @@ private struct GamePosterCard: View {
                 cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
                 style: .continuous
             ))
+            .jarvisGridCardShadow()
             .contentShape(RoundedRectangle(
                 cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
                 style: .continuous

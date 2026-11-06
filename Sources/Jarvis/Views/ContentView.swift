@@ -50,6 +50,8 @@ struct ContentView: View {
                 )
         }
         .background(Color.jarvisBackground.ignoresSafeArea())
+        .toolbarVisibility(.visible, for: .windowToolbar)
+        .toolbarBackgroundVisibility(loadedSection == .home ? .hidden : .automatic, for: .windowToolbar)
         .jarvisToastOverlay(app.toastMessage)
         .tint(app.accentColorPreference.resolvedColor)
         .coordinateSpace(name: Self.homePointerCoordinateSpace)
@@ -112,6 +114,9 @@ struct ContentView: View {
     }
 
     private func selectSection(_ section: TopLevelSection) {
+        if let tool = section.appSection.skill {
+            app.toolUsage.recordOpen(tool)
+        }
         guard navigationSelection != section || app.selectedSection != section.appSection else { return }
         navigationSelection = section
         app.selectedSection = section.appSection
@@ -130,11 +135,20 @@ struct ContentView: View {
     }
 
     private var topNavigationItems: [TopLevelSection] {
-        [.home, .aiConversation] + SkillID.sidebarCases.map(TopLevelSection.skill)
+        [
+            .home,
+            .aiConversation,
+            .skill(.screenshot),
+            .skill(.screenRecording),
+            .skill(.clipboard),
+            .skill(.meetingNotes),
+            .skill(.resume),
+            .skill(.lanTransfer)
+        ]
     }
 
     private var bottomNavigationItems: [TopLevelSection] {
-        [.gamePlaza, .entertainment]
+        [.skill(.wallpaper), .gamePlaza, .entertainment]
     }
 
     private var navigationTargetID: String {

@@ -4,6 +4,7 @@ import ScreenCaptureKit
 
 extension ScreenRecordingCoordinator {
     func handlePrimaryShortcut() {
+        app?.toolUsage.recordOpen(.screenRecording)
         guard !selectingTarget else { return }
         switch phase {
         case .idle:

@@ -596,11 +596,7 @@ struct ClipboardCard: View, Equatable {
             }
             .padding(JarvisSpacing.controlGap)
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .transition(
-                reduceMotion
-                    ? .identity
-                    : .opacity.combined(with: .offset(y: 8))
-            )
+            .transition(JarvisMotion.cardOverlayTransition(reduceMotion: reduceMotion))
         }
     }
 
@@ -644,7 +640,10 @@ struct ClipboardCard: View, Equatable {
             enablesHoverZoom: enablesHoverZoom
         )
         .overlay(alignment: .bottom) {
-            metadataRow
+            if isHovered {
+                metadataRow
+                    .transition(JarvisMotion.cardOverlayTransition(reduceMotion: reduceMotion))
+            }
         }
         .overlay(alignment: .topTrailing) {
             copyActionOverlay
@@ -655,6 +654,7 @@ struct ClipboardCard: View, Equatable {
                 style: .continuous
             )
         )
+        .jarvisGridCardShadow()
     }
 
     var body: some View {

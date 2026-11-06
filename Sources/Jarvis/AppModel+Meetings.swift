@@ -4,325 +4,6 @@ import Foundation
 import UniformTypeIdentifiers
 
 extension AppModel {
-    var meetingModelsReady: Bool {
-        meetingModelState.isReady
-    }
-
-    func refreshMeetingModelState() {
-        guard meetingModelPreparationTask == nil,
-              meetingModelAvailabilityTask == nil
-        else { return }
-        meetingModelAvailabilityTask = Task { @MainActor [weak self] in
-            let stored = await Task.detached(priority: .utility) {
-                MeetingModelStorage.availability()
-            }.value
-            let speechReady = await MeetingSpeechAssets.isInstalled()
-            let availability = MeetingModelAvailability(
-                speakerDiarizationReady: stored.speakerDiarizationReady,
-                chineseTranscriptionReady: speechReady
-            )
-            guard let self,
-                  !Task.isCancelled,
-                  meetingModelPreparationTask == nil
-            else { return }
-            meetingModelAvailabilityTask = nil
-            meetingModelAvailability = availability
-            meetingModelState = availability.isReady ? .ready : .notReady(availability)
-            updateMeetingMenuBarState()
-        }
-    }
-
-    func prepareMeetingModels() {
-        startMeetingModelPreparation(for: MeetingModelPreparationStage.allCases)
-    }
-
-    func prepareMeetingModel(_ stage: MeetingModelPreparationStage) {
-        startMeetingModelPreparation(for: [stage])
-    }
-
-    private func startMeetingModelPreparation(for stages: [MeetingModelPreparationStage]) {
-        guard canManageMeetingModels else { return }
-
-        meetingModelAvailabilityTask?.cancel()
-        meetingModelAvailabilityTask = nil
-        meetingModelPreparationTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            for stage in stages {
-                guard !Task.isCancelled else { break }
-                meetingModelState = .downloading(stage: stage, progress: 0.01)
-                do {
-                    try await meetingTranscriptionService.prepareModel(stage) { [weak self] progress in
-                        Task { @MainActor [weak self] in
-                            guard let self,
-                                  case let .downloading(activeStage, _) = meetingModelState,
-                                  activeStage == stage
-                            else {
-                                return
-                            }
-                            meetingModelState = .downloading(stage: stage, progress: progress)
-                            let bytes = MeetingSpeechDownloadMeter.snapshot()
-                            meetingModelDownloadCompletedBytes = bytes.completed
-                            meetingModelDownloadTotalBytes = bytes.total
-                        }
-                    }
-                    guard !Task.isCancelled else { break }
-                } catch is CancellationError {
-                    break
-                } catch {
-                    meetingModelPreparationTask = nil
-                    meetingModelState = .failed(
-                        stage: stage,
-                        operation: .download,
-                        message: error.localizedDescription
-                    )
-                    return
-                }
-            }
-
-            meetingModelPreparationTask = nil
-            meetingModelState = .checking
-            refreshMeetingModelState()
-        }
-    }
-
-    func removeMeetingModel(_ stage: MeetingModelPreparationStage) {
-        guard canManageMeetingModels else { return }
-
-        meetingModelState = .removing(stage)
-        meetingModelPreparationTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            do {
-                try await meetingTranscriptionService.removeModel(stage)
-                meetingModelPreparationTask = nil
-                meetingModelState = .checking
-                refreshMeetingModelState()
-            } catch {
-                meetingModelPreparationTask = nil
-                meetingModelState = .failed(
-                    stage: stage,
-                    operation: .remove,
-                    message: error.localizedDescription
-                )
-            }
-        }
-    }
-
-    func cancelMeetingModelPreparation() {
-        guard case .downloading = meetingModelState else { return }
-        meetingModelPreparationTask?.cancel()
-        meetingModelState = .checking
-        refreshMeetingModelState()
-    }
-
-    func toggleMeetingRecording() {
-        if meetingCurrentRecordingID == nil {
-            refreshPermissionStatus()
-            guard screenCapturePermissionGranted else {
-                promptForTaskPermission(.screenCapture)
-                return
-            }
-        }
-        guard meetingModelsReady else {
-            meetingProcessingState = .idle
-            if case .checking = meetingModelState {
-                showToast("正在检查会议识别模型，请稍后再试")
-            } else {
-                showToast(JarvisFeedbackCopy.downloadModelsFirst)
-            }
-            return
-        }
-        if meetingCurrentRecordingID != nil {
-            stopMeetingRecording()
-        } else if !isStartingMeetingRecording {
-            Task { await startMeetingRecording() }
-        }
-    }
-
-    func startMeetingRecording(
-        language: MeetingLanguage = .simplifiedChinese,
-        reusing recordID: UUID? = nil
-    ) async {
-        guard canBeginMeetingCapture else { return }
-        guard !meetingRecorder.isStopping else {
-            showToast(JarvisFeedbackCopy.meetingStopInProgress)
-            return
-        }
-        isStartingMeetingRecording = true
-        defer { isStartingMeetingRecording = false }
-
-        guard meetingModelsReady else {
-            meetingProcessingState = .idle
-            showToast(JarvisFeedbackCopy.downloadModelsFirst)
-            return
-        }
-
-        refreshPermissionStatus()
-        guard screenCapturePermissionGranted else {
-            meetingProcessingState = .failed("缺少屏幕录制权限。请到系统设置 > 隐私与安全性 > 屏幕录制，允许Jarvis。")
-            promptForTaskPermission(.screenCapture)
-            showToast("请允许屏幕录制权限")
-            return
-        }
-
-        let reused = reusableMeetingPlaceholder(recordID: recordID)
-        let id = reused?.id ?? UUID()
-        let now = reused?.createdAt ?? Date()
-        let title = reused?.title ?? MeetingRecord.defaultTitle
-        let recordingURLs = meetingRepository.recordingURLs(for: id)
-        let recordingsUsage = meetingRepository.recordingsUsageBytes()
-        if recordingsUsage >= MeetingRepository.recordingsWarningBytes {
-            let gigabytes = Double(recordingsUsage) / (1024 * 1024 * 1024)
-            showToast(JarvisFeedbackCopy.recordingsUsageWarning(gigabytes))
-        }
-        warnIfMeetingDiskIsLow()
-
-        do {
-            try await meetingRecorder.start(
-                meetingID: id,
-                systemAudioURL: recordingURLs.system
-            )
-            if let reusedIndex = meetingRecords.firstIndex(where: { $0.id == id }), reused != nil {
-                var record = meetingRecords[reusedIndex]
-                record.duration = 0
-                record.microphoneAudioFileName = nil
-                record.systemAudioFileName = recordingURLs.system.lastPathComponent
-                record.language = language
-                record.captureMode = .system
-                record.status = .recording
-                record.errorMessage = nil
-                record.interruptedRecording = nil
-                record.awaitingAssets = false
-                record.audioChunks = []
-                try meetingRepository.save(record)
-                meetingRecords[reusedIndex] = record
-            } else {
-                let record = MeetingRecord(
-                    id: id,
-                    title: title,
-                    createdAt: now,
-                    audioFileName: recordingURLs.mixed.lastPathComponent,
-                    microphoneAudioFileName: nil,
-                    systemAudioFileName: recordingURLs.system.lastPathComponent,
-                    language: language,
-                    captureMode: .system,
-                    awaitingAssets: false
-                )
-                try meetingRepository.save(record)
-                meetingRecords.removeAll { $0.id == id }
-                meetingRecords.insert(record, at: 0)
-            }
-            meetingCurrentRecordingID = id
-            selectedMeetingID = id
-            meetingElapsed = 0
-            meetingElapsedOrigin = Date()
-            meetingElapsedAccumulated = 0
-            meetingRecoverySnapshotBucket = -1
-            meetingSystemSilentSince = nil
-            meetingDidWarnAboutSystemSilence = false
-            meetingRecordingPaused = false
-            updateMeetingMenuBarState()
-            meetingProcessingState = .recording
-            meetingRecordingTimer?.cancel()
-            meetingLevelHistory = []
-            meetingRecordingTimer = Task { @MainActor [weak self] in
-                var tick = 0
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(120))
-                    guard let self, self.meetingCurrentRecordingID == id else { return }
-                    self.sampleMeetingLevel()
-                    tick += 1
-                    // The bookkeeping below only has to happen twice a second.
-                    guard tick % 4 == 0 else { continue }
-                    if !self.meetingRecordingPaused {
-                        self.meetingElapsed = self.meetingElapsedAccumulated
-                            + Date().timeIntervalSince(self.meetingElapsedOrigin)
-                    }
-                    let closed = self.meetingRecorder.rotateIfDue()
-                    if !closed.isEmpty {
-                        self.appendMeetingChunks(closed, recordID: id)
-                    }
-                    self.snapshotRecordingIfNeeded(id)
-                    self.refreshMeetingRecordingMeters()
-                    self.warnIfSystemAudioStaysSilent()
-                    self.updateMeetingMenuBarState()
-                }
-            }
-            showToast(JarvisFeedbackCopy.recordingStarted)
-        } catch {
-            await meetingRecorder.discard()
-            meetingProcessingState = .failed("开始录音失败：\(error.localizedDescription)")
-            showToast(JarvisFeedbackCopy.recordingStartFailed)
-        }
-    }
-
-    func stopMeetingRecording() {
-        guard let id = meetingCurrentRecordingID,
-              let index = meetingRecords.firstIndex(where: { $0.id == id })
-        else { return }
-
-        let duration = meetingElapsed
-        meetingRecordingTimer?.cancel()
-        meetingRecordingTimer = nil
-        meetingRecordingPaused = false
-        meetingElapsed = duration
-        meetingCurrentRecordingID = nil
-        updateMeetingMenuBarState()
-
-        var record = meetingRecords[index]
-        record.duration = max(duration, 0)
-        record.audioChunks = meetingRecorder.snapshotChunks()
-        record.status = .transcribing
-        meetingRecords[index] = record
-        persistMeeting(record)
-        meetingProcessingState = .processing(stage: .diarizing, progress: 0)
-        // 同步立 flag：下面的 Task 是异步调度的，不立的话用户可立即开始新会话，
-        // 旧 stop 恢复后会清掉新会话的采集状态（S-3）。
-        meetingRecorder.markStopInFlight()
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let stopResult = await meetingRecorder.stop()
-            finishStoppedMeeting(recordID: id, result: stopResult, processAfterStop: true)
-        }
-    }
-
-    func cancelMeetingRecording() {
-        guard let id = meetingCurrentRecordingID else { return }
-        let duration = meetingElapsed
-        meetingRecordingTimer?.cancel()
-        meetingRecordingTimer = nil
-        meetingCurrentRecordingID = nil
-        updateMeetingMenuBarState()
-        meetingElapsed = duration
-        selectedMeetingID = id
-        // 同上：同步立 flag，关掉 Task 调度窗口（S-3）。
-        meetingRecorder.markStopInFlight()
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let stopResult = await meetingRecorder.stop()
-            finishStoppedMeeting(
-                recordID: id,
-                result: stopResult,
-                processAfterStop: false,
-                failureMessage: "录音已停止，原始录音已保留在本机，可重新处理"
-            )
-        }
-    }
-
-    func finalizeMeetingRecordingForTermination() async {
-        guard let id = meetingCurrentRecordingID else { return }
-        meetingRecordingTimer?.cancel()
-        meetingRecordingTimer = nil
-        meetingCurrentRecordingID = nil
-        updateMeetingMenuBarState()
-        let stopResult = await meetingRecorder.stop()
-        finishStoppedMeeting(
-            recordID: id,
-            result: stopResult,
-            processAfterStop: false,
-            failureMessage: "应用退出时已保存录音，可重新处理"
-        )
-    }
-
     func summarizeSelectedMeeting() {
         guard let selectedMeetingID,
               meetingRecords.contains(where: { $0.id == selectedMeetingID })
@@ -333,6 +14,11 @@ extension AppModel {
     func summarizeMeeting(recordID: UUID, preserveUserEdits: Bool = true) {
         guard meetingRecords.contains(where: { $0.id == recordID }) else { return }
         ensureMeetingDetailLoaded(recordID)
+        guard AIAPIConfiguration.load().isConfigured else {
+            settingsPanelController.show(app: self)
+            showToast(JarvisFeedbackCopy.configureAIFirst)
+            return
+        }
         guard MeetingTranscriptConsent.isConfirmed else {
             meetingPreserveUserEdits = preserveUserEdits
             meetingTranscriptConsentRecordID = recordID
@@ -422,337 +108,7 @@ extension AppModel {
         }.value
     }
 
-    func copyMeetingMarkdown(_ record: MeetingRecord, includeTranscript: Bool = false) {
-        ensureMeetingDetailLoaded(record.id)
-        guard let current = meetingRecords.first(where: { $0.id == record.id }) else { return }
-        guard current.summary != nil || (includeTranscript && !current.transcript.isEmpty) else {
-            showToast(JarvisFeedbackCopy.nothingToCopy)
-            return
-        }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(
-            current.markdownDocument(includeTranscript: includeTranscript),
-            forType: .string
-        )
-        showToast(JarvisFeedbackCopy.copied)
-    }
-
-    func exportMeetingPlainTranscript(_ record: MeetingRecord) {
-        ensureMeetingDetailLoaded(record.id)
-        guard let current = meetingRecords.first(where: { $0.id == record.id }),
-              !current.transcript.isEmpty
-        else {
-            showToast(JarvisFeedbackCopy.nothingToExport)
-            return
-        }
-        let savePanel = NSSavePanel()
-        savePanel.canCreateDirectories = true
-        savePanel.allowedContentTypes = [.plainText]
-        savePanel.nameFieldStringValue = "\(current.title)-逐字稿.txt"
-        savePanel.begin { [weak self] response in
-            guard response == .OK, let url = savePanel.url else { return }
-            do {
-                try current.plainTranscriptDocument().write(to: url, atomically: true, encoding: .utf8)
-                self?.showToast(JarvisFeedbackCopy.exported)
-            } catch {
-                self?.showToast(JarvisFeedbackCopy.exportFailed)
-            }
-        }
-    }
-
-    func exportMeetingPDF(_ record: MeetingRecord) {
-        ensureMeetingDetailLoaded(record.id)
-        guard let current = meetingRecords.first(where: { $0.id == record.id }),
-              current.summary != nil || !current.transcript.isEmpty
-        else {
-            showToast(JarvisFeedbackCopy.nothingToExport)
-            return
-        }
-        let savePanel = NSSavePanel()
-        savePanel.canCreateDirectories = true
-        savePanel.allowedContentTypes = [.pdf]
-        savePanel.nameFieldStringValue = "\(current.title).pdf"
-        savePanel.begin { [weak self] response in
-            guard response == .OK, let url = savePanel.url else { return }
-            do {
-                try MeetingExport.pdfData(for: current).write(to: url)
-                self?.showToast(JarvisFeedbackCopy.exported)
-            } catch {
-                self?.showToast(JarvisFeedbackCopy.exportFailed)
-            }
-        }
-    }
-
-    func exportMeetingMarkdown(_ record: MeetingRecord, includeTranscript: Bool = false) {
-        ensureMeetingDetailLoaded(record.id)
-        guard let current = meetingRecords.first(where: { $0.id == record.id }) else { return }
-        guard current.summary != nil || (includeTranscript && !current.transcript.isEmpty) else {
-            showToast(JarvisFeedbackCopy.nothingToExport)
-            return
-        }
-        let savePanel = NSSavePanel()
-        savePanel.canCreateDirectories = true
-        savePanel.allowedContentTypes = [.plainText]
-        savePanel.nameFieldStringValue = includeTranscript
-            ? "\(current.title)-完整记录.md"
-            : "\(current.title).md"
-        savePanel.begin { [weak self] response in
-            guard response == .OK, let url = savePanel.url else { return }
-            do {
-                try current.markdownDocument(includeTranscript: includeTranscript)
-                    .write(to: url, atomically: true, encoding: .utf8)
-                self?.showToast(JarvisFeedbackCopy.exported)
-            } catch {
-                self?.showToast(JarvisFeedbackCopy.exportFailed)
-            }
-        }
-    }
-
-    func deleteMeeting(_ record: MeetingRecord) {
-        guard meetingCurrentRecordingID != record.id else {
-            showToast(JarvisFeedbackCopy.finishRecordingFirst)
-            return
-        }
-        meetingProcessingQueue.removeAll { $0.recordID == record.id }
-        let wasActive = meetingActiveProcessingID == record.id
-        if wasActive {
-            // #14：先取消任务，再同步清掉 active 标记。被取消任务的 defer
-            // （completeActiveMeetingProcessing）稍后才跑，会因 guard 直接 no-op，
-            // 不会把我们下面推进的状态覆盖掉。
-            meetingProcessingTask?.cancel()
-            meetingProcessingTask = nil
-            meetingActiveProcessingID = nil
-        }
-        // #14：删的是正在处理的会议时，队列里有排队就起下一个，空了就回 .idle——
-        // 以前这里只在 !wasActive 时回 idle，删正在处理的会议会让状态永远卡在 .processing。
-        defer {
-            if wasActive {
-                startNextMeetingProcessingIfNeeded()
-            }
-            if meetingActiveProcessingID == nil {
-                meetingProcessingState = .idle
-            }
-        }
-        do {
-            try meetingRepository.delete(record)
-            meetingRecords.removeAll { $0.id == record.id }
-            // Per-meeting state that lives outside the records goes with it.
-            meetingLiveSummaries[record.id] = nil
-            meetingAudioRevisions[record.id] = nil
-            if selectedMeetingID == record.id {
-                selectedMeetingID = meetingRecords.first?.id
-            }
-        } catch {
-            JarvisLog.error(
-                category: .storage,
-                event: "meeting.delete.failed",
-                error: error,
-                fields: ["meetingID": record.id.uuidString]
-            )
-            showToast(JarvisFeedbackCopy.deleteFailed)
-        }
-    }
-
-    func meetingAudioURL(for record: MeetingRecord) -> URL? {
-        try? meetingRepository.audioURL(for: record)
-    }
-
-    func updateMeetingTitle(recordID: UUID, title: String) {
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }) else { return }
-        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        meetingRecords[index].title = normalizedTitle.isEmpty ? MeetingRecord.defaultTitle : normalizedTitle
-        persistMeeting(meetingRecords[index])
-    }
-
-    func setMeetingActionItemCompleted(
-        recordID: UUID,
-        actionItemID: UUID,
-        isCompleted: Bool
-    ) {
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }),
-              var summary = meetingRecords[index].summary,
-              let itemIndex = summary.actionItems.firstIndex(where: { $0.id == actionItemID })
-        else { return }
-        summary.actionItems[itemIndex].isCompleted = isCompleted
-        meetingRecords[index].summary = summary
-        persistMeeting(meetingRecords[index])
-    }
-
-    func updateMeetingOverview(recordID: UUID, overview: String) {
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }),
-              var summary = meetingRecords[index].summary
-        else { return }
-        summary.overview = overview
-        summary.overviewIsUserEdited = true
-        meetingRecords[index].summary = summary
-        persistMeeting(meetingRecords[index])
-    }
-
-    func updateMeetingPoint(recordID: UUID, pointID: String, title: String, detail: String) {
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }),
-              var summary = meetingRecords[index].summary,
-              let pointIndex = summary.points.firstIndex(where: { $0.id == pointID })
-        else { return }
-        summary.points[pointIndex].title = title
-        summary.points[pointIndex].detail = detail
-        summary.points[pointIndex].isUserEdited = true
-        meetingRecords[index].summary = summary
-        persistMeeting(meetingRecords[index])
-    }
-
-    func updateMeetingActionItemText(recordID: UUID, actionItemID: UUID, task: String) {
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }),
-              var summary = meetingRecords[index].summary,
-              let itemIndex = summary.actionItems.firstIndex(where: { $0.id == actionItemID })
-        else { return }
-        summary.actionItems[itemIndex].task = task
-        summary.actionItems[itemIndex].isUserEdited = true
-        meetingRecords[index].summary = summary
-        persistMeeting(meetingRecords[index])
-    }
-
-    func renameMeetingSpeaker(recordID: UUID, speakerID: String, name: String) {
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }) else { return }
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              let speakerIndex = meetingRecords[index].speakers.firstIndex(where: { $0.id == speakerID })
-        else { return }
-        let oldName = meetingRecords[index].speakers[speakerIndex].name
-        guard oldName != trimmed else { return }
-        let shouldRelabelOwner = MeetingSpeakerRenaming.isUnambiguous(
-            oldName,
-            among: meetingRecords[index].speakers
-        )
-        meetingRecords[index].speakers[speakerIndex].name = trimmed
-        if shouldRelabelOwner, let summary = meetingRecords[index].summary {
-            meetingRecords[index].summary = MeetingSpeakerRenaming.relabeling(
-                summary,
-                from: oldName,
-                to: trimmed
-            )
-        }
-        if shouldRelabelOwner, let liveSummary = meetingLiveSummaries[recordID] {
-            meetingLiveSummaries[recordID] = MeetingSpeakerRenaming.relabeling(
-                liveSummary,
-                from: oldName,
-                to: trimmed
-            )
-        }
-        if persistMeeting(meetingRecords[index]) {
-            showToast("说话人名称已保存")
-        }
-    }
-
-    func mergeMeetingSpeakers(recordID: UUID, sourceSpeakerID: String, into targetSpeakerID: String) {
-        guard sourceSpeakerID != targetSpeakerID,
-              let recordIndex = meetingRecords.firstIndex(where: { $0.id == recordID }),
-              let sourceIndex = meetingRecords[recordIndex].speakers.firstIndex(where: { $0.id == sourceSpeakerID }),
-              let target = meetingRecords[recordIndex].speakers.first(where: { $0.id == targetSpeakerID })
-        else { return }
-
-        let source = meetingRecords[recordIndex].speakers[sourceIndex]
-        let shouldRelabelSummary = MeetingSpeakerRenaming.isUnambiguous(
-            source.name,
-            among: meetingRecords[recordIndex].speakers
-        )
-        var movedSegmentCount = 0
-        for segmentIndex in meetingRecords[recordIndex].transcript.indices
-            where meetingRecords[recordIndex].transcript[segmentIndex].speakerID == sourceSpeakerID
-        {
-            meetingRecords[recordIndex].transcript[segmentIndex].speakerID = targetSpeakerID
-            movedSegmentCount += 1
-        }
-        meetingRecords[recordIndex].speakers.remove(at: sourceIndex)
-        meetingRecords[recordIndex].estimatedSpeakerCount = meetingRecords[recordIndex].speakers.count
-
-        if shouldRelabelSummary, let summary = meetingRecords[recordIndex].summary {
-            meetingRecords[recordIndex].summary = MeetingSpeakerRenaming.relabeling(
-                summary,
-                from: source.name,
-                to: target.name
-            )
-        }
-        if shouldRelabelSummary, let liveSummary = meetingLiveSummaries[recordID] {
-            meetingLiveSummaries[recordID] = MeetingSpeakerRenaming.relabeling(
-                liveSummary,
-                from: source.name,
-                to: target.name
-            )
-        }
-
-        if persistMeeting(meetingRecords[recordIndex]) {
-            showToast("已合并说话人，(movedSegmentCount) 段转写归入「\(target.name)」")
-        }
-    }
-
-    func restoreMeetingMinutesVersion(recordID: UUID, versionID: UUID) {
-        ensureMeetingDetailLoaded(recordID)
-        guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }),
-              let versionIndex = meetingRecords[index].minutesVersions.firstIndex(where: { $0.id == versionID })
-        else { return }
-        let version = meetingRecords[index].minutesVersions[versionIndex]
-        if let current = meetingRecords[index].summary {
-            meetingRecords[index].minutesVersions.append(MeetingMinutesVersion(summary: current))
-        }
-        meetingRecords[index].minutesVersions.removeAll { $0.id == versionID }
-        meetingRecords[index].summary = version.summary
-        meetingRecords[index].status = .ready
-        meetingRecords[index].summaryCheckpoint = nil
-        meetingRecords[index].errorMessage = nil
-        persistMeeting(meetingRecords[index])
-    }
-
-    func createMeetingPlaceholder() {
-        let id = UUID()
-        let urls = meetingRepository.recordingURLs(for: id)
-        let record = MeetingRecord(
-            id: id,
-            title: MeetingRecord.defaultTitle,
-            audioFileName: urls.mixed.lastPathComponent,
-            status: .failed,
-            errorMessage: "识别资源还没准备好，这条会议先占着。资源下载完成后可以开始录音。",
-            awaitingAssets: true
-        )
-        do {
-            try meetingRepository.save(record)
-            meetingRecords.insert(record, at: 0)
-            selectedMeetingID = id
-        } catch {
-            showToast(JarvisFeedbackCopy.saveFailed)
-        }
-    }
-
-    func postponeMeetingAssetDownload() {
-        cancelMeetingModelPreparation()
-        if !meetingRecords.contains(where: { $0.awaitingAssets == true }) {
-            createMeetingPlaceholder()
-        }
-        showToast("资源稍后再准备。占位会议还不能录音。")
-    }
-
-    func pauseMeetingRecording() {
-        guard meetingCurrentRecordingID != nil, !meetingRecordingPaused else { return }
-        meetingElapsedAccumulated += Date().timeIntervalSince(meetingElapsedOrigin)
-        meetingElapsed = meetingElapsedAccumulated
-        meetingRecorder.pauseRecording()
-        meetingRecordingPaused = true
-        if let id = meetingCurrentRecordingID {
-            persistClosedRecorderChunks(id)
-        }
-    }
-
-    func resumeMeetingRecording() {
-        guard meetingCurrentRecordingID != nil, meetingRecordingPaused else { return }
-        do {
-            try meetingRecorder.resumeRecording()
-            meetingElapsedOrigin = Date()
-            meetingRecordingPaused = false
-        } catch {
-            showToast(JarvisFeedbackCopy.recordingStartFailed)
-        }
-    }
-
-    private func enqueueMeetingProcessing(
+    func enqueueMeetingProcessing(
         recordID: UUID,
         kind: MeetingProcessingJob.Kind,
         preserveUserEdits: Bool = true
@@ -771,7 +127,7 @@ extension AppModel {
         startNextMeetingProcessingIfNeeded()
     }
 
-    private func startNextMeetingProcessingIfNeeded() {
+    func startNextMeetingProcessingIfNeeded() {
         guard meetingActiveProcessingID == nil else { return }
         guard meetingProcessingQueue.isEmpty == false else {
             Task { await meetingTranscriptionService.releaseCachedModels() }
@@ -806,55 +162,40 @@ extension AppModel {
             guard let self else { return }
             defer { completeActiveMeetingProcessing(for: record.id) }
             do {
-                let prepared = try await prepareAudioForTranscription(record)
-                try await waitForMeetingAudioFile(at: prepared.mixedURL)
-                let sourceRecord = meetingRecords.first { $0.id == record.id } ?? record
-                let tracks = transcriptionTracks(
-                    for: sourceRecord,
-                    mixedURL: prepared.mixedURL,
-                    systemAudioFileName: prepared.systemAudioFileName
-                )
-                let transcription = try await meetingTranscriptionService.transcribeTracks(
-                    tracks,
-                    language: record.language
-                ) { [weak self] stage, progress in
-                    Task { @MainActor [weak self] in
-                        guard let self, self.meetingActiveProcessingID == record.id else { return }
-                        let shouldPublish = self.lastMeetingProgressStage != stage
-                            || abs(progress - self.lastMeetingProgressValue) >= 0.01
-                            || progress >= 1
-                        guard shouldPublish else { return }
-                        self.lastMeetingProgressStage = stage
-                        self.lastMeetingProgressValue = progress
-                        self.meetingProcessingState = .processing(stage: stage, progress: progress)
+                let transcription: MeetingTranscriptionResult
+                let captureDirectory = meetingRepository.captureDirectory(for: record.id)
+                if let completed = meetingCompletedTranscriptions.removeValue(forKey: record.id) {
+                    transcription = completed
+                } else if FileManager.default.fileExists(atPath: captureDirectory.path) {
+                    transcription = try await MeetingLiveEngine.recover(
+                        directory: captureDirectory,
+                        audioURL: meetingRepository.recordingURLs(for: record.id).mixed
+                    )
+                    markMeetingAudioRewritten(record.id)
+                } else {
+                    // Existing meetings remain readable and can be reprocessed with the new engine.
+                    let prepared = try await prepareAudioForTranscription(record)
+                    let sourceRecord = meetingRecords.first { $0.id == record.id } ?? record
+                    transcription = try await meetingTranscriptionService.transcribeTracks(
+                        transcriptionTracks(
+                            for: sourceRecord,
+                            mixedURL: prepared.mixedURL,
+                            systemAudioFileName: prepared.systemAudioFileName
+                        ), language: record.language
+                    ) { [weak self] stage, progress in
+                        Task { @MainActor [weak self] in
+                            guard let self, self.meetingActiveProcessingID == record.id else { return }
+                            self.meetingProcessingState = .processing(stage: stage, progress: progress)
+                        }
                     }
                 }
+                try Task.checkCancellation()
 
                 guard let currentIndex = meetingRecords.firstIndex(where: { $0.id == record.id }) else { return }
-                var updatedRecord = meetingRecords[currentIndex]
-                updatedRecord.speakers = transcription.speakers
-                updatedRecord.transcript = transcription.segments
-                updatedRecord.diarizationDegraded = transcription.diarizationDegraded
-                updatedRecord.diarizationDegradeReason = transcription.diarizationDegradeReason
-                updatedRecord.estimatedSpeakerCount = transcription.estimatedSpeakerCount
-                updatedRecord.uncertainSegmentRatio = transcription.uncertainSegmentRatio
-                updatedRecord.systemAudioFileName = prepared.systemAudioFileName
-                updatedRecord.errorMessage = transcription.diarizationDegraded
-                    ? "说话人分离没有完成，逐字稿先不标说话人。纪要仍可生成。"
-                    : nil
-                if transcription.segments.isEmpty {
-                    updatedRecord.status = .failed
-                    updatedRecord.errorMessage = "未识别到有效语音，请检查音量后重新处理"
-                    meetingRecords[currentIndex] = updatedRecord
-                    persistMeeting(updatedRecord)
-                    meetingProcessingState = .failed(updatedRecord.errorMessage ?? "")
-                    showToast(JarvisFeedbackCopy.processingFailed)
-                    return
-                }
-
-                updatedRecord.status = .transcribed
+                let updatedRecord = try MeetingTranscriptCommit.applying(transcription, to: meetingRecords[currentIndex])
                 meetingRecords[currentIndex] = updatedRecord
-                persistMeeting(updatedRecord)
+                try meetingRepository.save(updatedRecord)
+                try? FileManager.default.removeItem(at: captureDirectory)
 
                 let configuration = AIAPIConfiguration.load()
                 guard configuration.isConfigured else {
@@ -936,6 +277,7 @@ extension AppModel {
         configuration: AIAPIConfiguration,
         preserveUserEdits: Bool
     ) async throws {
+        cancelMeetingTitleGeneration(record.id)
         if let index = meetingRecords.firstIndex(where: { $0.id == record.id }) {
             meetingRecords[index].status = .summarizing
             persistMeeting(meetingRecords[index])
@@ -1014,6 +356,7 @@ extension AppModel {
         )
         meetingProcessingState = .ready
         showToast(JarvisFeedbackCopy.summaryReady)
+        generateMeetingTitle(recordID: record.id, summary: summary, configuration: configuration)
     }
 
     private func completeActiveMeetingProcessing(for recordID: UUID) {
@@ -1026,7 +369,7 @@ extension AppModel {
 
     /// The mixed recording was written over the one that was there before. Anyone already
     /// showing or playing that file has to be told, because its path never changes.
-    private func markMeetingAudioRewritten(_ recordID: UUID) {
+    func markMeetingAudioRewritten(_ recordID: UUID) {
         meetingAudioRevisions[recordID, default: 0] += 1
     }
 
@@ -1100,7 +443,7 @@ extension AppModel {
         return (audioURL, systemAudioFileName)
     }
 
-    private func finishStoppedMeeting(
+    func finishStoppedMeeting(
         recordID: UUID,
         result: MeetingRecordingStopResult,
         processAfterStop: Bool,
@@ -1231,7 +574,7 @@ extension AppModel {
         return nil
     }
 
-    private func appendMeetingChunks(_ chunks: [MeetingAudioChunk], recordID: UUID) {
+    func appendMeetingChunks(_ chunks: [MeetingAudioChunk], recordID: UUID) {
         guard let index = meetingRecords.firstIndex(where: { $0.id == recordID }) else { return }
         for chunk in chunks {
             meetingRecords[index].audioChunks.removeAll { $0.kind == chunk.kind && $0.index == chunk.index }
@@ -1256,13 +599,13 @@ extension AppModel {
         showToast(event.message)
     }
 
-    private func persistClosedRecorderChunks(_ id: UUID) {
+    func persistClosedRecorderChunks(_ id: UUID) {
         let chunks = meetingRecorder.closedChunksSnapshot()
         guard !chunks.isEmpty else { return }
         appendMeetingChunks(chunks, recordID: id)
     }
 
-    private func reusableMeetingPlaceholder(recordID: UUID?) -> MeetingRecord? {
+    func reusableMeetingPlaceholder(recordID: UUID?) -> MeetingRecord? {
         let candidate = recordID ?? selectedMeetingID
         guard let candidate,
               let record = meetingRecords.first(where: { $0.id == candidate }),
@@ -1273,7 +616,7 @@ extension AppModel {
 
     /// One bar of the live meter. Reads the recorder directly: the once-a-second mirror in
     /// `meetingSystemPower` is too coarse to draw with.
-    private func sampleMeetingLevel() {
+    func sampleMeetingLevel() {
         let level = meetingRecordingPaused
             ? 0
             : MeetingAudioLevel.normalized(meetingRecorder.systemAveragePower())
@@ -1286,27 +629,12 @@ extension AppModel {
 
     private static let meetingLevelHistoryLimit = 48
 
-    private func refreshMeetingRecordingMeters() {
+    func refreshMeetingRecordingMeters() {
         meetingSystemPower = meetingRecorder.systemAveragePower()
         meetingBytesWritten = meetingRecorder.writtenByteCount()
     }
 
-    private func warnIfSystemAudioStaysSilent() {
-        guard !meetingDidWarnAboutSystemSilence, !meetingRecordingPaused else { return }
-        guard let power = meetingRecorder.systemAveragePower() else { return }
-        if power < -45 {
-            if meetingSystemSilentSince == nil {
-                meetingSystemSilentSince = Date()
-            } else if let since = meetingSystemSilentSince, Date().timeIntervalSince(since) >= 30 {
-                meetingDidWarnAboutSystemSilence = true
-                showToast("系统音频已连续 30 秒没有声音，录音仍在继续")
-            }
-        } else {
-            meetingSystemSilentSince = nil
-        }
-    }
-
-    private func warnIfMeetingDiskIsLow() {
+    func warnIfMeetingDiskIsLow() {
         let directory = meetingRepository.recordingsDirectoryURL
         let values = try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         if let bytes = values?.volumeAvailableCapacityForImportantUsage, bytes < 512 * 1024 * 1024 {
@@ -1447,7 +775,7 @@ extension AppModel {
         return kept
     }
 
-    private func snapshotRecordingIfNeeded(_ id: UUID) {
+    func snapshotRecordingIfNeeded(_ id: UUID) {
         let bucket = Int(meetingElapsed / 30)
         guard bucket > 0, bucket != meetingRecoverySnapshotBucket else { return }
         meetingRecoverySnapshotBucket = bucket
@@ -1457,7 +785,7 @@ extension AppModel {
     }
 
     @discardableResult
-    private func persistMeeting(_ record: MeetingRecord) -> Bool {
+    func persistMeeting(_ record: MeetingRecord) -> Bool {
         do {
             try meetingRepository.save(record)
             return true

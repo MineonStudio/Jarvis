@@ -66,29 +66,34 @@ final class MeetingRepository: @unchecked Sendable {
             guard !writesDisabled else {
                 throw MeetingRepositoryError.writesDisabled
             }
-            for url in try audioURLs(for: record) {
-                if fileManager.fileExists(atPath: url.path) {
-                    try fileManager.removeItem(at: url)
+            // Stage the entire meeting and trash it as one recoverable item. On failure,
+            // restore every moved file before releasing the repository lock.
+            let recorded = (try? fileManager.contentsOfDirectory(at: recordingsURL, includingPropertiesForKeys: nil)) ?? []
+            let chunks = recorded.filter {
+                $0.lastPathComponent.hasPrefix("meeting-\(record.id.uuidString).")
+                    && MeetingAudioChunkFile.isChunkFileName($0.lastPathComponent)
+            }
+            let candidates = try audioURLs(for: record) + chunks + [
+                captureDirectory(for: record.id),
+                recordFileURL(for: record.id),
+                detailFileURL(for: record.id)
+            ]
+            let staging = directoryURL.appendingPathComponent("Deleted-\(record.id.uuidString)", isDirectory: true)
+            try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+            var moved: [(URL, URL)] = []
+            do {
+                for source in Set(candidates) where fileManager.fileExists(atPath: source.path) {
+                    let destination = staging.appendingPathComponent(source.lastPathComponent)
+                    try fileManager.moveItem(at: source, to: destination)
+                    moved.append((source, destination))
                 }
-            }
-            let chunkPrefix = "meeting-\(record.id.uuidString)."
-            let recorded = (try? fileManager.contentsOfDirectory(
-                at: recordingsURL,
-                includingPropertiesForKeys: nil
-            )) ?? []
-            for url in recorded
-                where url.lastPathComponent.hasPrefix(chunkPrefix)
-                && MeetingAudioChunkFile.isChunkFileName(url.lastPathComponent)
-            {
-                try fileManager.removeItem(at: url)
-            }
-            let recordFileURL = recordFileURL(for: record.id)
-            if fileManager.fileExists(atPath: recordFileURL.path) {
-                try fileManager.removeItem(at: recordFileURL)
-            }
-            let detailFileURL = detailFileURL(for: record.id)
-            if fileManager.fileExists(atPath: detailFileURL.path) {
-                try fileManager.removeItem(at: detailFileURL)
+                try fileManager.trashItem(at: staging, resultingItemURL: nil)
+            } catch {
+                for (source, destination) in moved.reversed() {
+                    try? fileManager.moveItem(at: destination, to: source)
+                }
+                try? fileManager.removeItem(at: staging)
+                throw error
             }
             // #15：会议删了，搜索缓存同步清掉。
             searchTextCache[record.id] = nil
@@ -124,6 +129,10 @@ final class MeetingRepository: @unchecked Sendable {
 
     var recordingsDirectoryURL: URL {
         recordingsURL
+    }
+
+    func captureDirectory(for id: UUID) -> URL {
+        recordingsURL.appendingPathComponent("meeting-\(id.uuidString).capture", isDirectory: true)
     }
 
     func recordingURLs(for id: UUID) -> (mixed: URL, microphone: URL, system: URL, systemCompressed: URL) {
@@ -173,14 +182,17 @@ final class MeetingRepository: @unchecked Sendable {
 
     func recordingsUsageBytes() -> Int64 {
         lock.withLock {
-            let urls = (try? fileManager.contentsOfDirectory(
+            guard let enumerator = fileManager.enumerator(
                 at: recordingsURL,
-                includingPropertiesForKeys: [.fileSizeKey]
-            )) ?? []
-            return urls.reduce(into: Int64(0)) { total, url in
-                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
-                total += size
+                includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey]
+            ) else { return 0 }
+            var total: Int64 = 0
+            for case let url as URL in enumerator {
+                if let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]), values.isRegularFile == true {
+                    total += Int64(values.fileSize ?? 0)
+                }
             }
+            return total
         }
     }
 

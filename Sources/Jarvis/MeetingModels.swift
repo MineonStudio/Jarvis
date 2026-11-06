@@ -98,41 +98,28 @@ struct MeetingSummaryCheckpoint: Codable, Equatable, Sendable {
 }
 
 enum MeetingModelPreparationStage: String, CaseIterable, Identifiable, Sendable {
-    case speakerDiarization
-    case chineseTranscription
-
+    case paraformer
     var id: Self {
         self
     }
 
     var title: String {
-        switch self {
-        case .speakerDiarization: "说话人识别"
-        case .chineseTranscription: "中文语音转写"
-        }
+        "Paraformer-large"
     }
 
     var modelName: String {
-        switch self {
-        case .speakerDiarization: "pyannote/speaker-diarization-community-1 · Core ML"
-        case .chineseTranscription: "系统中文语音资源，下载一次后可离线使用。应用不内置转写模型。"
-        }
+        "中文识别 · 含标点、语音检测与说话人区分 · 约 330 MB"
     }
 }
 
 struct MeetingModelAvailability: Equatable, Sendable {
-    let speakerDiarizationReady: Bool
-    let chineseTranscriptionReady: Bool
-
+    let paraformerReady: Bool
     var isReady: Bool {
-        speakerDiarizationReady && chineseTranscriptionReady
+        paraformerReady
     }
 
-    func isReady(for stage: MeetingModelPreparationStage) -> Bool {
-        switch stage {
-        case .speakerDiarization: speakerDiarizationReady
-        case .chineseTranscription: chineseTranscriptionReady
-        }
+    func isReady(for _: MeetingModelPreparationStage) -> Bool {
+        paraformerReady
     }
 }
 
@@ -331,6 +318,10 @@ struct MeetingActionItem: Codable, Equatable, Identifiable, Sendable {
         return dueMissing ?? MeetingMinutesAlgorithm.dueMissingLabel
     }
 
+    func dueDisplayLabel(meetingDate: Date) -> String {
+        MeetingDueDate.label(dueLabel, meetingDate: meetingDate)
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id
         case task
@@ -397,6 +388,7 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     var title: String
     let createdAt: Date
+    var titleIsUserEdited: Bool
     var duration: TimeInterval
     let audioFileName: String
     /// The original microphone track. Older records only have `audioFileName`,
@@ -453,11 +445,13 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
         diarizationDegradeReason: String? = nil,
         estimatedSpeakerCount: Int? = nil,
         uncertainSegmentRatio: Double? = nil,
-        minutesVersions: [MeetingMinutesVersion] = []
+        minutesVersions: [MeetingMinutesVersion] = [],
+        titleIsUserEdited: Bool? = nil
     ) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
+        self.titleIsUserEdited = titleIsUserEdited ?? MeetingTitlePolicy.isManuallyNamed(title, createdAt: createdAt)
         self.duration = duration
         self.audioFileName = audioFileName
         self.microphoneAudioFileName = microphoneAudioFileName
@@ -493,6 +487,7 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
         case id
         case title
         case createdAt
+        case titleIsUserEdited
         case duration
         case audioFileName
         case microphoneAudioFileName
@@ -522,6 +517,8 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
         id = try container.decode(UUID.self, forKey: .id)
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? Self.defaultTitle
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        titleIsUserEdited = try container.decodeIfPresent(Bool.self, forKey: .titleIsUserEdited)
+            ?? MeetingTitlePolicy.isManuallyNamed(title, createdAt: createdAt)
         duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 0
         audioFileName = try container.decode(String.self, forKey: .audioFileName)
         microphoneAudioFileName = try container.decodeIfPresent(String.self, forKey: .microphoneAudioFileName)
@@ -551,6 +548,7 @@ struct MeetingRecord: Codable, Equatable, Identifiable, Sendable {
         try container.encode(id, forKey: .id)
         try container.encode(title, forKey: .title)
         try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(titleIsUserEdited, forKey: .titleIsUserEdited)
         try container.encode(duration, forKey: .duration)
         try container.encode(audioFileName, forKey: .audioFileName)
         try container.encodeIfPresent(microphoneAudioFileName, forKey: .microphoneAudioFileName)
@@ -769,7 +767,7 @@ extension MeetingRecord {
                     lines.append("")
                     lines.append("- [\(item.isCompleted ? "x" : " ")] \(item.task)")
                     lines.append("  负责人：\(item.ownerLabel)")
-                    lines.append("  期限：\(item.dueLabel)")
+                    lines.append("  期限：\(item.dueDisplayLabel(meetingDate: createdAt))")
                     appendEvidence(item.evidence, to: &lines)
                 }
             }
