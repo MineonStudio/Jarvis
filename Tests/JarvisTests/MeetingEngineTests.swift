@@ -4,6 +4,42 @@ import Foundation
 import XCTest
 
 final class MeetingEngineTests: XCTestCase {
+    func testConverterInputSuppliesEachTapBufferOnlyOnce() throws {
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4800))
+        buffer.frameLength = 4800
+        let input = MeetingAudioConverterInput(buffer: buffer)
+        var status = AVAudioConverterInputStatus.noDataNow
+        XCTAssertTrue(input.next(status: &status) === buffer)
+        XCTAssertEqual(status, .haveData)
+        XCTAssertNil(input.next(status: &status))
+        XCTAssertEqual(status, .noDataNow)
+    }
+
+    func testConverterResamplesTapBufferToMeetingPCM() throws {
+        let source = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1))
+        let target = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: source, frameCapacity: 4800))
+        buffer.frameLength = 4800
+        let samples = try XCTUnwrap(buffer.floatChannelData)[0]
+        for index in 0 ..< 4800 {
+            samples[index] = Float(sin(Double(index) * 2 * .pi * 440 / 48000) * 0.25)
+        }
+        let input = MeetingAudioConverterInput(buffer: buffer)
+        let converter = try XCTUnwrap(AVAudioConverter(from: source, to: target))
+        let output = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: target, frameCapacity: 1728))
+        var error: NSError?
+        let result = converter.convert(to: output, error: &error) { _, status in input.next(status: status) }
+        XCTAssertNotEqual(result, .error)
+        XCTAssertNil(error)
+        // The converter retains its priming frames until later tap buffers arrive.
+        XCTAssertGreaterThan(output.frameLength, 0)
+        XCTAssertLessThanOrEqual(output.frameLength, 1600)
+        XCTAssertEqual(output.format, target)
+        let pcm = try XCTUnwrap(output.int16ChannelData)[0]
+        XCTAssertTrue(UnsafeBufferPointer(start: pcm, count: Int(output.frameLength)).contains { $0 != 0 })
+    }
+
     func testEngineTranscriptKeepsGlobalSpeakerIDsAndMillisecondTimes() throws {
         let json = #"{"duration_ms":12000,"sentences":[{"speaker":3,"start_ms":1250,"end_ms":2500,"text":"先确认范围。"},{"speaker":7,"start_ms":3000,"end_ms":4200,"text":"我来处理。"},{"speaker":3,"start_ms":5000,"end_ms":6200,"text":"周五交付。"}]}"#
         let transcript = try JSONDecoder().decode(MeetingEngineTranscript.self, from: Data(json.utf8))

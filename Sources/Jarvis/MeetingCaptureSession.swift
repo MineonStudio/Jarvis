@@ -166,13 +166,10 @@ final class MeetingCaptureSession: NSObject, SCStreamOutput, SCStreamDelegate, @
         }
         let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16000 / buffer.format.sampleRate) + 128)
         guard let converted = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return nil }
-        var supplied = false
+        let input = MeetingAudioConverterInput(buffer: buffer)
         var error: NSError?
         let status = converter.convert(to: converted, error: &error) { _, state in
-            if supplied {
-                state.pointee = .noDataNow; return nil
-            }
-            supplied = true; state.pointee = .haveData; return buffer
+            input.next(status: state)
         }
         if status == .error {
             throw error ?? MeetingEngineError.failed("音频转换失败")
@@ -193,5 +190,30 @@ final class MeetingCaptureSession: NSObject, SCStreamOutput, SCStreamDelegate, @
             origin = timestamp
         }
         return true
+    }
+}
+
+/// The converter calls its input block synchronously before convert returns.
+/// Own one immutable tap buffer for that call; protect the one-shot state even
+/// on SDKs that declare the input block @Sendable. No audio buffer escapes to a task.
+final class MeetingAudioConverterInput: @unchecked Sendable {
+    private let buffer: AVAudioPCMBuffer
+    private let lock = NSLock()
+    private var supplied = false
+
+    init(buffer: AVAudioPCMBuffer) {
+        self.buffer = buffer
+    }
+
+    func next(status: UnsafeMutablePointer<AVAudioConverterInputStatus>) -> AVAudioBuffer? {
+        lock.withLock {
+            guard !supplied else {
+                status.pointee = .noDataNow
+                return nil
+            }
+            supplied = true
+            status.pointee = .haveData
+            return buffer
+        }
     }
 }
