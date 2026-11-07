@@ -18,8 +18,8 @@ struct HomeQuickToolsCard: View {
                                 .overlay(alignment: .topTrailing) {
                                     HomeToolRankBadge(rank: index + 1).offset(x: 8, y: -6)
                                 }
-                            Text("\(Text(tool.navigationTitle).foregroundStyle(.primary))\(Text("*\(app.toolUsage.count(for: tool))次").foregroundStyle(.secondary))")
-                                .font(.system(size: 11, weight: .medium)).monospacedDigit()
+                            Text(tool.navigationTitle)
+                                .font(.system(size: 11, weight: .medium)).foregroundStyle(.primary)
                                 .lineLimit(1).minimumScaleFactor(0.75)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 4)
@@ -27,7 +27,7 @@ struct HomeQuickToolsCard: View {
                         .jarvisHoverFeedback(in: RoundedRectangle(cornerRadius: 10), scale: 1)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("第 \(index + 1) 名，\(tool.navigationTitle)，使用 \(app.toolUsage.count(for: tool)) 次")
+                    .accessibilityLabel("第 \(index + 1) 名，\(tool.navigationTitle)")
                     .help("打开\(tool.navigationTitle)")
                 }
             }
