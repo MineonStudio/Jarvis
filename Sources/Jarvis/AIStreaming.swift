@@ -202,9 +202,3 @@ actor AIStreamSink {
         winner == nil || winner == attempt
     }
 }
-
-enum AIAPIStreamError {
-    static func stalled(seconds: TimeInterval, receivedAnything: Bool) -> AIAPIError {
-        .streamStalled(seconds: seconds, beforeFirstToken: !receivedAnything)
-    }
-}

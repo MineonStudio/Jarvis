@@ -55,10 +55,6 @@ fn downloads() -> Vec<Download> {
     v
 }
 
-pub fn total_size() -> u64 {
-    downloads().iter().map(|d| d.size).sum()
-}
-
 fn ok_marker(dest: &Path) -> PathBuf {
     dest.with_extension(format!("{}.ok", dest.extension().and_then(|e| e.to_str()).unwrap_or("")))
 }
@@ -319,33 +315,6 @@ fn extract_punct(tar_bz2: &Path, dst: &Path) -> Result<(), String> {
         }
     }
     Err(tr("标点模型包里没有 model.int8.onnx", "model.int8.onnx not found in the punctuation model archive").into())
-}
-
-/// 解压 sherpa-onnx 的模型包：去掉最外层目录，跳过示例音频和说明。先解到临时目录，完整了再改名。
-fn extract_dir(tar_bz2: &Path, dst: &Path) -> Result<(), String> {
-    let tmp = dst.with_extension("tmp");
-    let _ = fs::remove_dir_all(&tmp);
-    fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
-    let f = File::open(tar_bz2)
-        .map_err(|e| tr(&format!("打开模型包：{e}"), &format!("Opening the model archive: {e}")).to_string())?;
-    let mut archive = tar::Archive::new(bzip2::read::BzDecoder::new(f));
-    for entry in archive.entries().map_err(|e| e.to_string())? {
-        let mut entry = entry.map_err(|e| e.to_string())?;
-        let path: PathBuf = entry.path().map_err(|e| e.to_string())?.into_owned();
-        let rel: PathBuf = path.components().skip(1).collect();
-        let skip = rel.as_os_str().is_empty()
-            || rel.starts_with("test_wavs")
-            || rel.extension().is_some_and(|e| e == "md")
-            || rel.components().any(|c| matches!(c, std::path::Component::ParentDir));
-        if skip || !entry.header().entry_type().is_file() {
-            continue;
-        }
-        let out = tmp.join(&rel);
-        fs::create_dir_all(out.parent().unwrap()).map_err(|e| e.to_string())?;
-        entry.unpack(&out).map_err(|e| e.to_string())?;
-    }
-    let _ = fs::remove_dir_all(dst);
-    fs::rename(&tmp, dst).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

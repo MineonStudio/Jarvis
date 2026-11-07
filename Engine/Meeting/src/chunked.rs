@@ -1,7 +1,7 @@
 //! 分段转写：把音频按停顿切成 10～30 秒逐段识别，最后统一聚类说话人。
 //! 录音中（边录边转）和处理已有文件共用；Python 版 live.py 的移植。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -317,8 +317,4 @@ fn step(inner: &Mutex<LiveState>, engine: &Engine, last: bool) -> bool {
         .extend(segs.iter().map(|g| (g.start_ms, g.text.clone())));
     s.chunker.segments.extend(segs);
     true
-}
-
-pub fn wav_path(dir: &Path, source: &str) -> PathBuf {
-    dir.join(format!("{source}.wav"))
 }
