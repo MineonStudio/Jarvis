@@ -20,3 +20,6 @@ DerivedData/
 .codex/
 
 Engine/Meeting/target/
+
+# Python automation test caches
+__pycache__/
