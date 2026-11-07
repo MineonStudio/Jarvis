@@ -627,21 +627,6 @@ extension View {
     func jarvisContentSurface(cornerRadius: CGFloat = JarvisMetrics.cardRadius) -> some View {
         modifier(JarvisContentSurfaceModifier(cornerRadius: cornerRadius))
     }
-
-    /// A lighter Liquid Glass treatment for the small icon containers used
-    /// throughout the pages. Full-strength accent tint makes these bubbles
-    /// read as solid dark badges instead of translucent glass.
-    func jarvisIconGlass(
-        tint: Color = Color.jarvisAccent,
-        in shape: some Shape,
-        interactive: Bool = false
-    ) -> some View {
-        jarvisGlass(
-            tint: tint.opacity(JarvisMetrics.iconTintOpacity),
-            in: shape,
-            interactive: interactive
-        )
-    }
 }
 
 /// 历史网格卡片的骨架：悬停缩放、圆角裁剪、选中描边和「已选中」徽标。
@@ -868,49 +853,6 @@ struct JarvisToolbarButtonStyle: ButtonStyle {
                 JarvisMotion.animation(JarvisMotion.buttonPress, reduceMotion: reduceMotion),
                 value: isPressed
             )
-    }
-}
-
-/// A single selection control for the native toolbar. Selection is rendered
-/// by the button itself; there is intentionally no parent capsule or group
-/// surface around a row of options.
-struct JarvisToolbarSelectionButton: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(isSelected ? JarvisTypography.controlEmphasis : JarvisTypography.control)
-                .foregroundStyle(isSelected ? Color.white : Color.jarvisTextSecondary)
-                .padding(.horizontal, 10)
-                .frame(height: JarvisToolbarMetrics.controlSize)
-                .jarvisSelectionPill(isSelected: isSelected, isHovered: isHovered)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(JarvisPressButtonStyle(pressedScale: 0.97, pressedOpacity: 0.82))
-        .scaleEffect(
-            reduceMotion || isSelected || !isHovered ? 1 : 1.02,
-            anchor: .center
-        )
-        .animation(
-            JarvisMotion.animation(JarvisMotion.hover, reduceMotion: reduceMotion),
-            value: isHovered
-        )
-        .animation(
-            JarvisMotion.animation(JarvisMotion.selection, reduceMotion: reduceMotion),
-            value: isSelected
-        )
-        .onHover { isHovering in
-            withAnimation(
-                JarvisMotion.animation(JarvisMotion.hover, reduceMotion: reduceMotion)
-            ) {
-                isHovered = isHovering
-            }
-        }
     }
 }
 

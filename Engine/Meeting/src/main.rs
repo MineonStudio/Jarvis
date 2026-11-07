@@ -1,11 +1,16 @@
 //! Jarvis transport adapter for the Tingo processing pipeline (MIT).
-#![allow(dead_code)]
 mod asr;
+// Retain upstream audio helpers covered by compatibility tests.
+#[allow(dead_code)]
 mod audio;
 mod chunked;
 mod cluster;
+// Upstream localization helpers are retained for transcript compatibility tests.
+#[allow(dead_code)]
 mod i18n;
 mod models;
+// The app consumes JSON; upstream formatting helpers remain regression-tested.
+#[allow(dead_code)]
 mod transcript;
 
 use std::io::{BufRead, Write};

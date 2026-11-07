@@ -13,10 +13,6 @@ extension OpenAICompatibleAPIClient {
         }
     }
 
-    func fetchModels(configuration: AIAPIConfiguration) async throws -> [String] {
-        try await fetchModelCatalogue(configuration: configuration).identifiers
-    }
-
     func fetchModelCatalogue(configuration: AIAPIConfiguration) async throws -> ModelCatalogue {
         let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else { throw AIAPIError.missingConfiguration }

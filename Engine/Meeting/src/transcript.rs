@@ -162,18 +162,6 @@ impl Transcript {
             .collect::<Vec<_>>()
             .join("\n")
     }
-
-    pub fn load(path: &Path) -> std::io::Result<Self> {
-        let text = std::fs::read_to_string(path)?;
-        serde_json::from_str(&text).map_err(std::io::Error::other)
-    }
-
-    pub fn save(&self, path: &Path) -> std::io::Result<()> {
-        std::fs::write(
-            path,
-            serde_json::to_string_pretty(self).map_err(std::io::Error::other)?,
-        )
-    }
 }
 
 pub fn fmt_ts(ms: u64) -> String {
