@@ -2,7 +2,15 @@ name: Swift quality
 
 on:
   push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
@@ -17,6 +25,9 @@ jobs:
         run: |
           echo "JARVIS_SWIFTPM_SCRATCH_DIR=$RUNNER_TEMP/jarvis-swiftpm" >> "$GITHUB_ENV"
           echo "JARVIS_ENGINE_BUILD_DIR=$RUNNER_TEMP/jarvis-meeting-engine" >> "$GITHUB_ENV"
+
+      - name: Test Git submission automation
+        run: python3 -m unittest discover -s script/tests -p 'test_*.py'
 
       - name: Prepare meeting engine toolchain
         working-directory: Engine/Meeting

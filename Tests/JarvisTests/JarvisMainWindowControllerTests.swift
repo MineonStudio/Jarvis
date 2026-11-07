@@ -195,6 +195,7 @@ final class JarvisMainWindowControllerTests: XCTestCase {
         window.isReleasedWhenClosed = false
         defer { window.close() }
         let controller = JarvisMainWindowController(frameStore: frameStore)
+        defer { withExtendedLifetime(controller) {} }
         controller.attach(to: window)
         let area = try XCTUnwrap(NSScreen.main).visibleFrame.insetBy(dx: 20, dy: 20)
         let target = NSRect(
@@ -205,7 +206,12 @@ final class JarvisMainWindowControllerTests: XCTestCase {
         // Native zoom and tiling use programmatic frame changes, rather than
         // a live-resize mouse gesture. They must survive subsequent run loops.
         window.setFrame(target, display: false)
-        try await Task.sleep(for: .milliseconds(250))
+        // AppKit notifications can reschedule the debounced save on busy CI
+        // runners. Wait for persistence, rather than assuming a fixed delay.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        repeat {
+            try await Task.sleep(for: .milliseconds(25))
+        } while frameStore.load() != target && ContinuousClock.now < deadline
 
         XCTAssertEqual(window.frame, target)
         XCTAssertEqual(frameStore.load(), target)
