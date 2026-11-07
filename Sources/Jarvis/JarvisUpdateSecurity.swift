@@ -128,12 +128,6 @@ enum JarvisUpdateSecurity {
     }
 }
 
-struct JarvisStagedUpdate: Equatable {
-    let version: String
-    let temporaryDirectoryURL: URL
-    let scriptURL: URL
-}
-
 enum JarvisInstallSource {
     static let defaultsKey = "jarvis.install.source"
     private static let knownSources: Set<String> = ["direct-download", "dmg", "development"]

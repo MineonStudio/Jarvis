@@ -801,17 +801,6 @@ extension AppModel {
         }
     }
 
-    private func waitForMeetingAudioFile(at url: URL) async throws {
-        let deadline = Date().addingTimeInterval(10)
-        while !isReadyAudioFile(at: url) {
-            guard !Task.isCancelled else { throw CancellationError() }
-            guard Date() < deadline else {
-                throw MeetingAudioFileError.unavailable
-            }
-            try await Task.sleep(for: .milliseconds(100))
-        }
-    }
-
     private func isReadyAudioFile(at url: URL) -> Bool {
         MeetingAudioMixer.isReadyAudioFile(at: url)
     }
@@ -834,14 +823,4 @@ struct MeetingProcessingJob: Equatable, Sendable {
     let recordID: UUID
     let kind: Kind
     var preserveUserEdits: Bool = true
-}
-
-private enum MeetingAudioFileError: LocalizedError {
-    case unavailable
-
-    var errorDescription: String? {
-        switch self {
-        case .unavailable: "原始录音文件未完成保存，无法开始转写"
-        }
-    }
 }

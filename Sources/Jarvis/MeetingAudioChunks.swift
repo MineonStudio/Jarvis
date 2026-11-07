@@ -69,31 +69,6 @@ struct MeetingMinutesVersion: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct MeetingPCMPacket: Sendable {
-    var sampleRate: Double
-    var samples: [Float]
-
-    init?(buffer: AVAudioPCMBuffer) {
-        let frames = Int(buffer.frameLength)
-        guard frames > 0, buffer.format.sampleRate > 0 else { return nil }
-        sampleRate = buffer.format.sampleRate
-        if let channels = buffer.floatChannelData {
-            let channelCount = Int(buffer.format.channelCount)
-            var mono = [Float](repeating: 0, count: frames)
-            let usedChannels = max(channelCount, 1)
-            for channel in 0 ..< channelCount {
-                let data = channels[channel]
-                for frame in 0 ..< frames {
-                    mono[frame] += data[frame] / Float(usedChannels)
-                }
-            }
-            samples = mono
-            return
-        }
-        return nil
-    }
-}
-
 enum MeetingAudioChunkFile {
     static let sliceDuration: TimeInterval = 30
 
