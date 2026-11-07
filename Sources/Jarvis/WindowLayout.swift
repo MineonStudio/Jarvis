@@ -133,7 +133,7 @@ final class WindowLayoutController {
     }
 
     func apply(_ placement: WindowSnapPlacement, to target: WindowDragTarget, on screen: NSScreen) {
-        guard let originalFrame = target.frame else { return }
+        guard target.frame != nil else { return }
         switch target.resolveAccessibilityWindow() {
         case .ready:
             break
@@ -146,20 +146,23 @@ final class WindowLayoutController {
             return
         }
         let visibleFrame = WindowLayoutScreenArea.visibleFrame(for: screen)
-        let frame = placement.frame(in: visibleFrame)
         if let window = target.nativeWindow {
             applyNative(placement, to: window, in: visibleFrame)
             return
         } else if let window = target.accessibilityWindow {
             guard isAccessibilityTrusted else { return }
-            if !target.supportsResizing || !setFrame(frame, on: window, using: screen) {
-                let fixedFrame = placement.frame(preserving: target.frame?.size ?? originalFrame.size, in: visibleFrame)
-                if setPosition(fixedFrame, on: window, using: screen) {
-                    statusHandler("窗口已移动，尺寸受应用限制")
-                    return
-                }
+            let adjustment = WindowLayoutAccessibilityAdjustment(
+                readSize: { self.size(of: window) },
+                setSize: { self.setSize($0, on: window) },
+                setPosition: { self.setPosition($0, on: window, using: screen) }
+            )
+            switch adjustment.apply(placement, in: visibleFrame, supportsResizing: target.supportsResizing) {
+            case .applied:
+                break
+            case .constrained:
+                statusHandler("窗口已移动，尺寸受应用限制")
+            case .failed:
                 statusHandler(JarvisFeedbackCopy.windowNotResizable)
-                return
             }
         } else {
             return
@@ -177,36 +180,20 @@ final class WindowLayoutController {
         }
     }
 
-    private func setFrame(_ frame: NSRect, on window: AXUIElement, using screen: NSScreen) -> Bool {
-        let position = CGPoint(
-            x: frame.minX,
-            y: accessibilityY(for: frame, on: screen)
-        )
-        var positionValue = position
-        var sizeValue = frame.size
-        guard let axPosition = AXValueCreate(.cgPoint, &positionValue),
-              let axSize = AXValueCreate(.cgSize, &sizeValue)
-        else {
-            return false
-        }
+    private func size(of window: AXUIElement) -> CGSize? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXValueGetTypeID()
+        else { return nil }
+        var size = CGSize.zero
+        guard AXValueGetValue(unsafeDowncast(value, to: AXValue.self), .cgSize, &size) else { return nil }
+        return size
+    }
 
-        // Some applications clamp the size when the position is changed in
-        // the same AX transaction. Apply the position, apply the exact target
-        // size, then apply the position once more to stabilize both halves.
-        let initialPositionResult = AXUIElementSetAttributeValue(
-            window,
-            kAXPositionAttribute as CFString,
-            axPosition
-        )
-        let sizeResult = AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, axSize)
-        let finalPositionResult = AXUIElementSetAttributeValue(
-            window,
-            kAXPositionAttribute as CFString,
-            axPosition
-        )
-        return initialPositionResult == .success
-            && sizeResult == .success
-            && finalPositionResult == .success
+    private func setSize(_ size: CGSize, on window: AXUIElement) -> Bool {
+        var size = size
+        guard let value = AXValueCreate(.cgSize, &size) else { return false }
+        return AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, value) == .success
     }
 
     private func setPosition(_ frame: NSRect, on window: AXUIElement, using screen: NSScreen) -> Bool {
