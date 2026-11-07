@@ -2,6 +2,8 @@
 
 Jarvis 使用 `main` 加短期功能分支。`main` 保存已验收的集成代码，版本标签标记正式发布点；本地开发版不是 Git 分支，不需要长期 `dev` 分支。
 
+用户明确授权提交并合并后，代理优先使用 `python3 script/submit_pr.py --title ... --body-file ...` 连续完成推送、PR、等待检查、Squash 合并、同步本地 `main` 和清理本次分支，无需逐步再次确认。参数及数据保护边界见[自动提交、合并与清理](git-automation.md)。
+
 ## 日常开发
 
 1. 检查 `git status`，妥善保存现有修改；执行 `git fetch origin --prune`。
