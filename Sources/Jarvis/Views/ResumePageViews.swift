@@ -58,7 +58,7 @@ enum ResumePageLayout {
         switch section {
         case .education: content.education.map(ResumePageItem.education)
         case .experience: content.experience.map(ResumePageItem.experience)
-        case .skills: content.skills.isEmpty ? [] : [.skills(content.skills)]
+        case .skills: content.skills.map(ResumePageItem.skill)
         case .projects: content.projects.map(ResumePageItem.project)
         case .basicInfo: []
         }
@@ -89,7 +89,7 @@ enum ResumePageLayout {
 private enum ResumePageItem {
     case education(ResumeEducation)
     case experience(ResumeExperience)
-    case skills([String])
+    case skill(String)
     case project(ResumeProject)
 }
 
@@ -120,8 +120,8 @@ private struct ResumePageAccumulator {
             education.append(value)
         case let .experience(value):
             experience.append(value)
-        case let .skills(values):
-            skills.append(contentsOf: values)
+        case let .skill(value):
+            skills.append(value)
         case let .project(value):
             projects.append(value)
         }
