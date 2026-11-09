@@ -19,14 +19,14 @@ struct WindowLayoutAccessibilityAdjustment {
         let requestedFrame = placement.frame(in: visibleFrame)
         var resized = false
         if supportsResizing {
-            // Move onto the destination display before resizing, but keep the
-            // current window inside the visible frame. Placing a still-tall
-            // window on a lower quadrant's top edge drops its bottom through
-            // the Dock; the screen clamps that height, and apps then ignore
-            // the resize. Anchoring the clamped height above the Dock makes
-            // the lower window overlap the upper one by about the Dock height.
+            // AX keeps the top-left corner and grows right and down. Start on
+            // the target's top-left so that growth stays inside the screen.
+            // Centering a half layout first makes one edge hit the screen, and
+            // the clamped size then leaves gaps on both sides of that axis.
+            // A window whose current height would hang through the Dock is
+            // lifted above it; apps ignore a resize while that overlap remains.
             if let currentSize = readSize(), currentSize.width > 0, currentSize.height > 0 {
-                _ = setPosition(placement.frame(preserving: currentSize, in: visibleFrame))
+                _ = setPosition(Self.parkedFrame(currentSize, beforeResizingInto: requestedFrame, in: visibleFrame))
             } else {
                 _ = setPosition(requestedFrame)
             }
@@ -45,6 +45,27 @@ struct WindowLayoutAccessibilityAdjustment {
         guard setPosition(actualFrame) else { return .failed }
         let matchesSize = Self.matches(actualSize, requestedFrame.size)
         return resized && matchesSize ? .applied : .constrained
+    }
+
+    /// Position that keeps the current size on screen while leaving room to grow
+    /// into `requested`. The returned rect still has the current size.
+    private static func parkedFrame(
+        _ currentSize: CGSize,
+        beforeResizingInto requested: CGRect,
+        in visibleFrame: CGRect
+    ) -> CGRect {
+        var x = requested.minX
+        if x + currentSize.width > visibleFrame.maxX {
+            x = visibleFrame.maxX - currentSize.width
+        }
+        if x < visibleFrame.minX {
+            x = visibleFrame.minX
+        }
+        var top = requested.maxY
+        if top - currentSize.height < visibleFrame.minY {
+            top = visibleFrame.minY + currentSize.height
+        }
+        return CGRect(x: x, y: top - currentSize.height, width: currentSize.width, height: currentSize.height)
     }
 
     private static func matches(_ actual: CGSize, _ requested: CGSize) -> Bool {
