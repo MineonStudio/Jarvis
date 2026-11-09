@@ -12,26 +12,39 @@ final class ResumeTests: XCTestCase {
         XCTAssertEqual(ResumeSection.allCases, [.basicInfo, .education, .experience, .skills, .projects])
     }
 
-    func testResumeTemplatesKeepModernMinimalAsTheDefault() {
+    func testGalleryContainsThreeTemplatesForEachOfTheFiveStyles() {
         XCTAssertEqual(ResumeTemplate.defaultTemplate, .minimal)
-        XCTAssertEqual(
-            ResumeTemplate.allCases,
-            [.minimal, .creative, .editorial, .timeline]
-        )
-        XCTAssertEqual(ResumeDocument.blank().template, .minimal)
-        XCTAssertEqual(
-            ResumeTemplate.allCases.map(\.title),
-            ["现代极简", "创意拼贴", "编辑风格", "时间轴"]
-        )
-        XCTAssertEqual(
-            ResumeTemplateCategory.allCases.map(\.title),
-            ["全部", "现代", "创意", "经典", "专业"]
-        )
+        XCTAssertEqual(ResumeTemplate.allCases.count, 15)
+        XCTAssertEqual(Set(ResumeTemplate.allCases.map(\.title)).count, 15)
+        XCTAssertEqual(ResumeTemplateCategory.minimal.templates, [.minimal, .mono, .grid])
+        XCTAssertEqual(ResumeTemplateCategory.business.templates, [.business, .summit, .slate])
+        XCTAssertEqual(ResumeTemplateCategory.classic.templates, [.classic, .heritage, .scholar])
+        XCTAssertEqual(ResumeTemplateCategory.editorial.templates, [.editorial, .journal, .gazette])
+        XCTAssertEqual(ResumeTemplateCategory.creative.templates, [.creative, .prism, .orbit])
+        XCTAssertEqual(ResumeTemplateCategory.allCases.map(\.title), ["全部", "极简", "商务", "经典", "编辑", "创意"])
         XCTAssertEqual(ResumeTemplateCategory.all.templates, ResumeTemplate.allCases)
-        XCTAssertEqual(ResumeTemplateCategory.modern.templates, [.minimal])
-        XCTAssertEqual(ResumeTemplateCategory.creative.templates, [.creative])
-        XCTAssertEqual(ResumeTemplateCategory.classic.templates, [.editorial])
-        XCTAssertEqual(ResumeTemplateCategory.professional.templates, [.timeline])
+        for category in ResumeTemplateCategory.allCases where category != .all {
+            XCTAssertEqual(category.templates.count, 3)
+            XCTAssertTrue(category.templates.allSatisfy { $0.category == category })
+        }
+    }
+
+    func testRetiredLayoutsImportWithoutReturningToTheGallery() throws {
+        let retired = ["structured", "compact", "folio", "typographic", "traditional", "academic", "timeline", "executive", "technical"]
+        for rawValue in retired {
+            let template = try JSONDecoder().decode(ResumeTemplate.self, from: JSONEncoder().encode(rawValue))
+            XCTAssertTrue(ResumeTemplate.allCases.contains(template))
+            XCTAssertFalse(ResumeTemplate.allCases.map(\.rawValue).contains(rawValue))
+        }
+    }
+
+    func testEveryTemplateSurvivesJSONExportAndImport() throws {
+        for template in ResumeTemplate.allCases {
+            var document = makeDocument()
+            document.template = template
+            let imported = try ResumeDocumentCodec.decode(ResumeDocumentCodec.encodedData(for: document))
+            XCTAssertEqual(imported, document, template.title)
+        }
     }
 
     func testTemplateSelectionIsShownOnlyUntilAChoiceIsMade() {
@@ -39,10 +52,10 @@ final class ResumeTests: XCTestCase {
 
         XCTAssertTrue(workspace.needsTemplateSelection)
 
-        workspace.chooseTemplate(.timeline)
+        workspace.chooseTemplate(.business)
 
         XCTAssertFalse(workspace.needsTemplateSelection)
-        XCTAssertEqual(workspace.document.template, .timeline)
+        XCTAssertEqual(workspace.document.template, .business)
 
         workspace.beginNewResume()
 
@@ -187,11 +200,11 @@ final class ResumeTests: XCTestCase {
 
     func testJSONImportKeepsTheCurrentTemplateAndAcceptsUnknownTemplates() throws {
         let workspace = ResumeWorkspace(document: makeDocument())
-        workspace.chooseTemplate(.timeline)
+        workspace.chooseTemplate(.business)
 
         let data = try ResumeDocumentCodec.encodedData(for: makeDocument())
         try workspace.replace(with: ResumeDocumentCodec.decode(data))
-        XCTAssertEqual(workspace.document.template, .timeline)
+        XCTAssertEqual(workspace.document.template, .business)
         XCTAssertEqual(workspace.document.basicInfo.name, "林知远")
 
         var root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -261,10 +274,26 @@ final class ResumeTests: XCTestCase {
             )
         }
 
-        let data = try ResumeExportService.data(for: document, format: .pdf)
-        let pdf = try XCTUnwrap(PDFDocument(data: data))
-
-        XCTAssertGreaterThan(pdf.pageCount, 1)
+        for template in ResumeTemplate.allCases {
+            document.template = template
+            let pages = ResumePageLayout.pages(for: document)
+            XCTAssertEqual(pages.flatMap(\.projects), document.projects, template.title)
+            XCTAssertEqual(pages.flatMap(\.education), document.education, template.title)
+            XCTAssertEqual(pages.flatMap(\.experience), document.experience, template.title)
+            XCTAssertEqual(pages.flatMap(\.skills), document.skills, template.title)
+            XCTAssertEqual(pages.filter(\.includesHeader).count, 1, template.title)
+            for page in pages {
+                XCTAssertLessThanOrEqual(
+                    ResumePageLayout.contentHeight(for: document, content: page),
+                    ResumePageLayout.pageSize.height,
+                    "\(template.title) 的内容不能超出纸张"
+                )
+            }
+            let data = try ResumeExportService.data(for: document, format: .pdf)
+            let pdf = try XCTUnwrap(PDFDocument(data: data))
+            XCTAssertGreaterThan(pdf.pageCount, 1, template.title)
+            XCTAssertEqual(pdf.pageCount, pages.count, template.title)
+        }
     }
 
     func testMarkdownExportIncludesAllExperienceSections() {
@@ -279,7 +308,9 @@ final class ResumeTests: XCTestCase {
         XCTAssertTrue(markdown.contains("面向企业客户的智能工单协作平台"))
         XCTAssertTrue(markdown.contains("- 推动项目上线并持续迭代"))
     }
+}
 
+extension ResumeTests {
     func testResumeAIServiceGeneratesOneItemAndRetriesARepeatedExperience() async throws {
         let api = SequenceResumeAIAPI(responses: [
             #"{"company":"星云科技","role":"产品经理","period":"2021 — 至今"}"#,
