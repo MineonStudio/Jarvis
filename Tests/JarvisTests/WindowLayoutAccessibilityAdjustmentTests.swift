@@ -103,6 +103,43 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
         }
     }
 
+    func testHalfLayoutsGrowFromTheTargetTopLeft() {
+        let screenTop: CGFloat = 1440
+        let initial = CGRect(x: 400, y: 300, width: 1280, height: 665)
+        for placement in [WindowSnapPlacement.halfLeft, .halfRight, .halfTop, .halfBottom] {
+            let window = ScreenEdgeClampedWindow(
+                visibleFrame: visibleFrame,
+                frame: initial,
+                primaryDisplayTop: screenTop
+            )
+            let adjustment = WindowLayoutAccessibilityAdjustment(
+                readSize: { window.size },
+                setSize: { window.setSize($0) },
+                setPosition: { window.setPosition($0); return true }
+            )
+
+            XCTAssertEqual(adjustment.apply(placement, in: visibleFrame, supportsResizing: true), .applied)
+            XCTAssertEqual(window.frame, placement.frame(in: visibleFrame))
+        }
+    }
+
+    func testHalfLeftLiftsATooTallWindowBeforeResizing() {
+        let screenTop: CGFloat = 1440
+        let window = ScreenEdgeClampedWindow(
+            visibleFrame: visibleFrame,
+            frame: CGRect(x: 80, y: 79, width: 900, height: 1500),
+            primaryDisplayTop: screenTop
+        )
+        let adjustment = WindowLayoutAccessibilityAdjustment(
+            readSize: { window.size },
+            setSize: { window.setSize($0) },
+            setPosition: { window.setPosition($0); return true }
+        )
+
+        XCTAssertEqual(adjustment.apply(.halfLeft, in: visibleFrame, supportsResizing: true), .applied)
+        XCTAssertEqual(window.frame, WindowSnapPlacement.halfLeft.frame(in: visibleFrame))
+    }
+
     private func apply(
         _ placement: WindowSnapPlacement,
         to window: LayoutAXWindow,
@@ -184,6 +221,50 @@ private final class DockClampedWindow {
     func setSize(_ size: CGSize) -> Bool {
         guard frame.minY >= visibleFrame.minY - 0.5 else { return true }
         axFrame.size = size
+        return true
+    }
+}
+
+/// Keeps the AX top-left fixed and refuses growth past the visible frame.
+/// A bottom that already hangs through the Dock ignores the resize entirely.
+@MainActor
+private final class ScreenEdgeClampedWindow {
+    private var axFrame: CGRect
+    private let visibleFrame: CGRect
+    private let primaryDisplayTop: CGFloat
+
+    init(visibleFrame: CGRect, frame: CGRect, primaryDisplayTop: CGFloat) {
+        self.visibleFrame = visibleFrame
+        self.primaryDisplayTop = primaryDisplayTop
+        axFrame = WindowLayoutCoordinates.flipped(frame, primaryDisplayTop: primaryDisplayTop)
+    }
+
+    var frame: CGRect {
+        WindowLayoutCoordinates.flipped(axFrame, primaryDisplayTop: primaryDisplayTop)
+    }
+
+    var size: CGSize {
+        frame.size
+    }
+
+    func setPosition(_ frame: CGRect) {
+        axFrame.origin = WindowLayoutCoordinates.flipped(frame, primaryDisplayTop: primaryDisplayTop).origin
+    }
+
+    func setSize(_ size: CGSize) -> Bool {
+        let current = frame
+        guard current.minY >= visibleFrame.minY - 0.5 else { return true }
+        let fitted = CGSize(
+            width: min(size.width, max(0, visibleFrame.maxX - current.minX)),
+            height: min(size.height, max(0, current.maxY - visibleFrame.minY))
+        )
+        let updated = CGRect(
+            x: current.minX,
+            y: current.maxY - fitted.height,
+            width: fitted.width,
+            height: fitted.height
+        )
+        axFrame = WindowLayoutCoordinates.flipped(updated, primaryDisplayTop: primaryDisplayTop)
         return true
     }
 }
