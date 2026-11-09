@@ -19,9 +19,21 @@ struct WindowLayoutAccessibilityAdjustment {
         let requestedFrame = placement.frame(in: visibleFrame)
         var resized = false
         if supportsResizing {
-            // Moving first lets applications resize within the destination display.
-            _ = setPosition(requestedFrame)
+            // Move onto the destination display before resizing, but keep the
+            // current window inside the visible frame. Placing a still-tall
+            // window on a lower quadrant's top edge drops its bottom through
+            // the Dock; the screen clamps that height, and apps then ignore
+            // the resize. Anchoring the clamped height above the Dock makes
+            // the lower window overlap the upper one by about the Dock height.
+            if let currentSize = readSize(), currentSize.width > 0, currentSize.height > 0 {
+                _ = setPosition(placement.frame(preserving: currentSize, in: visibleFrame))
+            } else {
+                _ = setPosition(requestedFrame)
+            }
             resized = setSize(requestedFrame.size)
+            if let actual = readSize(), !Self.matches(actual, requestedFrame.size) {
+                resized = setSize(requestedFrame.size) || resized
+            }
         }
         guard let actualSize = readSize(), actualSize.width > 0, actualSize.height > 0 else {
             return .failed
@@ -31,8 +43,11 @@ struct WindowLayoutAccessibilityAdjustment {
         // with a taller actual size would push a lower layout into the Dock.
         let actualFrame = placement.frame(preserving: actualSize, in: visibleFrame)
         guard setPosition(actualFrame) else { return .failed }
-        let matchesSize = abs(actualSize.width - requestedFrame.width) <= 1
-            && abs(actualSize.height - requestedFrame.height) <= 1
+        let matchesSize = Self.matches(actualSize, requestedFrame.size)
         return resized && matchesSize ? .applied : .constrained
+    }
+
+    private static func matches(_ actual: CGSize, _ requested: CGSize) -> Bool {
+        abs(actual.width - requested.width) <= 1 && abs(actual.height - requested.height) <= 1
     }
 }

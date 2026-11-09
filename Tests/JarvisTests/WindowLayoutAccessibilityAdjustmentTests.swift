@@ -78,6 +78,31 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
         XCTAssertEqual(adjustment.apply(.lowerLeft, in: visibleFrame, supportsResizing: true), .failed)
     }
 
+    func testTallLowerLayoutShrinksAfterParkingAboveTheDock() {
+        let screenTop: CGFloat = 1440
+        let window = DockClampedWindow(
+            visibleFrame: visibleFrame,
+            size: CGSize(width: 1100, height: 900),
+            primaryDisplayTop: screenTop
+        )
+        let adjustment = WindowLayoutAccessibilityAdjustment(
+            readSize: { window.size },
+            setSize: { window.setSize($0) },
+            setPosition: { window.setPosition($0); return true }
+        )
+
+        for placement in [WindowSnapPlacement.lowerLeft, WindowSnapPlacement.lowerRight] {
+            XCTAssertEqual(adjustment.apply(placement, in: visibleFrame, supportsResizing: true), .applied)
+            let expected = placement.frame(in: visibleFrame)
+            let upper = placement == .lowerLeft
+                ? WindowSnapPlacement.upperLeft.frame(in: visibleFrame)
+                : WindowSnapPlacement.upperRight.frame(in: visibleFrame)
+            XCTAssertEqual(window.frame, expected)
+            XCTAssertEqual(window.frame.maxY, upper.minY, accuracy: 0.001)
+            XCTAssertGreaterThanOrEqual(window.frame.minY, visibleFrame.minY)
+        }
+    }
+
     private func apply(
         _ placement: WindowSnapPlacement,
         to window: LayoutAXWindow,
@@ -120,6 +145,45 @@ private final class LayoutAXWindow {
             width: max(size.width, minimumSize.width),
             height: max(size.height, minimumSize.height)
         )
+        return true
+    }
+}
+
+/// Ignores a resize while its bottom hangs through the Dock, matching apps that
+/// acknowledge the AX write and keep the screen-clamped height.
+@MainActor
+private final class DockClampedWindow {
+    private var axFrame: CGRect
+    private let visibleFrame: CGRect
+    private let primaryDisplayTop: CGFloat
+
+    init(visibleFrame: CGRect, size: CGSize, primaryDisplayTop: CGFloat) {
+        self.visibleFrame = visibleFrame
+        self.primaryDisplayTop = primaryDisplayTop
+        let appKit = CGRect(
+            x: visibleFrame.minX + 40,
+            y: visibleFrame.minY + 40,
+            width: size.width,
+            height: size.height
+        )
+        axFrame = WindowLayoutCoordinates.flipped(appKit, primaryDisplayTop: primaryDisplayTop)
+    }
+
+    var frame: CGRect {
+        WindowLayoutCoordinates.flipped(axFrame, primaryDisplayTop: primaryDisplayTop)
+    }
+
+    var size: CGSize {
+        frame.size
+    }
+
+    func setPosition(_ frame: CGRect) {
+        axFrame.origin = WindowLayoutCoordinates.flipped(frame, primaryDisplayTop: primaryDisplayTop).origin
+    }
+
+    func setSize(_ size: CGSize) -> Bool {
+        guard frame.minY >= visibleFrame.minY - 0.5 else { return true }
+        axFrame.size = size
         return true
     }
 }
