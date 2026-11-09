@@ -26,6 +26,7 @@ struct ResumePageContent: Sendable {
     }
 }
 
+@MainActor
 enum ResumePageLayout {
     static let pageSize = CGSize(width: 620, height: 876)
     static let pageSpacing: CGFloat = 16
@@ -33,130 +34,67 @@ enum ResumePageLayout {
     static func pages(for document: ResumeDocument) -> [ResumePageContent] {
         let fullContent = ResumePageContent.fullDocument(document)
         guard document.hasContent else { return [fullContent] }
+        let pageItems = document.template.sectionOrder.flatMap { items(for: $0, content: fullContent) }
 
         var pages: [ResumePageContent] = []
-        var current = ResumePageAccumulator(
-            includesHeader: true,
-            usedHeight: estimatedHeaderHeight(for: document)
-        )
-
-        for item in fullContent.education {
-            place(
-                .education(item),
-                height: estimatedEducationHeight(item),
-                current: &current,
-                pages: &pages
-            )
+        var current = ResumePageAccumulator(includesHeader: true)
+        for item in pageItems {
+            var candidate = current
+            candidate.append(item)
+            if current.hasSectionContent, contentHeight(for: document, content: candidate.content) > pageSize.height {
+                pages.append(current.content)
+                candidate = ResumePageAccumulator(includesHeader: false)
+                candidate.append(item)
+            }
+            current = candidate
         }
-        for item in fullContent.experience {
-            place(
-                .experience(item),
-                height: estimatedExperienceHeight(item),
-                current: &current,
-                pages: &pages
-            )
-        }
-        if !fullContent.skills.isEmpty {
-            place(
-                .skills(fullContent.skills),
-                height: estimatedSkillsHeight(fullContent.skills),
-                current: &current,
-                pages: &pages
-            )
-        }
-        for item in fullContent.projects {
-            place(
-                .project(item),
-                height: estimatedProjectHeight(item),
-                current: &current,
-                pages: &pages
-            )
-        }
-
         if current.hasSectionContent {
             pages.append(current.content)
         }
         return pages.isEmpty ? [fullContent] : pages
     }
 
-    private static func place(
-        _ item: ResumePageItem,
-        height: CGFloat,
-        current: inout ResumePageAccumulator,
-        pages: inout [ResumePageContent]
-    ) {
-        let sectionHeaderHeight = current.contains(item) ? 0 : 35
-        let totalHeight = height + CGFloat(sectionHeaderHeight)
-        if current.hasSectionContent, current.usedHeight + totalHeight > 780 {
-            pages.append(current.content)
-            current = ResumePageAccumulator(includesHeader: false, usedHeight: 0)
+    private static func items(for section: ResumeSection, content: ResumePageContent) -> [ResumePageItem] {
+        switch section {
+        case .education: content.education.map(ResumePageItem.education)
+        case .experience: content.experience.map(ResumePageItem.experience)
+        case .skills: content.skills.map(ResumePageItem.skill)
+        case .projects: content.projects.map(ResumePageItem.project)
+        case .basicInfo: []
         }
-        current.append(item)
-        current.usedHeight += totalHeight
     }
 
-    private static func estimatedHeaderHeight(for document: ResumeDocument) -> CGFloat {
-        var height: CGFloat = 18
-        if nonEmpty(document.basicInfo.name) {
-            height += 34
-        }
-        if nonEmpty(document.basicInfo.headline) {
-            height += 20
-        }
-        let contact = [
-            document.basicInfo.location,
-            document.basicInfo.email,
-            document.basicInfo.jobStatus,
-            document.basicInfo.workYears
-        ]
-        if contact.contains(where: nonEmpty) {
-            height += 18
-        }
+    /// Measure the actual template composition: narrow columns, large project titles,
+    /// and parallel sections cannot be paginated using a shared character estimate.
+    static func contentHeight(for document: ResumeDocument, content: ResumePageContent) -> CGFloat {
+        let body = ResumePageBody(
+            document: document,
+            content: content,
+            showsPlaceholders: false,
+            selectedProjectID: nil,
+            selectedBulletIndex: nil,
+            onSelectProject: { _ in },
+            onSelectBullet: { _, _ in }
+        )
+        .frame(width: pageSize.width, alignment: .topLeading)
+        .fixedSize(horizontal: false, vertical: true)
+        let renderer = ImageRenderer(content: body)
+        renderer.proposedSize = ProposedViewSize(width: pageSize.width, height: nil)
+        var height: CGFloat = 0
+        renderer.render { size, _ in height = size.height }
         return height
-    }
-
-    private static func estimatedEducationHeight(_ item: ResumeEducation) -> CGFloat {
-        24 + estimatedTextHeight([item.school, item.degree, item.major, item.period])
-    }
-
-    private static func estimatedExperienceHeight(_ item: ResumeExperience) -> CGFloat {
-        24 + estimatedTextHeight([item.company, item.role, item.period])
-    }
-
-    private static func estimatedSkillsHeight(_ skills: [String]) -> CGFloat {
-        let lineCount = max(1, Int(ceil(Double(skills.count) / 5.0)))
-        return CGFloat(lineCount) * 26
-    }
-
-    private static func estimatedProjectHeight(_ item: ResumeProject) -> CGFloat {
-        25
-            + (nonEmpty(item.summary) ? estimatedTextHeight([item.summary]) + 5 : 0)
-            + item.bullets.reduce(CGFloat.zero) { height, bullet in
-                height + estimatedTextHeight([bullet]) + 5
-            }
-    }
-
-    private static func estimatedTextHeight(_ values: [String]) -> CGFloat {
-        let longest = values.map(\.count).max() ?? 0
-        let lineCount = max(1, Int(ceil(Double(longest) / 62)))
-        return CGFloat(lineCount) * 16
-    }
-
-    private static func nonEmpty(_ value: String) -> Bool {
-        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
 private enum ResumePageItem {
     case education(ResumeEducation)
     case experience(ResumeExperience)
-    case skills([String])
+    case skill(String)
     case project(ResumeProject)
 }
 
 private struct ResumePageAccumulator {
     let includesHeader: Bool
-    var usedHeight: CGFloat
     var education: [ResumeEducation] = []
     var experience: [ResumeExperience] = []
     var skills: [String] = []
@@ -176,27 +114,14 @@ private struct ResumePageAccumulator {
         )
     }
 
-    func contains(_ item: ResumePageItem) -> Bool {
-        switch item {
-        case .education:
-            !education.isEmpty
-        case .experience:
-            !experience.isEmpty
-        case .skills:
-            !skills.isEmpty
-        case .project:
-            !projects.isEmpty
-        }
-    }
-
     mutating func append(_ item: ResumePageItem) {
         switch item {
         case let .education(value):
             education.append(value)
         case let .experience(value):
             experience.append(value)
-        case let .skills(values):
-            skills.append(contentsOf: values)
+        case let .skill(value):
+            skills.append(value)
         case let .project(value):
             projects.append(value)
         }
@@ -211,59 +136,6 @@ struct ResumePageView: View {
     let onSelectProject: (UUID) -> Void
     let onSelectBullet: (UUID, Int) -> Void
     let pageContent: ResumePageContent?
-
-    /// #32：空态占位各模板只差分割线颜色/高度和 padding 数值，以前是四个几乎
-    /// 一样的 switch 分支。抽成配置表，分支只剩查表 + 一套布局。
-    private struct PlaceholderChrome {
-        let dividerColor: Color
-        let dividerHeight: CGFloat
-        let dividerTopPadding: CGFloat
-        /// nil 表示原来就没有 bottom padding（如 timeline），传 0 等价。
-        let dividerBottomPadding: CGFloat?
-        let horizontalPadding: CGFloat
-        let verticalPadding: CGFloat
-    }
-
-    private static func placeholderChrome(for template: ResumeTemplate) -> PlaceholderChrome {
-        switch template {
-        case .editorial:
-            PlaceholderChrome(
-                dividerColor: ResumePaperPalette.ink,
-                dividerHeight: 1,
-                dividerTopPadding: 20,
-                dividerBottomPadding: 2,
-                horizontalPadding: 58,
-                verticalPadding: 46
-            )
-        case .minimal:
-            PlaceholderChrome(
-                dividerColor: ResumePaperPalette.ink,
-                dividerHeight: 2,
-                dividerTopPadding: 25,
-                dividerBottomPadding: 1,
-                horizontalPadding: 58,
-                verticalPadding: 48
-            )
-        case .creative:
-            PlaceholderChrome(
-                dividerColor: ResumePaperPalette.coral,
-                dividerHeight: 2,
-                dividerTopPadding: 18,
-                dividerBottomPadding: 1,
-                horizontalPadding: 52,
-                verticalPadding: 40
-            )
-        case .timeline:
-            PlaceholderChrome(
-                dividerColor: ResumePaperPalette.teal,
-                dividerHeight: 2,
-                dividerTopPadding: 20,
-                dividerBottomPadding: nil,
-                horizontalPadding: 48,
-                verticalPadding: 43
-            )
-        }
-    }
 
     init(
         document: ResumeDocument,
@@ -295,7 +167,7 @@ struct ResumePageView: View {
             }
         }
         .frame(width: 620, height: 876, alignment: .topLeading)
-        .background(ResumePaperPalette.paper)
+        .background { ResumePaperDecoration(template: document.template) }
         .foregroundStyle(ResumePaperPalette.ink)
         .clipShape(Rectangle())
         .overlay {
@@ -304,226 +176,48 @@ struct ResumePageView: View {
         }
     }
 
-    @ViewBuilder
     private func templateLayout(_ content: ResumePageContent) -> some View {
-        switch document.template {
-        case .editorial:
-            editorialLayout(content)
-        case .minimal:
-            minimalLayout(content)
-        case .creative:
-            creativeLayout(content)
-        case .timeline:
-            timelineLayout(content)
-        }
+        ResumePageBody(
+            document: document,
+            content: content,
+            showsPlaceholders: false,
+            selectedProjectID: selectedProjectID,
+            selectedBulletIndex: selectedBulletIndex,
+            onSelectProject: onSelectProject,
+            onSelectBullet: onSelectBullet
+        )
     }
 
     private var templatePlaceholderLayout: some View {
-        let chrome = Self.placeholderChrome(for: document.template)
-        return VStack(alignment: .leading, spacing: 0) {
-            ResumePageHeader(
-                document: document,
-                template: document.template,
-                showsPlaceholders: true
-            )
-            Rectangle()
-                .fill(chrome.dividerColor)
-                .frame(height: chrome.dividerHeight)
-                .padding(.top, chrome.dividerTopPadding)
-                .padding(.bottom, chrome.dividerBottomPadding ?? 0)
-            placeholderPageSections(template: document.template)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, chrome.horizontalPadding)
-        .padding(.vertical, chrome.verticalPadding)
-    }
-
-    @ViewBuilder
-    private func placeholderPageSections(template: ResumeTemplate) -> some View {
-        ResumePageSection(title: "教育经历", template: template) {
-            ResumePagePlaceholderRow(
-                fields: ["学校", "学历 · 专业", "时间"],
-                template: template
-            )
-        }
-        ResumePageSection(title: "工作经历", template: template) {
-            ResumePagePlaceholderRow(
-                fields: ["公司 · 职位", "时间"],
-                template: template
-            )
-        }
-        ResumePageSection(title: "掌握技能", template: template) {
-            HStack(spacing: 8) {
-                ForEach(Array(["技能", "技能", "技能"].enumerated()), id: \.offset) { _, field in
-                    ResumePagePlaceholderField(
-                        title: field,
-                        template: template
-                    )
-                }
-            }
-        }
-        ResumePageSection(title: "项目经历", template: template) {
-            VStack(alignment: .leading, spacing: 7) {
-                ResumePagePlaceholderRow(
-                    fields: ["项目名称", "时间"],
-                    template: template
-                )
-                ResumePagePlaceholderField(title: "项目简介", template: template)
-                ResumePagePlaceholderField(title: "项目要点", template: template)
-            }
-        }
-    }
-
-    private func editorialLayout(_ content: ResumePageContent) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if content.includesHeader {
-                ResumePageHeader(document: document, template: .editorial)
-                Rectangle()
-                    .fill(ResumePaperPalette.ink)
-                    .frame(height: 1)
-                    .padding(.top, 20)
-                    .padding(.bottom, 2)
-            }
-            pageSections(content, template: .editorial)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 58)
-        .padding(.vertical, 46)
-    }
-
-    private func minimalLayout(_ content: ResumePageContent) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if content.includesHeader {
-                ResumePageHeader(document: document, template: .minimal)
-                Rectangle()
-                    .fill(ResumePaperPalette.ink)
-                    .frame(height: 2)
-                    .padding(.top, 25)
-                    .padding(.bottom, 1)
-            }
-            pageSections(content, template: .minimal)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 58)
-        .padding(.vertical, 48)
-    }
-
-    private func creativeLayout(_ content: ResumePageContent) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if content.includesHeader {
-                ResumePageHeader(document: document, template: .creative)
-                HStack(spacing: 6) {
-                    Rectangle()
-                        .fill(ResumePaperPalette.coral)
-                        .frame(width: 36, height: 3)
-                    Rectangle()
-                        .fill(ResumePaperPalette.violet.opacity(0.28))
-                        .frame(height: 1)
-                }
-                .padding(.top, 18)
-                .padding(.bottom, 1)
-            }
-            pageSections(content, template: .creative)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 52)
-        .padding(.vertical, 40)
-    }
-
-    private func timelineLayout(_ content: ResumePageContent) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if content.includesHeader {
-                ResumePageHeader(document: document, template: .timeline)
-                Rectangle()
-                    .fill(ResumePaperPalette.teal)
-                    .frame(height: 2)
-                    .padding(.top, 20)
-            }
-            pageSections(content, template: .timeline)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 48)
-        .padding(.vertical, 43)
-    }
-
-    @ViewBuilder
-    private func pageSections(_ content: ResumePageContent, template: ResumeTemplate) -> some View {
-        if !content.education.isEmpty {
-            ResumePageSection(title: "教育经历", template: template) {
-                ForEach(content.education) { item in
-                    ResumePageEducation(item: item, template: template)
-                }
-            }
-        }
-
-        if !content.experience.isEmpty {
-            ResumePageSection(title: "工作经历", template: template) {
-                ForEach(content.experience) { item in
-                    ResumePageExperience(item: item, template: template)
-                }
-            }
-        }
-
-        if !content.skills.isEmpty {
-            ResumePageSection(title: "掌握技能", template: template) {
-                ResumePageSkills(skills: content.skills, template: template)
-            }
-        }
-
-        if !content.projects.isEmpty {
-            ResumePageSection(title: "项目经历", template: template) {
-                ForEach(content.projects) { project in
-                    ResumePageProject(
-                        project: project,
-                        template: template,
-                        selectedProjectID: selectedProjectID,
-                        selectedBulletIndex: selectedBulletIndex,
-                        onSelectProject: onSelectProject,
-                        onSelectBullet: onSelectBullet
-                    )
-                }
-            }
-        }
-    }
-
-    private func nonEmpty(_ value: String) -> Bool {
-        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        ResumePageBody(
+            document: document,
+            content: .fullDocument(document),
+            showsPlaceholders: true,
+            selectedProjectID: nil,
+            selectedBulletIndex: nil,
+            onSelectProject: { _ in },
+            onSelectBullet: { _, _ in }
+        )
     }
 }
 
-private struct ResumePagePlaceholderRow: View {
-    let fields: [String]
-    let template: ResumeTemplate
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 7) {
-            ForEach(Array(fields.dropLast().enumerated()), id: \.offset) { _, field in
-                ResumePagePlaceholderField(title: field, template: template)
-            }
-            Spacer(minLength: 8)
-            if let lastField = fields.last {
-                ResumePagePlaceholderField(title: lastField, template: template)
-            }
-        }
-    }
-}
-
-private struct ResumePagePlaceholderField: View {
+struct ResumePagePlaceholderField: View {
     let title: String
     let template: ResumeTemplate
+    var isSidebar = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.system(
-                    size: template == .editorial ? 10 : 9.5,
+                    size: template.category == .classic ? 10 : 9.5,
                     weight: .regular,
-                    design: template == .editorial ? .serif : .default
+                    design: template.bodyFontDesign
                 ))
-                .foregroundStyle(ResumePaperPalette.muted.opacity(0.78))
+                .foregroundStyle(isSidebar ? .white.opacity(0.8) : ResumePaperPalette.muted.opacity(0.78))
                 .lineLimit(1)
             Rectangle()
-                .fill(ResumePaperPalette.softLine)
+                .fill(isSidebar ? .white.opacity(0.25) : ResumePaperPalette.softLine)
                 .frame(height: 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

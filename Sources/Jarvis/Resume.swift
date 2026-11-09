@@ -1,92 +1,6 @@
 import Combine
 import Foundation
 
-enum ResumeTemplate: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
-    case minimal
-    case creative
-    case editorial
-    case timeline
-
-    static let defaultTemplate: ResumeTemplate = .minimal
-    static let allCases: [ResumeTemplate] = [.minimal, .creative, .editorial, .timeline]
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let rawValue = try container.decode(String.self)
-        switch rawValue {
-        case "minimal", "classic", "modern", "waterfall", "sidebar", "contrast":
-            self = .minimal
-        case "creative":
-            self = .creative
-        case "editorial":
-            self = .editorial
-        case "timeline":
-            self = .timeline
-        default:
-            self = .defaultTemplate
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
-    }
-
-    var id: String {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .minimal: "现代极简"
-        case .creative: "创意拼贴"
-        case .editorial: "编辑风格"
-        case .timeline: "时间轴"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .minimal: "text.alignleft"
-        case .creative: "scribble.variable"
-        case .editorial: "newspaper"
-        case .timeline: "point.3.connected.trianglepath.dotted"
-        }
-    }
-}
-
-enum ResumeTemplateCategory: String, CaseIterable, Identifiable, Sendable {
-    case all
-    case modern
-    case creative
-    case classic
-    case professional
-
-    var id: String {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .all: "全部"
-        case .modern: "现代"
-        case .creative: "创意"
-        case .classic: "经典"
-        case .professional: "专业"
-        }
-    }
-
-    var templates: [ResumeTemplate] {
-        switch self {
-        case .all: ResumeTemplate.allCases
-        case .modern: [.minimal]
-        case .creative: [.creative]
-        case .classic: [.editorial]
-        case .professional: [.timeline]
-        }
-    }
-}
-
 struct ResumeDocument: Codable, Equatable, Identifiable, Sendable {
     var id: UUID
     var title: String
@@ -338,42 +252,6 @@ struct ResumeProject: Codable, Equatable, Identifiable, Sendable {
             .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             || !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || bullets.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    }
-}
-
-enum ResumeSection: String, CaseIterable, Identifiable, Sendable {
-    case basicInfo
-    case education
-    case experience
-    case skills
-    case projects
-
-    var id: String {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .basicInfo: "基本信息"
-        case .education: "教育经历"
-        case .experience: "工作经历"
-        case .skills: "掌握技能"
-        case .projects: "项目经历"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .basicInfo: "person.crop.circle"
-        case .education: "graduationcap"
-        case .experience: "briefcase"
-        case .skills: "tag"
-        case .projects: "folder"
-        }
-    }
-
-    var requirementTitle: String {
-        self == .basicInfo ? "必填" : "可选"
     }
 }
 

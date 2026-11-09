@@ -38,9 +38,7 @@ private struct ResumeTemplateCard: View {
     @State private var isHovered = false
 
     private var styleTitle: String {
-        ResumeTemplateCategory.allCases.first {
-            $0 != .all && $0.templates.contains(template)
-        }?.title ?? ResumeTemplateCategory.all.title
+        template.category.title
     }
 
     var body: some View {
@@ -125,187 +123,67 @@ private struct ResumeTemplateCard: View {
     }
 }
 
-private struct ResumeTemplateThumbnail: View {
+struct ResumeTemplateThumbnail: View {
     static let size = CGSize(width: 168, height: 237)
     let template: ResumeTemplate
 
     var body: some View {
-        page
-            .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
-            .background(Color.white)
-            .allowsHitTesting(false)
+        let document = Self.sampleDocument(template: template)
+        ResumePageView(
+            document: document,
+            selectedProjectID: nil,
+            selectedBulletIndex: nil,
+            showsEmptyState: false,
+            onSelectProject: { _ in },
+            onSelectBullet: { _, _ in },
+            pageContent: ResumePageLayout.pages(for: document).first
+        )
+        .scaleEffect(Self.size.width / ResumePageLayout.pageSize.width, anchor: .topLeading)
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
+        .clipped()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
-    @ViewBuilder
-    private var page: some View {
-        switch template {
-        case .creative:
-            ZStack(alignment: .topLeading) {
-                ResumePaperPalette.violet.opacity(0.09)
-                Circle()
-                    .fill(ResumePaperPalette.coral.opacity(0.84))
-                    .frame(width: 56, height: 56)
-                    .offset(x: 112, y: -18)
-
-                VStack(alignment: .leading, spacing: 9) {
-                    HStack(spacing: 5) {
-                        Rectangle()
-                            .fill(ResumePaperPalette.coral)
-                            .frame(width: 26, height: 3)
-                        Text("CREATE")
-                            .font(.system(size: 5.5, weight: .bold, design: .rounded))
-                            .tracking(1)
-                            .foregroundStyle(ResumePaperPalette.coral)
-                    }
-                    Text("林知远")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundStyle(ResumePaperPalette.ink)
-                    Text("产品经理 · 设计思维")
-                        .font(.system(size: 6, weight: .medium, design: .rounded))
-                        .foregroundStyle(ResumePaperPalette.muted)
-                    miniSection(title: "关于我", accent: ResumePaperPalette.coral)
-                    miniSkills(["用户研究", "产品策略", "品牌设计"], fill: ResumePaperPalette.coral.opacity(0.12))
-                    miniSection(title: "精选项目", accent: ResumePaperPalette.violet)
-                }
-            }
-            .padding(17)
-        case .editorial:
-            VStack(alignment: .center, spacing: 8) {
-                Text("CURRICULUM VITAE")
-                    .font(.system(size: 5, weight: .semibold, design: .serif))
-                    .kerning(1)
-                    .foregroundStyle(ResumePaperPalette.muted)
-                Text("林知远")
-                    .font(.system(size: 17, weight: .medium, design: .serif))
-                    .foregroundStyle(ResumePaperPalette.ink)
-                Text("产品经理")
-                    .font(.system(size: 6, weight: .medium, design: .serif))
-                    .foregroundStyle(ResumePaperPalette.muted)
-                divider
-                miniSection(title: "教育经历", accent: ResumePaperPalette.ink)
-                miniSection(title: "工作经历", accent: ResumePaperPalette.ink)
-                miniSkillsTitle("掌握技能")
-                miniSkills(["产品规划", "用户研究", "数据分析"], fill: ResumePaperPalette.ink.opacity(0.08))
-                miniSection(title: "项目经历", accent: ResumePaperPalette.ink)
-            }
-            .padding(19)
-        case .minimal:
-            VStack(alignment: .leading, spacing: 11) {
-                Text("林知远")
-                    .font(.system(size: 24, weight: .light, design: .rounded))
-                    .foregroundStyle(ResumePaperPalette.ink)
-                Text("产品经理  ·  上海  ·  6年经验")
-                    .font(.system(size: 5.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(ResumePaperPalette.muted)
-                Rectangle()
-                    .fill(ResumePaperPalette.ink)
-                    .frame(height: 2)
-                miniMinimalSection("教育经历")
-                miniMinimalSection("工作经历")
-                miniSkillsTitle("掌握技能")
-                miniSkills(["产品规划", "用户研究", "数据分析"], fill: ResumePaperPalette.blue.opacity(0.12))
-                miniMinimalSection("项目经历")
-            }
-            .padding(18)
-        case .timeline:
-            HStack(alignment: .top, spacing: 8) {
-                VStack(spacing: 6) {
-                    ForEach(0 ..< 5, id: \.self) { _ in
-                        Circle()
-                            .fill(ResumePaperPalette.teal)
-                            .frame(width: 6, height: 6)
-                        Rectangle()
-                            .fill(ResumePaperPalette.teal.opacity(0.28))
-                            .frame(width: 1, height: 28)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("林知远")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(ResumePaperPalette.ink)
-                    Text("成长轨迹")
-                        .font(.system(size: 6, weight: .semibold))
-                        .foregroundStyle(ResumePaperPalette.teal)
-                    miniTimelineSection("2021 — 至今", "高级产品经理")
-                    miniTimelineSection("2018 — 2021", "产品经理")
-                    miniTimelineSection("2015 — 2018", "计算机科学 · 硕士")
-                    miniSkills(["产品规划", "用户研究", "数据分析"], fill: ResumePaperPalette.teal.opacity(0.12))
-                }
-            }
-            .padding(16)
-        }
-    }
-
-    private func miniSection(title: String, accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 6.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(ResumePaperPalette.ink)
-                Spacer(minLength: 0)
-            }
-            miniLine(width: nil, color: accent.opacity(0.32))
-            miniLine(width: 90, color: ResumePaperPalette.body.opacity(0.24))
-            miniLine(width: 68, color: ResumePaperPalette.muted.opacity(0.16))
-        }
-    }
-
-    private func miniLine(width: CGFloat?, color: Color = .black.opacity(0.22)) -> some View {
-        Capsule()
-            .fill(color)
-            .frame(width: width, height: 2)
-    }
-
-    private var divider: some View {
-        divider(color: ResumePaperPalette.muted)
-    }
-
-    private func divider(color: Color) -> some View {
-        Rectangle()
-            .fill(color)
-            .frame(height: 1)
-    }
-
-    private func miniSkillsTitle(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 5.5, weight: .bold, design: .rounded))
-            .foregroundStyle(ResumePaperPalette.muted)
-    }
-
-    private func miniSkills(_ skills: [String], fill: Color) -> some View {
-        HStack(spacing: 3) {
-            ForEach(skills, id: \.self) { skill in
-                Text(skill)
-                    .font(.system(size: 4.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(ResumePaperPalette.body)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(fill, in: Capsule())
-            }
-        }
-    }
-
-    private func miniMinimalSection(_ title: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title.uppercased())
-                .font(.system(size: 5.5, weight: .bold, design: .rounded))
-                .tracking(0.7)
-                .foregroundStyle(ResumePaperPalette.muted)
-            miniLine(width: nil, color: ResumePaperPalette.softLine)
-            miniLine(width: 86, color: ResumePaperPalette.body.opacity(0.35))
-            miniLine(width: 61, color: ResumePaperPalette.muted.opacity(0.22))
-        }
-    }
-
-    private func miniTimelineSection(_ period: String, _ title: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(period)
-                .font(.system(size: 5, weight: .bold, design: .rounded))
-                .foregroundStyle(ResumePaperPalette.teal)
-            Text(title)
-                .font(.system(size: 6.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(ResumePaperPalette.ink)
-            miniLine(width: 86, color: ResumePaperPalette.muted.opacity(0.25))
-        }
+    /// Only the gallery uses sample content; selecting a template still creates a blank resume.
+    static func sampleDocument(template: ResumeTemplate) -> ResumeDocument {
+        ResumeDocument(
+            template: template,
+            basicInfo: ResumeBasicInfo(
+                name: "林知远", headline: "高级产品经理", email: "zhiyuan.lin@example.com",
+                location: "上海", jobStatus: "在职 · 寻找新机会", workYears: "6 年经验"
+            ),
+            education: [ResumeEducation(
+                school: "上海交通大学", degree: "硕士", major: "计算机科学", period: "2017 — 2020"
+            )],
+            experience: [
+                ResumeExperience(company: "星云科技", role: "高级产品经理", period: "2023 — 至今"),
+                ResumeExperience(company: "远航软件", role: "产品经理", period: "2020 — 2023")
+            ],
+            skills: ["产品策略", "用户研究", "数据分析", "交互设计", "SQL / Figma", "跨团队协作"],
+            projects: [
+                ResumeProject(
+                    name: "企业协作平台", period: "2024 — 2025",
+                    summary: "面向中大型企业的一体化协作产品，覆盖需求管理、项目推进与知识沉淀，支持多团队异步协作。",
+                    bullets: [
+                        "访谈 30 家企业客户，梳理核心协作流程，制定产品路线图并推进三个版本落地。",
+                        "联合设计与研发优化任务分派和进度追踪，关键任务完成率由 68% 提升至 89%。"
+                    ]
+                ),
+                ResumeProject(
+                    name: "客户增长计划", period: "2022 — 2023",
+                    summary: "围绕客户全生命周期，搭建增长实验与运营分析体系，将产品使用数据转化为可执行的运营策略。",
+                    bullets: [
+                        "建立从注册到付费的指标体系，通过分层实验改善关键转化环节。",
+                        "协同运营建立客户反馈闭环，推动新用户激活率提升 24%。"
+                    ]
+                ),
+                ResumeProject(
+                    name: "设计系统与体验升级", period: "2021 — 2022",
+                    summary: "统一核心产品的交互规范与组件语言，提升跨端使用体验及团队交付效率。",
+                    bullets: ["整理 40 余个常用组件，建立设计评审与体验验收机制，减少重复设计和沟通成本。"]
+                )
+            ]
+        )
     }
 }
