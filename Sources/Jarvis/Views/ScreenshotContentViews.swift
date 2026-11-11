@@ -4,6 +4,7 @@ import SwiftUI
 struct ScreenshotView: View {
     @Environment(AppModel.self) private var app
     @State private var selectedTimeFilter: ScreenshotTimeFilter = .threeDays
+    @State private var searchText = ""
     @State private var selectedItemID: UUID?
     @State private var gridZoom: HistoryGridZoomLevel = .regular
     @State private var toolbarAlignment = HistoryToolbarAlignment()
@@ -26,6 +27,14 @@ struct ScreenshotView: View {
                         selectedItem: selectedItem,
                         onClearSelection: { selectedItemID = nil }
                     )
+                }
+                ToolbarSpacer(.fixed, placement: .automatic)
+                ToolbarItem(id: "screenshot.search", placement: .automatic) {
+                    ClipboardSearchField(
+                        text: $searchText,
+                        placeholder: ScreenshotTimeFilterLogic.searchPlaceholder,
+                        focusesOnAppear: false
+                    )
                     .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .trailing))
                 }
             },
@@ -33,6 +42,7 @@ struct ScreenshotView: View {
                 ScrollView {
                     ScreenshotHistorySection(
                         selectedTimeFilter: $selectedTimeFilter,
+                        searchText: searchText,
                         selectedItemID: $selectedItemID,
                         gridZoom: gridZoom
                     )
@@ -250,14 +260,21 @@ struct ScreenshotHistorySection: View {
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selectedTimeFilter: ScreenshotTimeFilter
+    let searchText: String
     @Binding var selectedItemID: UUID?
     let gridZoom: HistoryGridZoomLevel
 
     private var filteredItems: [ScreenshotHistoryItem] {
         ScreenshotTimeFilterLogic.filteredItems(
             from: app.screenshotHistory,
-            filter: selectedTimeFilter
+            filter: selectedTimeFilter,
+            searchText: searchText,
+            imageTextByHash: app.imageTextByHash
         )
+    }
+
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -265,10 +282,8 @@ struct ScreenshotHistorySection: View {
             if filteredItems.isEmpty {
                 JarvisEmptyState(
                     icon: "photo.on.rectangle",
-                    title: app.screenshotHistory.isEmpty ? "还没有截图" : "该时间范围暂无截图",
-                    message: app.screenshotHistory.isEmpty
-                        ? "框选截图后，历史记录会显示在这里"
-                        : "切换其他时间范围查看截图"
+                    title: emptyTitle,
+                    message: emptyMessage
                 )
                 .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
             } else {
@@ -312,6 +327,30 @@ struct ScreenshotHistorySection: View {
             JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion),
             value: selectedTimeFilter
         )
+        .animation(
+            JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion),
+            value: searchText
+        )
+    }
+
+    private var emptyTitle: String {
+        if app.screenshotHistory.isEmpty {
+            return "还没有截图"
+        }
+        if isSearching {
+            return "没有匹配的截图"
+        }
+        return "该时间范围暂无截图"
+    }
+
+    private var emptyMessage: String {
+        if app.screenshotHistory.isEmpty {
+            return "框选截图后，历史记录会显示在这里"
+        }
+        if isSearching {
+            return "换个关键词或时间范围。新图片里的文字要等后台识别完成后才能搜到。"
+        }
+        return "切换其他时间范围查看截图"
     }
 }
 

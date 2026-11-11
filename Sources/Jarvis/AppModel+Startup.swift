@@ -74,6 +74,7 @@ extension AppModel {
         if latestScreenshotData != nil {
             statusMessage = "已恢复上次缓存的截图"
         }
+        backfillImageText()
         JarvisPerformance.emit("startup services ready")
         JarvisLog.info(
             category: .lifecycle,

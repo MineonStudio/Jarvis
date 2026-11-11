@@ -210,16 +210,16 @@ extension AppModel {
                 "stalePathCount": String(stalePaths.count)
             ]
         )
+        enqueueReceivedClipboardImage(item)
         refreshClipboardCacheUsage()
     }
 
-    /// 剪贴板历史的唯一落盘入口：写入调用当下的状态，并作废在途的去抖写入。
-    /// 版本号就在读取状态之后取，两者同在 MainActor 上同步完成，顺序一致。
     @discardableResult
     private func persistClipboardHistory() -> Bool {
         clipboardSaveTask?.cancel()
         clipboardSaveTask = nil
         clipboardHistoryRevision += 1
+        defer { pruneUnreferencedImageText() }
         return clipboardStore.save(clipboardItems, revision: clipboardHistoryRevision)
     }
 

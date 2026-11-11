@@ -51,13 +51,38 @@ enum ScreenshotTimeFilter: String, CaseIterable, Identifiable {
 }
 
 enum ScreenshotTimeFilterLogic {
+    static let searchPlaceholder = "搜索图片中的文字"
+
     static func filteredItems(
         from items: [ScreenshotHistoryItem],
         filter: ScreenshotTimeFilter,
+        searchText: String = "",
+        imageTextByHash: [String: String] = [:],
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [ScreenshotHistoryItem] {
-        items.filter { filter.matches($0, now: now, calendar: calendar) }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return items.filter { item in
+            filter.matches(item, now: now, calendar: calendar)
+                && matchesSearch(item, query: query, imageTextByHash: imageTextByHash)
+        }
+    }
+
+    static func matchesSearch(
+        _ item: ScreenshotHistoryItem,
+        query: String,
+        imageTextByHash: [String: String]
+    ) -> Bool {
+        if query.isEmpty {
+            return true
+        }
+        guard let hash = item.contentHash,
+              let text = imageTextByHash[hash],
+              !text.isEmpty
+        else {
+            return false
+        }
+        return text.localizedCaseInsensitiveContains(query)
     }
 
     static func count(

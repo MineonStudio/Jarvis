@@ -272,23 +272,34 @@ extension AppModel {
         }
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let cacheSaved = cacheStore.save(data)
-            // 这次落盘实际对应的条目 id：更新时是原来那条，新建时是刚加进去那条。
-            let resolvedID: UUID? = if let historyItem {
-                historyStore.update(historyItem, data: data) != nil ? historyItem.id : nil
+            let contentHash = ImageContentHash.sha256(data)
+            // 这次落盘实际对应的条目：更新时是原来那条，新建时是刚加进去那条。
+            let savedItem: ScreenshotHistoryItem? = if let historyItem {
+                historyStore.update(historyItem, data: data, contentHash: contentHash)
             } else {
-                historyStore.add(data: data)?.id
+                historyStore.add(data: data, contentHash: contentHash)
             }
             let history = historyStore.load()
+            let savedFileURL = savedItem.map { historyStore.fileURL(for: $0) }
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.latestScreenshotData = cacheSaved ? data : self.latestScreenshotData
                 self.screenshotHistory = history
                 self.editingHistoryID = Self.editingHistoryIDAfterFinalize(
                     endsSession: endsSession,
-                    resolvedID: resolvedID,
+                    resolvedID: savedItem?.id,
                     current: self.editingHistoryID
                 )
-                if !cacheSaved || resolvedID == nil {
+                if let savedItem, let savedFileURL {
+                    self.enqueueImageText(
+                        hash: contentHash,
+                        fileURL: savedFileURL,
+                        priority: true,
+                        screenshotID: savedItem.id
+                    )
+                    self.pruneUnreferencedImageText()
+                }
+                if !cacheSaved || savedItem == nil {
                     self.showToast(JarvisFeedbackCopy.historySaveFailed)
                 }
                 self.refreshClipboardCacheUsage()
@@ -355,6 +366,7 @@ extension AppModel {
             return
         }
         reloadScreenshotHistory()
+        pruneUnreferencedImageText()
 
         if let deletedData, latestScreenshotData == deletedData {
             let replacement = screenshotHistory.first.flatMap { item in
