@@ -261,7 +261,7 @@ struct ClipboardItem: Codable, Identifiable, Equatable, Sendable {
     }
 
     var cachePaths: [String] {
-        [textPath, imagePath, filePath, thumbnailPath].compactMap { $0 }
+        [textPath, imagePath, filePath, thumbnailPath].compactMap(\.self)
     }
 
     var preview: String {
@@ -661,7 +661,7 @@ final class ClipboardService: @unchecked Sendable {
                 fileName: nil,
                 fileSize: Int64(data.count),
                 fileUTI: UTType.png.identifier,
-                fingerprintValue: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(),
+                fingerprintValue: ImageContentHash.sha256(data),
                 isStoredCopy: path != nil
             )
             JarvisLog.info(

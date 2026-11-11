@@ -75,6 +75,8 @@ final class AppModel {
     var clipboardItems: [ClipboardItem] = []
     var latestScreenshotData: Data?
     var screenshotHistory: [ScreenshotHistoryItem] = []
+    /// 图片 SHA-256 → OCR 文本。空字符串表示已经认过、图里没有文字。
+    var imageTextByHash: [String: String] = [:]
     var isCapturing = false
     var statusMessage = "系统就绪"
     var toastMessage: String?
@@ -144,21 +146,6 @@ final class AppModel {
     var meetingModelAvailability = MeetingModelAvailability(
         paraformerReady: false
     )
-    var canManageMeetingModels: Bool {
-        guard meetingModelPreparationTask == nil,
-              meetingCurrentRecordingID == nil,
-              !isStartingMeetingRecording
-        else {
-            return false
-        }
-        switch meetingProcessingState {
-        case .recording, .processing:
-            return false
-        default:
-            return true
-        }
-    }
-
     var meetingStorageError: String?
     var screenCapturePermissionGranted = false
     var accessibilityPermissionGranted = false
@@ -187,6 +174,14 @@ final class AppModel {
     @ObservationIgnored let settingsPanelController = SettingsPanelController()
     @ObservationIgnored lazy var screenshotCacheStore = ScreenshotCacheStore()
     @ObservationIgnored lazy var screenshotHistoryStore = ScreenshotHistoryStore()
+    @ObservationIgnored lazy var imageTextIndex: ImageTextIndex = {
+        let index = ImageTextIndex()
+        index.onStored = { [weak self] hash, text in
+            self?.noteImageTextStored(hash: hash, text: text)
+        }
+        return index
+    }()
+
     @ObservationIgnored let screenshotController = ScreenshotCaptureController()
     @ObservationIgnored let screenshotHistoryPreviewController = ScreenshotHistoryPreviewController()
     @ObservationIgnored let clipboardMediaPreviewController = ClipboardMediaPreviewController()
@@ -391,6 +386,21 @@ final class AppModel {
 }
 
 extension AppModel {
+    var canManageMeetingModels: Bool {
+        guard meetingModelPreparationTask == nil,
+              meetingCurrentRecordingID == nil,
+              !isStartingMeetingRecording
+        else {
+            return false
+        }
+        switch meetingProcessingState {
+        case .recording, .processing:
+            return false
+        default:
+            return true
+        }
+    }
+
     func aiConversationController(for provider: AIConversationProvider) -> JarvisWebPlatformController {
         if let controller = aiConversationControllers[provider] {
             return controller

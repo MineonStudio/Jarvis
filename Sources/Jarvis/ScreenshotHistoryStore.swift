@@ -5,6 +5,8 @@ struct ScreenshotHistoryItem: Codable, Identifiable, Equatable, Sendable {
     let createdAt: Date
     var updatedAt: Date
     let fileName: String
+    /// PNG 字节的 SHA-256。改过的图会换成新值；旧索引没有这个字段时为 nil，启动后补上。
+    var contentHash: String?
 
     /// 拖到别处（Finder、聊天窗口）时落盘用的名字。
     ///
@@ -110,7 +112,7 @@ final class ScreenshotHistoryStore: @unchecked Sendable {
     }
 
     @discardableResult
-    func add(data: Data, date: Date = Date()) -> ScreenshotHistoryItem? {
+    func add(data: Data, date: Date = Date(), contentHash: String? = nil) -> ScreenshotHistoryItem? {
         guard !data.isEmpty else { return nil }
         return lock.withLock {
             let id = UUID()
@@ -118,7 +120,8 @@ final class ScreenshotHistoryStore: @unchecked Sendable {
                 id: id,
                 createdAt: date,
                 updatedAt: date,
-                fileName: "screenshot-\(id.uuidString).png"
+                fileName: "screenshot-\(id.uuidString).png",
+                contentHash: contentHash
             )
             guard write(data, for: item) else { return nil }
 
@@ -140,7 +143,12 @@ final class ScreenshotHistoryStore: @unchecked Sendable {
     }
 
     @discardableResult
-    func update(_ item: ScreenshotHistoryItem, data: Data, date: Date = Date()) -> ScreenshotHistoryItem? {
+    func update(
+        _ item: ScreenshotHistoryItem,
+        data: Data,
+        date: Date = Date(),
+        contentHash: String? = nil
+    ) -> ScreenshotHistoryItem? {
         guard !data.isEmpty else { return nil }
         return lock.withLock {
             guard var items = try? itemsForWriting() else { return nil }
@@ -151,6 +159,9 @@ final class ScreenshotHistoryStore: @unchecked Sendable {
 
             var updated = items[index]
             updated.updatedAt = date
+            if let contentHash {
+                updated.contentHash = contentHash
+            }
             items[index] = updated
             guard save(items) else {
                 try? fileManager.removeItem(at: tempURL)
@@ -158,6 +169,18 @@ final class ScreenshotHistoryStore: @unchecked Sendable {
             }
             guard replaceFile(for: item, with: tempURL) else { return nil }
             return updated
+        }
+    }
+
+    /// 只补哈希，不重写 PNG。识别完成前历史里还没有哈希时用这个。
+    @discardableResult
+    func setContentHash(id: UUID, hash: String) -> Bool {
+        lock.withLock {
+            guard var items = try? itemsForWriting() else { return false }
+            guard let index = items.firstIndex(where: { $0.id == id }) else { return false }
+            guard items[index].contentHash != hash else { return true }
+            items[index].contentHash = hash
+            return save(items)
         }
     }
 
@@ -257,7 +280,9 @@ final class ScreenshotHistoryStore: @unchecked Sendable {
             return stale.count
         }
     }
+}
 
+extension ScreenshotHistoryStore {
     private func fileSize(of item: ScreenshotHistoryItem) -> Int64 {
         guard let url = safeFileURL(for: item.fileName),
               let size = (try? fileManager.attributesOfItem(atPath: url.path))?[.size] as? NSNumber

@@ -89,7 +89,7 @@ enum ClipboardFilterLogic {
         from items: [ClipboardItem],
         searchText: String,
         timeFilter: ClipboardTimeFilter,
-        category: ClipboardViewFilter,
+        category: ClipboardViewFilter, imageTextByHash: [String: String] = [:],
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [ClipboardItem] {
@@ -97,19 +97,19 @@ enum ClipboardFilterLogic {
         return items.filter { item in
             timeFilter.matches(item, now: now, calendar: calendar)
                 && category.matches(item)
-                && (query.isEmpty || item.preview.localizedCaseInsensitiveContains(query))
+                && matchesSearch(item, query: query, imageTextByHash: imageTextByHash)
         }
     }
 
     static func filteredItems(
         from items: [ClipboardItem],
         searchText: String,
-        filter: ClipboardViewFilter
+        filter: ClipboardViewFilter, imageTextByHash: [String: String] = [:]
     ) -> [ClipboardItem] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return items.filter { item in
             filter.matches(item)
-                && (query.isEmpty || item.preview.localizedCaseInsensitiveContains(query))
+                && matchesSearch(item, query: query, imageTextByHash: imageTextByHash)
         }
     }
 
@@ -189,7 +189,7 @@ struct ClipboardView: View {
             from: app.clipboardItems,
             searchText: searchText,
             timeFilter: selectedTimeFilter,
-            category: selectedCategory
+            category: selectedCategory, imageTextByHash: app.imageTextByHash
         )
     }
 
@@ -224,7 +224,7 @@ struct ClipboardView: View {
                 ToolbarItem(id: "clipboard.search", placement: .automatic) {
                     ClipboardSearchField(
                         text: $searchText,
-                        placeholder: "搜索文本、文件名…",
+                        placeholder: ClipboardFilterLogic.searchPlaceholder,
                         focusesOnAppear: false
                     )
                     .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .trailing))

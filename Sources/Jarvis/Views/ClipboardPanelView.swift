@@ -64,7 +64,8 @@ struct ClipboardPanelView: View {
     private var filteredItems: [ClipboardItem] {
         ClipboardFilterLogic.filteredItems(
             from: app.clipboardItems, searchText: searchText,
-            timeFilter: selectedTimeFilter, category: selectedCategory
+            timeFilter: selectedTimeFilter, category: selectedCategory,
+            imageTextByHash: app.imageTextByHash
         )
     }
 
@@ -192,7 +193,7 @@ struct ClipboardPanelView: View {
     }
 
     private var search: some View {
-        ClipboardSearchField(text: $searchText, placeholder: "搜索文本、文件名…")
+        ClipboardSearchField(text: $searchText, placeholder: ClipboardFilterLogic.searchPlaceholder)
             .frame(height: ClipboardPanelLayout.controlsHeight)
             .glassEffect(.regular, in: Capsule())
     }
