@@ -16,8 +16,9 @@ struct JarvisHomeView: View {
         .buttonStyle(JarvisSecondaryButtonStyle())
         .environment(\.jarvisFlatControls, true)
         .environment(\.jarvisContentButtonShadows, true)
-        .background(Color.jarvisBackground)
-        .ignoresSafeArea(.container, edges: .top)
+        // The hidden toolbar still occupies the top safe area. Drawing the
+        // header through it clips the greeting and the clock.
+        .background(Color.jarvisBackground.ignoresSafeArea())
         .toolbar { JarvisToolbarPlaceholder(id: "home.placeholder") }
         .onAppear { app.refreshPermissionStatus() }
         .task(id: scenePhase) {
@@ -27,22 +28,18 @@ struct JarvisHomeView: View {
     }
 
     private func dashboard(size: CGSize) -> some View {
-        let contentHeight = size.height - 16
-        let headerHeight: CGFloat = 64
-        let metricsHeight = min(160, max(134, contentHeight * 0.215))
-        let rankingHeight = min(128, contentHeight * 0.19)
-        let overviewHeight = contentHeight - headerHeight - metricsHeight - rankingHeight - 30
+        let bands = HomeDashboardLayout.bands(contentHeight: size.height - 16)
         return VStack(spacing: 10) {
             HomeDashboardHeader(pointerTracker: pointerTracker)
                 .background { Color.clear.contentShape(Rectangle()).gesture(WindowDragGesture()) }
-                .frame(height: headerHeight)
-            HomeMetricsGrid(monitor: monitor, width: size.width - 32).frame(height: metricsHeight)
+                .frame(height: bands.header)
+            HomeMetricsGrid(monitor: monitor, width: size.width - 32).frame(height: bands.metrics)
             HStack(spacing: 12) {
                 HomeSystemOverviewCard(monitor: monitor)
                 HomeCalendarCard()
-                HomeTipsCard(illustrationHeight: min(96, max(52, overviewHeight - 174)))
-            }.frame(height: overviewHeight)
-            HomeQuickToolsCard().frame(height: rankingHeight)
+                HomeTipsCard(illustrationHeight: min(96, max(52, bands.overview - 174)))
+            }.frame(height: bands.overview)
+            HomeQuickToolsCard().frame(height: bands.ranking)
         }
         .padding(.horizontal, 16).padding(.vertical, JarvisToolbarMetrics.leadingInset)
     }

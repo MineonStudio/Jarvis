@@ -31,6 +31,7 @@ struct HomeQuickToolsCard: View {
                     .help("打开\(tool.navigationTitle)")
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
     }
 }

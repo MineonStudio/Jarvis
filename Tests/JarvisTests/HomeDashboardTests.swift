@@ -14,6 +14,43 @@ final class HomeDashboardTests: XCTestCase {
         }
     }
 
+    func testTallWindowKeepsBandSharesInsteadOfGrowingOnlyTheMiddle() {
+        let content: CGFloat = 1400
+        let bands = HomeDashboardLayout.bands(contentHeight: content)
+        XCTAssertEqual(bands.header, 64)
+        XCTAssertEqual(bands.metrics, content * 0.215, accuracy: 0.001)
+        XCTAssertEqual(bands.ranking, content * 0.19, accuracy: 0.001)
+        XCTAssertEqual(
+            bands.header + bands.metrics + bands.overview + bands.ranking + HomeDashboardLayout.bandSpacing,
+            content,
+            accuracy: 0.001
+        )
+        XCTAssertGreaterThan(bands.metrics, 160)
+        XCTAssertGreaterThan(bands.ranking, 128)
+        XCTAssertLessThan(bands.overview, content * 0.6)
+        XCTAssertGreaterThan(bands.overview, bands.metrics)
+    }
+
+    func testCompactCanvasKeepsTheMetricsMinimum() {
+        let content: CGFloat = 604
+        let bands = HomeDashboardLayout.bands(contentHeight: content)
+        XCTAssertEqual(bands.metrics, 134, accuracy: 0.001)
+        XCTAssertEqual(bands.ranking, content * 0.19, accuracy: 0.001)
+        XCTAssertGreaterThan(bands.overview, 240)
+        XCTAssertEqual(
+            bands.header + bands.metrics + bands.overview + bands.ranking + HomeDashboardLayout.bandSpacing,
+            content,
+            accuracy: 0.001
+        )
+    }
+
+    func testCalendarRowsCapWhenTheCardIsTallAndShrinkWhenItIsShort() {
+        XCTAssertEqual(HomeDashboardLayout.calendarRowHeight(availableHeight: 600, weeks: 6), 52)
+        XCTAssertEqual(HomeDashboardLayout.calendarRowHeight(availableHeight: 180, weeks: 6), 30)
+        XCTAssertEqual(HomeDashboardLayout.calendarRowHeight(availableHeight: 4, weeks: 6), 1)
+        XCTAssertEqual(HomeDashboardLayout.calendarRowHeight(availableHeight: 40, weeks: 0), 40)
+    }
+
     private var calendar: Calendar {
         var value = Calendar(identifier: .gregorian)
         value.timeZone = .gmt

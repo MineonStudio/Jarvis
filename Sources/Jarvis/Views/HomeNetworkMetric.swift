@@ -22,7 +22,7 @@ struct HomeNetworkMetric: View {
             }
             HomeSparkline(values: history, color: .purple, maximum: nil, height: 22)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onHover(perform: hover)
         .onDisappear {

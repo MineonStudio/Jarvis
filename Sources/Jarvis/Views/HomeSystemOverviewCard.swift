@@ -25,7 +25,7 @@ struct HomeSystemOverviewCard: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .frame(maxWidth: .infinity, alignment: .center)
 
                 VStack(spacing: 8) {
                     info("芯片", value: monitor.macInfo.chip)
@@ -34,9 +34,9 @@ struct HomeSystemOverviewCard: View {
                     info("系统", value: monitor.macInfo.systemVersion)
                 }
                 .padding(.horizontal, 4)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
         .task(id: monitor.macInfo.modelIdentifier) {
             let types = UTType.types(
@@ -65,6 +65,6 @@ struct HomeSystemOverviewCard: View {
                 .multilineTextAlignment(.trailing)
         }
         .font(.system(size: 11))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
     }
 }

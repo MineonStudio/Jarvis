@@ -166,7 +166,7 @@ struct HomeMetricsGrid: View {
             Label(title, systemImage: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(color)
             content()
         }
-        .padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .jarvisContentSurface(cornerRadius: 16)
     }
 }

@@ -25,34 +25,36 @@ struct HomeTipsCard: View {
 
     var body: some View {
         HomeDashboardCard(title: "小贴士", symbol: "lightbulb", contentSpacing: 10, contentPadding: 14) {
-            HomeTipIllustration(theme: prompt.illustration, height: illustrationHeight)
-                .id(prompt.illustration)
-                .transition(.opacity)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(prompt.title).font(.system(size: 14, weight: .semibold))
-                Text(prompt.message).font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .id(prompt.id).transition(.opacity)
-            Spacer(minLength: 0)
-            HStack(spacing: 0) {
-                ForEach(prompts.indices, id: \.self) { page in
-                    Button {
-                        select(page)
-                    } label: {
-                        Capsule()
-                            .fill(page == index % prompts.count ? Color.jarvisAccent : Color.secondary.opacity(0.22))
-                            .frame(width: page == index % prompts.count ? 12 : 4, height: 4)
-                            .frame(width: 12, height: 18)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("第 \(page + 1) 条小贴士")
-                    .accessibilityAddTraits(page == index % prompts.count ? .isSelected : [])
+            VStack(spacing: 10) {
+                HomeTipIllustration(theme: prompt.illustration, height: illustrationHeight)
+                    .id(prompt.illustration)
+                    .transition(.opacity)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(prompt.title).font(.system(size: 14, weight: .semibold))
+                    Text(prompt.message).font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .id(prompt.id).transition(.opacity)
+                HStack(spacing: 0) {
+                    ForEach(prompts.indices, id: \.self) { page in
+                        Button {
+                            select(page)
+                        } label: {
+                            Capsule()
+                                .fill(page == index % prompts.count ? Color.jarvisAccent : Color.secondary.opacity(0.22))
+                                .frame(width: page == index % prompts.count ? 12 : 4, height: 4)
+                                .frame(width: 12, height: 18)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("第 \(page + 1) 条小贴士")
+                        .accessibilityAddTraits(page == index % prompts.count ? .isSelected : [])
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
         .onHover { isHovering = $0 }
         .task(id: "\(index)-\(scenePhase == .active && !isHovering)-\(prompts.count)") {
