@@ -4,7 +4,7 @@ import AppKit
 @MainActor
 enum ScreenRecordingOptionsLayout {
     static func width(microphoneNames: [String]) -> CGFloat {
-        let rowTitles = ["系统默认麦克风", "显示鼠标点按", "包括系统音频"] + microphoneNames
+        let rowTitles = ["系统默认麦克风", "显示鼠标", "包括系统音频"] + microphoneNames
         let choices = ["H.264", "HEVC", "30 fps", "60 fps"] + ScreenRecordingQuality.allCases.map(\.title)
         let rows = textWidth(rowTitles) + 54
         let pickers = textWidth(["编码", "画质", "帧率"]) + textWidth(choices) + 72

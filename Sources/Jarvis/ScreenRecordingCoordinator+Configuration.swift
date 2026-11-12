@@ -32,7 +32,6 @@ extension ScreenRecordingCoordinator {
         config.queueDepth = 4
         config.scalesToFit = true; config.preservesAspectRatio = true
         config.showsCursor = settings.showsCursor
-        config.showMouseClicks = settings.showsMouseClicks == true
         config.capturesAudio = false // System output is captured independently of the video target.
         config.excludesCurrentProcessAudio = true
         config.captureMicrophone = settings.microphone

@@ -4,16 +4,16 @@ import AVFoundation
 import XCTest
 
 final class ScreenRecordingTests: XCTestCase {
-    func testOlderSettingsRemainDecodableWithoutMouseClickPreference() throws {
+    func testSavedSettingsIgnoreRetiredMouseClickPreference() throws {
         let original = ScreenRecordingSettings()
         let data = try JSONEncoder().encode(original)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        object.removeValue(forKey: "showsMouseClicks")
+        object["showsMouseClicks"] = true
         object["countdown"] = 5
         let decoded = try JSONDecoder().decode(ScreenRecordingSettings.self, from: JSONSerialization.data(withJSONObject: object))
-        XCTAssertNil(decoded.showsMouseClicks)
         XCTAssertEqual(decoded.countdown, 5)
         XCTAssertEqual(decoded.systemAudio, original.systemAudio)
+        XCTAssertEqual(decoded.showsCursor, original.showsCursor)
     }
 
     @MainActor
