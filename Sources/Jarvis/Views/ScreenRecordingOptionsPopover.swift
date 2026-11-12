@@ -60,9 +60,6 @@ struct ScreenRecordingOptionsPopover: View {
             .font(.system(size: 13))
             .padding(.horizontal, JarvisSpacing.controlGap).padding(.vertical, JarvisSpacing.iconGap)
             option("显示鼠标", selected: recorder.settings.showsCursor) { recorder.settings.showsCursor.toggle() }
-            option("显示鼠标点按", selected: recorder.settings.showsMouseClicks == true) {
-                recorder.settings.showsMouseClicks = !(recorder.settings.showsMouseClicks == true)
-            }
             option("包括系统音频", selected: recorder.settings.systemAudio) { recorder.settings.systemAudio.toggle() }
             if let message = recorder.message {
                 Text(message).font(.caption).foregroundStyle(.secondary).padding(JarvisSpacing.controlGap)

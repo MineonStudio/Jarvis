@@ -2,9 +2,9 @@ import SwiftUI
 
 struct JarvisHomeView: View {
     let pointerTracker: JarvisHomePointerTracker
+    let monitor: HomeSystemMonitor
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
-    @State private var monitor = HomeSystemMonitor()
 
     var body: some View {
         GeometryReader { geometry in

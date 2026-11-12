@@ -68,7 +68,6 @@ struct ScreenRecordingSettings: Codable, Equatable, Sendable {
     var microphoneID = ""
     var quality: ScreenRecordingQuality = .fullHD
     var frameRate = 30
-    var showsMouseClicks: Bool? = false
     var showsCursor = true
     var countdown = 3
     var useHEVC = false

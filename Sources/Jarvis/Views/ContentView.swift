@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var navigationSelection: TopLevelSection = .home
     @State private var loadedSection: AppSection = .home
     @State private var homePointerTracker = JarvisHomePointerTracker()
+    @State private var homeMonitor = HomeSystemMonitor()
 
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
@@ -184,7 +185,7 @@ struct ContentView: View {
     @ViewBuilder
     private var detailView: some View {
         switch loadedSection {
-        case .home: JarvisHomeView(pointerTracker: homePointerTracker)
+        case .home: JarvisHomeView(pointerTracker: homePointerTracker, monitor: homeMonitor)
         case .aiConversation: AIConversationView()
         case .entertainment: EntertainmentView()
         case .gamePlaza: GamePlazaView()

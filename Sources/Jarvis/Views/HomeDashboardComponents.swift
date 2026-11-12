@@ -90,6 +90,8 @@ struct HomeDashboardHeader: View {
 struct HomeMetricsGrid: View {
     let monitor: HomeSystemMonitor
     let width: CGFloat
+    @Environment(AppModel.self) private var app
+
     var body: some View {
         LazyVGrid(
             columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: width >= 760 ? 4 : 2), spacing: 12
@@ -138,11 +140,13 @@ struct HomeMetricsGrid: View {
                 HomeSparkline(values: monitor.diskHistory, color: .orange, maximum: 1)
             }
             metric(title: "网络", symbol: "network", color: .purple) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Label(HomeDashboardFormatting.rate(monitor.snapshot.upload), systemImage: "arrow.up")
-                    Label(HomeDashboardFormatting.rate(monitor.snapshot.download), systemImage: "arrow.down")
-                }.font(.system(size: 15, weight: .medium)).monospacedDigit().frame(height: 48, alignment: .leading)
-                HomeSparkline(values: monitor.networkHistory, color: .purple, maximum: nil)
+                HomeNetworkMetric(
+                    upload: monitor.snapshot.upload,
+                    download: monitor.snapshot.download,
+                    history: monitor.networkHistory,
+                    display: monitor.identity,
+                    onCopied: { app.showToast($0) }
+                )
             }
         }
     }
@@ -155,10 +159,10 @@ struct HomeMetricsGrid: View {
         }.frame(width: 44, height: 44).padding(3).accessibilityHidden(true)
     }
 
-    private func metric(title: String, symbol: String, color: Color, @ViewBuilder content: () -> some View)
-        -> some View
-    {
-        VStack(alignment: .leading, spacing: 10) {
+    private func metric(
+        title: String, symbol: String, color: Color, spacing: CGFloat = 10, @ViewBuilder content: () -> some View
+    ) -> some View {
+        VStack(alignment: .leading, spacing: spacing) {
             Label(title, systemImage: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(color)
             content()
         }
@@ -171,6 +175,7 @@ struct HomeSparkline: View {
     let values: [Double]
     let color: Color
     let maximum: Double?
+    var height: CGFloat = 22
     var body: some View {
         Canvas { context, size in
             guard values.count > 1 else { return }
@@ -190,6 +195,6 @@ struct HomeSparkline: View {
             context.stroke(
                 line, with: .color(color), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
             )
-        }.frame(height: 22).accessibilityHidden(true)
+        }.frame(height: height).accessibilityHidden(true)
     }
 }
