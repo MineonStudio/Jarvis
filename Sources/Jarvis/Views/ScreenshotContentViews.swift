@@ -39,7 +39,7 @@ struct ScreenshotView: View {
                 }
             },
             content: {
-                ScrollView {
+                JarvisBackToTopScroll("返回截图列表顶部", id: "screenshot-scroll-top") {
                     ScreenshotHistorySection(
                         selectedTimeFilter: $selectedTimeFilter,
                         searchText: searchText,
