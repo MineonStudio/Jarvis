@@ -231,7 +231,7 @@ struct ClipboardView: View {
                 }
             },
             content: {
-                ScrollView {
+                JarvisBackToTopScroll("返回剪贴板列表顶部", id: "clipboard-scroll-top") {
                     ClipboardHistoryGallery(
                         items: filteredItems,
                         gridZoom: gridZoom,

@@ -10,7 +10,7 @@ private enum WallpaperScrollTarget {
 }
 
 private enum WallpaperScrollBehavior {
-    static let backToTopThreshold: CGFloat = 500
+    static let backToTopThreshold = JarvisScrollToTop.visibilityThreshold
 }
 
 private enum WallpaperCustomFilterPrompt {
