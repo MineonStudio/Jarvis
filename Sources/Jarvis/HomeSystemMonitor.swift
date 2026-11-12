@@ -26,18 +26,29 @@ struct HomeSystemSnapshot: Sendable {
 @Observable @MainActor
 final class HomeSystemMonitor {
     var snapshot = HomeSystemSnapshot()
+    var identity = HomeNetworkDisplay.empty
     var cpuHistory: [Double] = []
     var memoryHistory: [Double] = []
     var networkHistory: [Double] = []
     var diskHistory: [Double] = []
     let deviceName = Host.current().localizedName ?? "我的 Mac"
     var macInfo = HomeMacSystemInfo.fallback
+    private let egress = HomeNetworkEgressEngine()
 
     /// The view owns this task; leaving Home or deactivating the scene cancels it.
     func run() async {
         let info = await HomeMacSystemInfoReader.shared.read()
         guard !Task.isCancelled else { return }
         macInfo = info
+        egress.onUpdate = { [weak self] next in
+            self?.identity = next
+        }
+        async let sampling: Void = sampleLoop()
+        async let egressing: Void = egress.run()
+        _ = await (sampling, egressing)
+    }
+
+    private func sampleLoop() async {
         let sampler = HomeSystemSampler()
         while !Task.isCancelled {
             let next = await sampler.sample()
