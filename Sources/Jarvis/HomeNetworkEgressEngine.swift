@@ -15,6 +15,11 @@ enum HomeNetworkLookupPlan {
         .distantFuture
     }
 
+    /// Only an address from this lookup counts. A card that keeps the previous address is a miss.
+    static func succeeded(_ resolved: HomeNetworkDisplay) -> Bool {
+        resolved.realAddress != nil || resolved.vpnAddress != nil
+    }
+
     static func afterFailure(now: Date, attempt: Int) -> (date: Date, attempt: Int) {
         let index = min(attempt, backoff.count - 1)
         return (now.addingTimeInterval(backoff[index]), min(attempt + 1, backoff.count - 1))
@@ -142,8 +147,8 @@ final class HomeNetworkEgressEngine {
         }
         let real = await located(realTask, state: state, vpn: proxy, token: token)
         guard current(token) else { return }
-        reveal(state, real: real, vpn: proxy)
-        finish()
+        let refreshed = reveal(state, real: real, vpn: proxy)
+        finish(refreshed: refreshed)
     }
 
     private func current(_ token: Int) -> Bool {
@@ -164,11 +169,10 @@ final class HomeNetworkEgressEngine {
         return lookup
     }
 
-    private func finish() {
-        let found = display.realAddress != nil || display.vpnAddress != nil
-        hasResult = found
-        schedule(failed: !found)
-        log(found: found)
+    private func finish(refreshed: Bool) {
+        hasResult = display.realAddress != nil || display.vpnAddress != nil
+        schedule(failed: !refreshed)
+        log(found: hasResult)
     }
 
     private func begin(primary: String?, plan: HomeNetworkRequestPlan, vpnActive: Bool) -> RevealState {
@@ -203,7 +207,8 @@ final class HomeNetworkEgressEngine {
         var hadResult: Bool
     }
 
-    private func reveal(_ state: RevealState, real: HomeNetworkLookup?, vpn: HomeNetworkLookup?) {
+    @discardableResult
+    private func reveal(_ state: RevealState, real: HomeNetworkLookup?, vpn: HomeNetworkLookup?) -> Bool {
         let resolved = HomeNetworkResolver.display(
             plan: state.plan, vpnActive: state.vpnActive, real: real, vpn: vpn
         )
@@ -211,6 +216,7 @@ final class HomeNetworkEgressEngine {
             previous: display, resolved: resolved, primaryChanged: state.changed, hadResult: state.hadResult
         )
         onUpdate?(display)
+        return HomeNetworkLookupPlan.succeeded(resolved)
     }
 
     private func schedule(failed: Bool) {

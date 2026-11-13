@@ -30,4 +30,11 @@ final class HomeNetworkLookupPlanTests: XCTestCase {
             handledGeneration: 3
         ))
     }
+
+    func testRetainedAddressesDoNotCountAsAFreshLookup() {
+        XCTAssertFalse(HomeNetworkLookupPlan.succeeded(.empty))
+        var fresh = HomeNetworkDisplay.empty
+        fresh.vpnAddress = "198.51.100.9"
+        XCTAssertTrue(HomeNetworkLookupPlan.succeeded(fresh))
+    }
 }
