@@ -1,6 +1,33 @@
 import Foundation
 import Network
 
+/// One homepage visit looks up immediately. A success waits for the next visit or a path change.
+enum HomeNetworkLookupPlan {
+    static func beginVisit() -> Date {
+        .distantPast
+    }
+
+    static func isDue(now: Date, nextLookup: Date, generation: Int, handledGeneration: Int) -> Bool {
+        now >= nextLookup || generation != handledGeneration
+    }
+
+    static func afterSuccess() -> Date {
+        .distantFuture
+    }
+
+    /// Only an address from this lookup counts. A card that keeps the previous address is a miss.
+    static func succeeded(_ resolved: HomeNetworkDisplay) -> Bool {
+        resolved.realAddress != nil || resolved.vpnAddress != nil
+    }
+
+    static func afterFailure(now: Date, attempt: Int) -> (date: Date, attempt: Int) {
+        let index = min(attempt, backoff.count - 1)
+        return (now.addingTimeInterval(backoff[index]), min(attempt + 1, backoff.count - 1))
+    }
+
+    private static let backoff: [TimeInterval] = [60, 120, 240, 30 * 60]
+}
+
 @MainActor
 final class HomeNetworkEgressEngine {
     var onUpdate: (@MainActor (HomeNetworkDisplay) -> Void)?
@@ -36,6 +63,8 @@ final class HomeNetworkEgressEngine {
     func run() async {
         runToken += 1
         let token = runToken
+        failureStep = 0
+        nextLookup = HomeNetworkLookupPlan.beginVisit()
         let pathMonitor = NWPathMonitor()
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let ok = path.status == .satisfied
@@ -63,9 +92,13 @@ final class HomeNetworkEgressEngine {
                 await waitForChange()
                 continue
             }
-            let due = Date() >= nextLookup
-            let changed = generation != handledGeneration
-            if !due, !changed {
+            let due = HomeNetworkLookupPlan.isDue(
+                now: Date(),
+                nextLookup: nextLookup,
+                generation: generation,
+                handledGeneration: handledGeneration
+            )
+            if !due {
                 try? await Task.sleep(for: .milliseconds(400))
                 continue
             }
@@ -114,8 +147,8 @@ final class HomeNetworkEgressEngine {
         }
         let real = await located(realTask, state: state, vpn: proxy, token: token)
         guard current(token) else { return }
-        reveal(state, real: real, vpn: proxy)
-        finish()
+        let refreshed = reveal(state, real: real, vpn: proxy)
+        finish(refreshed: refreshed)
     }
 
     private func current(_ token: Int) -> Bool {
@@ -136,11 +169,10 @@ final class HomeNetworkEgressEngine {
         return lookup
     }
 
-    private func finish() {
-        let found = display.realAddress != nil || display.vpnAddress != nil
-        hasResult = found
-        schedule(failed: !found)
-        log(found: found)
+    private func finish(refreshed: Bool) {
+        hasResult = display.realAddress != nil || display.vpnAddress != nil
+        schedule(failed: !refreshed)
+        log(found: hasResult)
     }
 
     private func begin(primary: String?, plan: HomeNetworkRequestPlan, vpnActive: Bool) -> RevealState {
@@ -175,7 +207,8 @@ final class HomeNetworkEgressEngine {
         var hadResult: Bool
     }
 
-    private func reveal(_ state: RevealState, real: HomeNetworkLookup?, vpn: HomeNetworkLookup?) {
+    @discardableResult
+    private func reveal(_ state: RevealState, real: HomeNetworkLookup?, vpn: HomeNetworkLookup?) -> Bool {
         let resolved = HomeNetworkResolver.display(
             plan: state.plan, vpnActive: state.vpnActive, real: real, vpn: vpn
         )
@@ -183,17 +216,18 @@ final class HomeNetworkEgressEngine {
             previous: display, resolved: resolved, primaryChanged: state.changed, hadResult: state.hadResult
         )
         onUpdate?(display)
+        return HomeNetworkLookupPlan.succeeded(resolved)
     }
 
     private func schedule(failed: Bool) {
         if failed {
-            let delay = Self.backoff[min(failureStep, Self.backoff.count - 1)]
-            failureStep = min(failureStep + 1, Self.backoff.count - 1)
-            nextLookup = Date().addingTimeInterval(delay)
+            let scheduled = HomeNetworkLookupPlan.afterFailure(now: Date(), attempt: failureStep)
+            failureStep = scheduled.attempt
+            nextLookup = scheduled.date
             return
         }
         failureStep = 0
-        nextLookup = Date().addingTimeInterval(30 * 60)
+        nextLookup = HomeNetworkLookupPlan.afterSuccess()
     }
 
     private func log(found: Bool) {
@@ -219,6 +253,4 @@ final class HomeNetworkEgressEngine {
             fields: ["viaVPN": display.regionOnVPN ? "true" : "false", "vpn": vpn]
         )
     }
-
-    private static let backoff: [TimeInterval] = [60, 120, 240, 30 * 60]
 }
