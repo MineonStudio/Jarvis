@@ -33,6 +33,24 @@ enum JarvisDropdownMetrics {
     static let horizontalPadding: CGFloat = 10
     static let arrowSpacing: CGFloat = 5
     static let arrowPointSize: CGFloat = 10
+    static let searchableMenuMaximumHeight: CGFloat = 400
+
+    static func menuHeightLimit(anchor: CGRect, visibleFrame: CGRect) -> CGFloat {
+        let below = anchor.minY - visibleFrame.minY - triggerGap
+        let above = visibleFrame.maxY - anchor.maxY - triggerGap
+        return min(visibleFrame.height, max(below, above, 0))
+    }
+
+    static func optionListHeight(count: Int) -> CGFloat {
+        CGFloat(count) * JarvisToolbarMetrics.controlSize + CGFloat(max(0, count - 1)) * optionSpacing
+    }
+
+    static func wholeOptionRowsHeight(count: Int, availableHeight: CGFloat) -> CGFloat {
+        let rowStride = JarvisToolbarMetrics.controlSize + optionSpacing
+        let rowsThatFit = Int(max(0, availableHeight + optionSpacing) / rowStride)
+        guard rowsThatFit > 0 else { return max(0, availableHeight) }
+        return optionListHeight(count: min(count, rowsThatFit))
+    }
 
     static func menuOriginY(anchor: CGRect, panelHeight: CGFloat, visibleFrame: CGRect) -> CGFloat {
         let below = anchor.minY - panelHeight - triggerGap
@@ -274,12 +292,18 @@ struct JarvisDropdownPillMenuList: View {
         searchThreshold.map { options.count > $0 } ?? false
     }
 
+    private var menuOptions: [JarvisDropdownOption] {
+        showsSelectedOption ? options : options.filter { $0.id != selectionID }
+    }
+
     private var visibleOptions: [JarvisDropdownOption] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return options.filter { option in
-            (showsSelectedOption || option.id != selectionID)
-                && (query.isEmpty || option.title.localizedStandardContains(query))
-        }
+        return query.isEmpty ? menuOptions : menuOptions.filter { $0.title.localizedStandardContains(query) }
+    }
+
+    private var availableOptionsHeight: CGFloat {
+        // Search menus reserve space for their field, result count and padding.
+        maximumHeight - (showsSearch ? 86 : JarvisDropdownMetrics.menuEdgePadding * 2)
     }
 
     var body: some View {
@@ -315,7 +339,7 @@ struct JarvisDropdownPillMenuList: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if options.count > 10 {
+            if showsSearch || JarvisDropdownMetrics.optionListHeight(count: menuOptions.count) > availableOptionsHeight {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
                         LazyVStack(alignment: .leading, spacing: JarvisDropdownMetrics.optionSpacing) {
@@ -329,10 +353,8 @@ struct JarvisDropdownPillMenuList: View {
                         }
                     }
                     .scrollIndicators(.visible)
-                    .frame(height: min(
-                        CGFloat(options.count) * (JarvisToolbarMetrics.controlSize
-                            + JarvisDropdownMetrics.optionSpacing),
-                        max(48, maximumHeight - (showsSearch ? 86 : 8))
+                    .frame(height: JarvisDropdownMetrics.wholeOptionRowsHeight(
+                        count: menuOptions.count, availableHeight: availableOptionsHeight
                     ))
                     .onAppear {
                         if let selectionID {
@@ -637,6 +659,14 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
             dismiss: @escaping () -> Void
         ) {
             guard let anchorView, let parentWindow = anchorView.window else { return }
+            let anchorRect = parentWindow.convertToScreen(anchorView.convert(anchorView.bounds, to: nil))
+            let availableHeight = (parentWindow.screen ?? NSScreen.main).map {
+                JarvisDropdownMetrics.menuHeightLimit(anchor: anchorRect, visibleFrame: $0.visibleFrame)
+            } ?? JarvisDropdownMetrics.searchableMenuMaximumHeight
+            let showsSearch = searchThreshold.map { options.count > $0 } ?? false
+            let maximumHeight = showsSearch
+                ? min(JarvisDropdownMetrics.searchableMenuMaximumHeight, availableHeight)
+                : availableHeight
 
             let panel = JarvisDropdownMenuPanel(
                 contentRect: .zero,
@@ -650,7 +680,7 @@ private struct JarvisDropdownMenuPanelPresenter: NSViewRepresentable {
                 showsSelectedOption: showsSelectedOption,
                 controlWidth: controlWidth,
                 searchThreshold: searchThreshold,
-                maximumHeight: min(400, (parentWindow.screen?.visibleFrame.height ?? 800) - 16),
+                maximumHeight: maximumHeight,
                 onSelect: { [weak self] optionID in
                     // 先提交外部选择；它可能触发父视图重绘。最后再写入关闭状态，
                     // 避免父视图因选择变化重绘时覆盖关闭状态并让面板保持打开。

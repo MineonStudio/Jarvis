@@ -89,7 +89,11 @@ final class UpdatePromptTests: XCTestCase {
         var installCount = 0
         for response in [NSApplication.ModalResponse.alertSecondButtonReturn, .alertFirstButtonReturn] {
             settings.makeKeyAndOrderFront(nil)
-            controller.present(release: release) { installCount += 1 }
+            controller.present(
+                release: release,
+                loadNotes: { _ in ["修复首页网络显示。"] },
+                onInstall: { installCount += 1 }
+            )
             controller.present(release: release) { XCTFail("Duplicate prompt must be ignored") }
             try await Task.sleep(for: .milliseconds(300))
             XCTAssertTrue(controller.isPresenting)
@@ -116,6 +120,60 @@ final class UpdatePromptTests: XCTestCase {
             XCTAssertEqual(alert.buttons.map(\.title), ["立马更新", "稍后更新"])
             XCTAssertEqual(alert.buttons[1].keyEquivalent, "\u{1b}")
             XCTAssertTrue(alert.informativeText.contains("重启应用"))
+            XCTAssertTrue(alert.informativeText.contains("暂时无法显示更新说明"))
+            XCTAssertNil(alert.accessoryView)
         }
+    }
+}
+
+extension UpdatePromptTests {
+    func testLongReleaseNotesScrollWhileKeepingBothActionsAvailable() throws {
+        let url = try XCTUnwrap(URL(string: "https://example.com/update"))
+        let release = JarvisReleaseInfo(
+            version: "2.0.0", build: "400", releaseURL: url, downloadURL: url,
+            manifestURL: url, signatureURL: url, archiveName: "Jarvis-update.zip"
+        )
+        let notes = (1 ... 24).map { "第 \($0) 项更新内容。" }
+        let alert = JarvisUpdatePromptController.makeAlert(release: release, notes: notes)
+        let scrollView = try XCTUnwrap(alert.accessoryView as? NSScrollView)
+        let textView = try XCTUnwrap(scrollView.documentView as? NSTextView)
+
+        XCTAssertTrue(scrollView.hasVerticalScroller)
+        XCTAssertFalse(textView.isEditable)
+        XCTAssertEqual(textView.string.components(separatedBy: "\n").count, notes.count)
+        XCTAssertTrue(textView.string.contains("第 24 项更新内容。"))
+        XCTAssertEqual(alert.buttons.map(\.title), ["立马更新", "稍后更新"])
+    }
+}
+
+final class JarvisReleaseNotesTests: XCTestCase {
+    func testReleaseNotesUseChangeSectionsAndExcludeVerification() {
+        let body = """
+        发布摘要。
+
+        ## 新功能
+        - 新增 **返回顶部**。
+        - [查看示例](https://example.com/example)。
+
+        ## 修复
+        ### 网络
+        重新适配公网地址查询。
+
+        ### 代理
+        1. 修复代理地址显示。
+
+        ## 验证
+        - 打包和签名校验通过。
+        """
+        XCTAssertEqual(JarvisReleaseNotes.items(from: body), [
+            "新增 返回顶部。", "查看示例。", "重新适配公网地址查询。", "修复代理地址显示。"
+        ])
+    }
+
+    func testNotesWithoutFormalHeadingsCanUseProseOrLists() {
+        XCTAssertEqual(JarvisReleaseNotes.items(from: "修复了设置窗口重复提示。"), ["修复了设置窗口重复提示。"])
+        XCTAssertEqual(JarvisReleaseNotes.items(from: "- 优化界面。\n- 修复崩溃。"), ["优化界面。", "修复崩溃。"])
+        XCTAssertTrue(JarvisReleaseNotes.items(from: "## 验证\n\n- 签名通过。").isEmpty)
+        XCTAssertTrue(JarvisReleaseNotes.items(from: "  ").isEmpty)
     }
 }

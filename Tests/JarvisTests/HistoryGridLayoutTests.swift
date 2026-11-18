@@ -2,13 +2,7 @@ import AppKit
 @testable import Jarvis
 import XCTest
 
-/// 宫格的列几何：一行铺满（右边不留参差的空档），卡片比例恒为 16:9。
-///
-/// 参考桌面壁纸模块的 justified 布局——那边行高随图的宽高比变；截图和剪贴板的卡片
-/// 比例是固定的，所以"铺满"由**列宽**承担，比例一点都不能动。
-///
-/// 视图侧现在直接交给 `LazyVGrid.adaptive(minimum:maximum: .infinity)`，这里钉住的是
-/// 同一套算术：给它一个可用宽度，它该算出几列、列宽多少。
+/// 固定比例宫格的列数、列宽和卡片高度。
 final class HistoryGridLayoutTests: XCTestCase {
     private let spacing = HistoryGridMetrics.clipboardGridSpacing
 
@@ -23,9 +17,6 @@ final class HistoryGridLayoutTests: XCTestCase {
             let card = width(available: available, target: target)
             let columns = HistoryGridColumns.columns(availableWidth: available, targetWidth: target, spacing: spacing)
             let used = CGFloat(columns) * card + CGFloat(columns - 1) * spacing
-            if columns == 1, card >= target * 1.5 {
-                continue // 巨卡上限生效时本来就不铺满
-            }
             XCTAssertEqual(used, available, accuracy: 0.01, "可用 \(available)：没铺满，右边留了 \(available - used)")
         }
     }

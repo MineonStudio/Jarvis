@@ -5,49 +5,67 @@ struct ScreenRecordingHistoryCard: View, Equatable {
     let record: ScreenRecordingRecord
     let thumbnail: URL
     let isSelected: Bool
-    let maxPixelSize: Int
+    let cardSize: CGSize
     let enablesHoverZoom: Bool
+    let onClick: (Int) -> Void
     let onSelect: () -> Void
     let onPlay: () -> Void
     let onCopy: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var image: NSImage?
-    @State private var isHovered = false
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.record == rhs.record && lhs.thumbnail == rhs.thumbnail && lhs.isSelected == rhs.isSelected
-            && lhs.maxPixelSize == rhs.maxPixelSize && lhs.enablesHoverZoom == rhs.enablesHoverZoom
+            && lhs.cardSize == rhs.cardSize && lhs.enablesHoverZoom == rhs.enablesHoverZoom
     }
 
     private var thumbnailCacheKey: String {
         "\(record.id.uuidString)|\(record.filePath)|\(record.byteCount)"
     }
 
+    private var maxPixelSize: Int {
+        // Group nearby sizes so dragging the window does not repeatedly reload thumbnails.
+        let longestEdge = max(cardSize.width, cardSize.height)
+        let pixels = (longestEdge * 2 / 64).rounded(.up) * 64
+        return Int(min(640, max(160, pixels)))
+    }
+
+    private var duration: String {
+        MeetingRecordingStyle.formatDuration(record.duration)
+    }
+
+    private var timestamp: String {
+        JarvisHistoryDateFormatting.string(from: record.createdAt)
+    }
+
     var body: some View {
-        cardBody
-            .contentShape(RoundedRectangle(cornerRadius: HistoryGridMetrics.clipboardCornerRadius, style: .continuous))
-            .onTapGesture(count: 2, perform: onPlay)
-            .onTapGesture(perform: onSelect)
-            .onHover { hovering in
-                guard hovering != isHovered else { return }
-                withAnimation(JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion)) {
-                    isHovered = hovering
+        GalleryCard(
+            size: cardSize,
+            isSelected: isSelected,
+            enablesHoverZoom: enablesHoverZoom,
+            onClick: onClick,
+            preview: { previewArea },
+            leading: {
+                Label {
+                    Text(duration)
+                } icon: {
+                    Image(systemName: "video.fill").font(.system(size: 9, weight: .semibold))
                 }
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("屏幕录制，\(MeetingRecordingStyle.formatDuration(record.duration))，\(JarvisHistoryDateFormatting.string(from: record.createdAt))")
-            .accessibilityValue(isSelected ? "已选中" : "未选中")
-            .accessibilityHint("点击选择，双击播放；可以拖到 Finder 或其他应用导出视频")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction(named: "播放", onPlay)
-            .accessibilityAction(named: "复制", onCopy)
-            .task(id: "\(thumbnailCacheKey)|\(maxPixelSize)") { await loadThumbnail() }
+            },
+            trailing: { Text(timestamp) }
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("屏幕录制，\(duration)，\(timestamp)")
+        .accessibilityHint(isSelected ? "再次点击取消选择，双击播放" : "点击选择，双击播放")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(.default, onSelect)
+        .accessibilityAction(named: "播放", onPlay)
+        .accessibilityAction(named: "复制", onCopy)
+        .task(id: "\(thumbnailCacheKey)|\(maxPixelSize)") { await loadThumbnail() }
     }
 
     private var previewArea: some View {
         Color.clear
-            .aspectRatio(HistoryGridLayout.aspectRatio, contentMode: .fit)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
                 ZStack {
                     Color.clear.jarvisPanelBackground(cornerRadius: 0)
@@ -64,55 +82,6 @@ struct ScreenRecordingHistoryCard: View, Equatable {
             .onDrag {
                 record.exists ? NSItemProvider(object: record.fileURL as NSURL) : NSItemProvider()
             }
-    }
-
-    private var cardBody: some View {
-        HistoryCardChrome(preview: previewArea, isSelected: isSelected, enablesHoverZoom: enablesHoverZoom)
-            .overlay(alignment: .bottom) {
-                if isHovered {
-                    metadataRow
-                        .transition(JarvisMotion.cardOverlayTransition(reduceMotion: reduceMotion))
-                }
-            }
-            .overlay(alignment: .topTrailing) { actionOverlay }
-            .clipShape(RoundedRectangle(cornerRadius: HistoryGridMetrics.clipboardCornerRadius, style: .continuous))
-            .jarvisGridCardShadow()
-    }
-
-    @ViewBuilder
-    private var actionOverlay: some View {
-        if isHovered {
-            HStack(spacing: JarvisSpacing.iconGap) {
-                Button(action: onPlay) { Text("播放").lineLimit(1).fixedSize(horizontal: true, vertical: false) }
-                    .buttonStyle(JarvisCardActionPillButtonStyle())
-                    .accessibilityLabel("播放视频")
-                Button(action: onCopy) { Text("复制").lineLimit(1).fixedSize(horizontal: true, vertical: false) }
-                    .buttonStyle(JarvisCardActionPillButtonStyle())
-                    .accessibilityLabel("复制视频")
-            }
-            .disabled(!record.exists)
-            .padding(JarvisSpacing.controlGap)
-            .transition(JarvisMotion.cardOverlayTransition(reduceMotion: reduceMotion))
-        }
-    }
-
-    private var metadataRow: some View {
-        HStack(spacing: JarvisSpacing.iconGap) {
-            Image(systemName: "video")
-                .font(JarvisTypography.captionEmphasis)
-                .fixedSize()
-            Text(MeetingRecordingStyle.formatDuration(record.duration))
-                .font(JarvisTypography.caption)
-                .monospacedDigit()
-                .lineLimit(1)
-            Spacer(minLength: 4)
-            Text(JarvisHistoryDateFormatting.string(from: record.createdAt))
-                .font(JarvisTypography.caption)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .historyCardMetadata()
     }
 
     private func loadThumbnail() async {

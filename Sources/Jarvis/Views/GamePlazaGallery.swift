@@ -12,7 +12,9 @@ enum GamePlazaCategory: String, CaseIterable, Identifiable {
 
 struct GamePlazaGallery: View {
     let category: GamePlazaCategory
+    let gridZoom: HistoryGridZoomLevel
     let onStartMahjong: () -> Void
+    @State private var selection = GallerySelection<Game.ID>()
 
     private enum Game: String, CaseIterable, Identifiable {
         case mahjong
@@ -35,82 +37,46 @@ struct GamePlazaGallery: View {
     }
 
     var body: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 250, maximum: 350), spacing: JarvisSpacing.gridGap)],
-            alignment: .leading,
-            spacing: JarvisSpacing.gridGap
-        ) {
-            ForEach(visibleGames) { game in
-                GamePosterCard(
-                    title: game.title,
-                    onStart: {
-                        switch game {
-                        case .mahjong: onStartMahjong()
-                        }
-                    }
+        GeometryReader { viewport in
+            ScrollView {
+                FixedRatioGallery(
+                    items: visibleGames, availableWidth: viewport.size.width,
+                    targetWidth: gridZoom.cardWidth,
+                    card: card
                 )
+                .padding(.bottom, HistoryGridMetrics.historyPanelInset)
+                .galleryBackground(minHeight: viewport.size.height) { selection.clear() }
             }
+            .scrollIndicators(.hidden)
+        }
+        .onChange(of: visibleGames.map(\.id)) { _, ids in selection.retain(ids.contains) }
+    }
+
+    private func card(_ game: Game, _ size: CGSize) -> some View {
+        let isSelected = selection.selectedID == game.id
+        return GalleryCard(
+            size: size, isSelected: isSelected, enablesHoverZoom: gridZoom.enablesHoverZoom,
+            onClick: { count in
+                GallerySelection.handleClick(count, on: game.id, selection: $selection) { start(game) }
+            },
+            preview: { GamePosterArtwork() },
+            leading: { Label(game.category.rawValue, systemImage: "gamecontroller") },
+            trailing: { Text(game.title) }
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(game.title)
+        .accessibilityHint("点击切换选中，双击开始游戏")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { selection.toggle(game.id) }
+        .accessibilityAction(named: "开始游戏") { start(game) }
+        .contextMenu {
+            Button("开始游戏", systemImage: "play.fill") { start(game) }
         }
     }
-}
 
-private struct GamePosterCard: View {
-    let title: String
-    let onStart: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovered = false
-
-    var body: some View {
-        HistoryCardChrome(preview: cover, isSelected: false)
-            .overlay(alignment: .bottomTrailing) { startActionOverlay }
-            .clipShape(RoundedRectangle(
-                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                style: .continuous
-            ))
-            .jarvisGridCardShadow()
-            .contentShape(RoundedRectangle(
-                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                style: .continuous
-            ))
-            .onTapGesture(count: 2, perform: onStart)
-            .onHover { hovering in
-                guard hovering != isHovered else { return }
-                withAnimation(JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion)) {
-                    isHovered = hovering
-                }
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(title)
-            .accessibilityHint("双击开始游戏，也可使用右下角悬浮的开始游戏按钮")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction(named: "开始游戏", onStart)
-            .contextMenu {
-                Button(action: onStart) {
-                    Label("开始游戏", systemImage: "play.fill")
-                }
-            }
-    }
-
-    private var cover: some View {
-        Color.clear
-            .aspectRatio(HistoryGridLayout.aspectRatio, contentMode: .fit)
-            .frame(maxWidth: .infinity)
-            .overlay { GamePosterArtwork() }
-            .clipped()
-    }
-
-    @ViewBuilder
-    private var startActionOverlay: some View {
-        if isHovered {
-            Button(action: onStart) {
-                Text("开始游戏")
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            .buttonStyle(JarvisCardActionPillButtonStyle())
-            .accessibilityLabel("开始游戏，\(title)")
-            .padding(JarvisSpacing.controlGap)
-            .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 8)))
+    private func start(_ game: Game) {
+        switch game {
+        case .mahjong: onStartMahjong()
         }
     }
 }
@@ -128,7 +94,7 @@ private struct GamePosterArtwork: View {
             if let poster = Self.poster {
                 Image(nsImage: poster)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .clipped()
             } else {

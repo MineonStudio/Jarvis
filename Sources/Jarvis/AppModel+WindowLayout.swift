@@ -48,7 +48,7 @@ extension AppModel {
         refreshPermissionStatus()
         guard windowDragLayoutActivation.request(hasPermission: accessibilityPermissionGranted) else {
             persistWindowDragLayoutEnabled(false)
-            promptForTaskPermission(.accessibility, presentation: .settingsWindow)
+            promptForTaskPermission(.accessibility, presentation: .settingsPage)
             return
         }
         persistWindowDragLayoutEnabled(true)

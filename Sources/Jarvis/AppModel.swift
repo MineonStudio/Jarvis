@@ -9,6 +9,7 @@ enum AppSection: Hashable, Identifiable {
     case aiConversation
     case entertainment
     case gamePlaza
+    case settings
     case skill(SkillID)
 
     var id: String {
@@ -17,6 +18,7 @@ enum AppSection: Hashable, Identifiable {
         case .aiConversation: "ai-conversation"
         case .entertainment: "entertainment"
         case .gamePlaza: "game-plaza"
+        case .settings: "settings"
         case let .skill(skill): "skill.\(skill.id)"
         }
     }
@@ -27,6 +29,7 @@ enum AppSection: Hashable, Identifiable {
         case .aiConversation: "AI聚合"
         case .entertainment: "娱乐广场"
         case .gamePlaza: "游戏广场"
+        case .settings: "设置"
         case let .skill(skill): skill.title
         }
     }
@@ -37,6 +40,7 @@ enum AppSection: Hashable, Identifiable {
         case .aiConversation: "AI聚合"
         case .entertainment: "娱乐广场"
         case .gamePlaza: "游戏广场"
+        case .settings: "设置"
         case .skill(.screenshot): "截图"
         case .skill(.screenRecording): "屏幕录制"
         case .skill(.clipboard): "剪贴板"
@@ -54,6 +58,7 @@ enum AppSection: Hashable, Identifiable {
         case .aiConversation: "sparkles"
         case .entertainment: "play.rectangle"
         case .gamePlaza: "gamecontroller"
+        case .settings: "gearshape"
         case let .skill(skill): skill.icon
         }
     }
@@ -80,6 +85,7 @@ final class AppModel {
     var isCapturing = false
     var statusMessage = "系统就绪"
     var toastMessage: String?
+    var toastDestination: JarvisToastDestination = .main
     var screenshotShortcut = ScreenshotShortcut.default
     var screenshotShortcutConflictMessage = ""
     var clipboardShortcut = ScreenshotShortcut.clipboardDefault
@@ -171,7 +177,6 @@ final class AppModel {
     @ObservationIgnored lazy var clipboardHistoryWriter = ClipboardHistoryWriter(store: clipboardStore)
     @ObservationIgnored lazy var startupRepository = JarvisStartupRepository()
     @ObservationIgnored let clipboardPanelController = ClipboardPanelController()
-    @ObservationIgnored let settingsPanelController = SettingsPanelController()
     @ObservationIgnored lazy var screenshotCacheStore = ScreenshotCacheStore()
     @ObservationIgnored lazy var screenshotHistoryStore = ScreenshotHistoryStore()
     @ObservationIgnored lazy var imageTextIndex: ImageTextIndex = {

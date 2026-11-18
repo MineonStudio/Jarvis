@@ -10,6 +10,7 @@ struct ResumeContentView: View {
     @State private var selectedProjectID: UUID?
     @State private var selectedBulletIndex = 0
     @State private var selectedTemplateCategory: ResumeTemplateCategory = .all
+    @State private var templateGridZoom: HistoryGridZoomLevel = .regular
     @State private var previewScale: CGFloat = 1.0
     @State private var isNewResumeConfirmationPresented = false
     @FocusState private var isFilenameFocused: Bool
@@ -27,8 +28,8 @@ struct ResumeContentView: View {
             },
             trailingToolbar: {
                 if workspace.needsTemplateSelection {
-                    ToolbarItem(placement: .automatic) {
-                        EmptyView()
+                    ToolbarItem(id: "resume.template-grid-zoom", placement: .automatic) {
+                        HistoryGridZoomControl(selection: $templateGridZoom)
                     }
                 } else {
                     resumeTrailingToolbar
@@ -37,7 +38,7 @@ struct ResumeContentView: View {
             content: {
                 Group {
                     if workspace.needsTemplateSelection {
-                        ResumeTemplateSelectionView(category: selectedTemplateCategory) { template in
+                        ResumeTemplateSelectionView(category: selectedTemplateCategory, gridZoom: templateGridZoom) { template in
                             workspace.chooseTemplate(template)
                             expandedSection = .basicInfo
                         }

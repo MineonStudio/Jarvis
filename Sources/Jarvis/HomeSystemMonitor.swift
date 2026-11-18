@@ -26,26 +26,19 @@ struct HomeSystemSnapshot: Sendable {
 @Observable @MainActor
 final class HomeSystemMonitor {
     var snapshot = HomeSystemSnapshot()
-    var identity = HomeNetworkDisplay.empty
     var cpuHistory: [Double] = []
     var memoryHistory: [Double] = []
     var networkHistory: [Double] = []
     var diskHistory: [Double] = []
     let deviceName = Host.current().localizedName ?? "我的 Mac"
     var macInfo = HomeMacSystemInfo.fallback
-    private let egress = HomeNetworkEgressEngine()
 
     /// The view owns this task; leaving Home or deactivating the scene cancels it.
     func run() async {
         let info = await HomeMacSystemInfoReader.shared.read()
         guard !Task.isCancelled else { return }
         macInfo = info
-        egress.onUpdate = { [weak self] next in
-            self?.identity = next
-        }
-        async let sampling: Void = sampleLoop()
-        async let egressing: Void = egress.run()
-        _ = await (sampling, egressing)
+        await sampleLoop()
     }
 
     private func sampleLoop() async {
@@ -57,7 +50,11 @@ final class HomeSystemMonitor {
             append(next.cpu, to: &cpuHistory)
             append(next.memoryFraction, to: &memoryHistory)
             append(next.diskFraction, to: &diskHistory)
-            append(next.download.map { $0 + (next.upload ?? 0) }, to: &networkHistory)
+            if let upload = next.upload, let download = next.download {
+                append(upload + download, to: &networkHistory)
+            } else {
+                networkHistory.removeAll()
+            }
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
         }
     }
@@ -73,7 +70,12 @@ final class HomeSystemMonitor {
 
 actor HomeSystemSampler {
     private var previousCPU: [UInt32]?
-    private var previousNetwork: (received: UInt64, sent: UInt64, time: TimeInterval)?
+    private struct InterfaceCounters {
+        let received: UInt64
+        let sent: UInt64
+    }
+
+    private var previousNetwork: (interfaces: [String: InterfaceCounters], time: TimeInterval)?
     private var lastDiskRead = Date.distantPast
     private var disk: (available: UInt64?, total: UInt64?) = (nil, nil)
 
@@ -108,18 +110,20 @@ actor HomeSystemSampler {
             let pages = UInt64(memory.active_count) + UInt64(memory.wire_count) + UInt64(memory.compressor_page_count)
             result.memoryUsed = min(result.memoryTotal, pages * UInt64(pageSize))
         }
-        if let counters = Self.networkCounters() {
-            let time = ProcessInfo.processInfo.systemUptime
-            if let old = previousNetwork {
-                result.download = Self.rate(
-                    previous: old.received, current: counters.received, elapsed: time - old.time
-                )
-                result.upload = Self.rate(previous: old.sent, current: counters.sent, elapsed: time - old.time)
+        let counters = Self.networkCounters()
+        let time = ProcessInfo.processInfo.systemUptime
+        if let previousNetwork {
+            let elapsed = time - previousNetwork.time
+            for (name, current) in counters {
+                guard let old = previousNetwork.interfaces[name],
+                      let download = Self.rate(previous: old.received, current: current.received, elapsed: elapsed),
+                      let upload = Self.rate(previous: old.sent, current: current.sent, elapsed: elapsed)
+                else { continue }
+                result.download = (result.download ?? 0) + download
+                result.upload = (result.upload ?? 0) + upload
             }
-            previousNetwork = (counters.received, counters.sent, time)
-        } else {
-            previousNetwork = nil
         }
+        previousNetwork = (counters, time)
         if Date().timeIntervalSince(lastDiskRead) >= 30 {
             let values = try? URL(fileURLWithPath: NSHomeDirectory()).resourceValues(
                 forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey]
@@ -148,27 +152,22 @@ actor HomeSystemSampler {
         return Double(current - previous) / elapsed
     }
 
-    private static func networkCounters() -> (received: UInt64, sent: UInt64)? {
+    private static func networkCounters() -> [String: InterfaceCounters] {
         var list: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&list) == 0, let first = list else { return nil }
+        guard getifaddrs(&list) == 0, let first = list else { return [:] }
         defer { freeifaddrs(list) }
-        var pointer: UnsafeMutablePointer<ifaddrs>? = first
-        var received: UInt64 = 0
-        var sent: UInt64 = 0
-        var found = false
-        while let current = pointer {
+        var interfaces: [String: InterfaceCounters] = [:]
+        for current in sequence(first: first, next: { $0.pointee.ifa_next }) {
             let item = current.pointee
-            defer { pointer = item.ifa_next }
+            let name = String(cString: item.ifa_name)
             guard let address = item.ifa_addr, Int32(address.pointee.sa_family) == AF_LINK,
-                  item.ifa_flags & UInt32(IFF_UP) != 0,
-                  String(cString: item.ifa_name).hasPrefix("en"), let data = item.ifa_data
+                  item.ifa_flags & UInt32(IFF_UP | IFF_RUNNING) == UInt32(IFF_UP | IFF_RUNNING),
+                  name.hasPrefix("en"), let data = item.ifa_data
             else { continue }
             let counters = data.assumingMemoryBound(to: if_data.self).pointee
-            received += UInt64(counters.ifi_ibytes)
-            sent += UInt64(counters.ifi_obytes)
-            found = true
+            interfaces[name] = InterfaceCounters(received: UInt64(counters.ifi_ibytes), sent: UInt64(counters.ifi_obytes))
         }
-        return found ? (received, sent) : nil
+        return interfaces
     }
 
     nonisolated static func systemString(_ key: String) -> String? {

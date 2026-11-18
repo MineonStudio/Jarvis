@@ -4,13 +4,12 @@ import SwiftUI
 struct ScreenRecordingView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var selectedRecordID: UUID?
+    @State private var selection = GallerySelection<UUID>()
+    @FocusState private var isHistoryFocused: Bool
     @State private var gridZoom: HistoryGridZoomLevel = .regular
     @State private var toolbarAlignment = HistoryToolbarAlignment()
     @State private var selectedTimeFilter: ScreenshotTimeFilter = .threeDays
     @State private var pendingDelete: ScreenRecordingRecord?
-    @State private var pendingRename: ScreenRecordingRecord?
-    @State private var newTitle = ""
     private var recorder: ScreenRecordingCoordinator {
         app.screenRecording
     }
@@ -22,7 +21,7 @@ struct ScreenRecordingView: View {
     }
 
     private var selectedRecord: ScreenRecordingRecord? {
-        guard let selectedRecordID else { return nil }
+        guard let selectedRecordID = selection.selectedID else { return nil }
         return filteredRecords.first { $0.id == selectedRecordID }
     }
 
@@ -49,11 +48,9 @@ struct ScreenRecordingView: View {
                     .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .content))
             }
         )
-        .onChange(of: selectedTimeFilter) { _, _ in selectedRecordID = nil }
+        .onChange(of: selectedTimeFilter) { _, _ in selection.clear() }
         .onChange(of: filteredRecords.map(\.id)) { _, ids in
-            if let selectedRecordID, !ids.contains(selectedRecordID) {
-                self.selectedRecordID = nil
-            }
+            selection.retain(ids.contains)
         }
         .confirmationDialog("删除这段屏幕录制？", isPresented: Binding(get: { pendingDelete != nil }, set: {
             if !$0 {
@@ -66,19 +63,6 @@ struct ScreenRecordingView: View {
                 }; pendingDelete = nil
             }
         } message: { Text("视频会移到废纸篓，录制记录与恢复片段会被删除。") }
-        .alert("重命名", isPresented: Binding(get: { pendingRename != nil }, set: {
-            if !$0 {
-                pendingRename = nil
-            }
-        })) {
-            TextField("标题", text: $newTitle)
-            Button("取消", role: .cancel) { pendingRename = nil }
-            Button("保存") {
-                if let record = pendingRename {
-                    recorder.rename(record, title: newTitle)
-                }; pendingRename = nil
-            }
-        }
     }
 
     private var actionToolbar: some View {
@@ -151,36 +135,62 @@ struct ScreenRecordingView: View {
     }
 
     private var historyGrid: some View {
-        ScrollView {
-            LazyVGrid(
-                columns: [GridItem(
-                    .adaptive(minimum: gridZoom.cardWidth, maximum: .infinity),
-                    spacing: HistoryGridMetrics.clipboardGridSpacing
-                )],
-                alignment: .leading,
-                spacing: HistoryGridMetrics.clipboardGridSpacing
-            ) {
-                ForEach(filteredRecords) { record in
-                    ScreenRecordingHistoryCard(
-                        record: record,
-                        thumbnail: recorder.repository.thumbnail(record.id),
-                        isSelected: selectedRecordID == record.id,
-                        maxPixelSize: gridZoom.thumbnailPixelSize,
-                        enablesHoverZoom: gridZoom.enablesHoverZoom,
-                        onSelect: { selectedRecordID = record.id },
-                        onPlay: { open(record) },
-                        onCopy: { copy(record) }
-                    )
-                    .equatable()
-                    .contextMenu { actions(record) }
-                }
+        GeometryReader { viewport in
+            let width = viewport.size.width - toolbarAlignment.leadingInset - toolbarAlignment.trailingInset
+            ScrollView {
+                FixedRatioGallery(
+                    items: filteredRecords,
+                    availableWidth: width,
+                    targetWidth: gridZoom.cardWidth,
+                    card: { record, size in
+                        ScreenRecordingHistoryCard(
+                            record: record,
+                            thumbnail: recorder.repository.thumbnail(record.id),
+                            isSelected: selection.selectedID == record.id,
+                            cardSize: size,
+                            enablesHoverZoom: gridZoom.enablesHoverZoom,
+                            onClick: { count in
+                                GallerySelection.handleClick(count, on: record.id, selection: $selection) {
+                                    previewFromCard(record)
+                                }
+                                isHistoryFocused = true
+                            },
+                            onSelect: {
+                                selection.toggle(record.id)
+                                isHistoryFocused = true
+                            },
+                            onPlay: { previewFromCard(record) },
+                            onCopy: { copy(record) }
+                        )
+                        .equatable()
+                        .contextMenu { actions(record) }
+                    }
+                )
+                .padding(.leading, toolbarAlignment.leadingInset)
+                .padding(.trailing, toolbarAlignment.trailingInset)
+                .padding(.bottom, HistoryGridMetrics.historyPanelInset)
+                .galleryBackground(minHeight: viewport.size.height) { selection.clear() }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, toolbarAlignment.leadingInset)
-            .padding(.trailing, toolbarAlignment.trailingInset)
-            .padding(.bottom, HistoryGridMetrics.historyPanelInset)
+            .focusable()
+            .focusEffectDisabled()
+            .focused($isHistoryFocused)
+            .onKeyPress(.escape) {
+                let hadSelection = selection.selectedID != nil
+                selection.clear()
+                return hadSelection ? .handled : .ignored
+            }
+            .onKeyPress(.return) {
+                guard let selectedRecord, selectedRecord.exists else { return .ignored }
+                open(selectedRecord)
+                return .handled
+            }
         }
         .animation(JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion), value: gridZoom)
+    }
+
+    private func previewFromCard(_ record: ScreenRecordingRecord) {
+        isHistoryFocused = true
+        open(record)
     }
 
     private var recoverySection: some View {
@@ -204,15 +214,13 @@ struct ScreenRecordingView: View {
     @ViewBuilder
     private func actions(_ record: ScreenRecordingRecord) -> some View {
         Button("播放") { open(record) }.disabled(!record.exists)
-        Button("重命名…") { newTitle = record.title; pendingRename = record }
         Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([record.fileURL]) }.disabled(!record.exists)
         if !record.exists {
             Button("重新定位文件…") { Task { await recorder.locate(record) } }
         }
-        Button("复制文件") { copy(record) }.disabled(!record.exists)
-        ShareLink(item: record.fileURL) { Text("分享…") }.disabled(!record.exists)
+        Button("复制") { copy(record) }.disabled(!record.exists)
         Divider()
-        Button("删除…", role: .destructive) { pendingDelete = record }
+        Button("删除", role: .destructive) { pendingDelete = record }
     }
 
     private func open(_ record: ScreenRecordingRecord) {

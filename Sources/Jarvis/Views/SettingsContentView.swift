@@ -3,8 +3,6 @@ import SwiftUI
 
 enum SettingsLayout {
     static let contentMaxWidth: CGFloat = 760
-    static let defaultWindowSize = CGSize(width: 1040, height: 680)
-    static let minimumWindowSize = CGSize(width: 728, height: 520)
 }
 
 enum SettingsSection: String, CaseIterable, Hashable, Identifiable {
@@ -85,11 +83,11 @@ struct SettingsCardHeader: View {
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var selection: SettingsSection = .general
+    @Binding var selection: SettingsSection
     @State private var isClearPermissionsConfirmationPresented = false
 
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
+        HStack(spacing: 0) {
             JarvisSidebarNavigation(
                 topItems: SettingsSection.allCases,
                 selection: $selection,
@@ -97,14 +95,8 @@ struct SettingsView: View {
                 icon: { $0.icon },
                 showsHeader: false
             )
-            .background(Color.jarvisBackground)
-            .toolbar(removing: .sidebarToggle)
-            .navigationSplitViewColumnWidth(
-                min: JarvisMetrics.sidebarMinimumWidth,
-                ideal: JarvisMetrics.sidebarWidth,
-                max: JarvisMetrics.sidebarMaximumWidth
-            )
-        } detail: {
+            .frame(width: JarvisMetrics.sidebarWidth)
+            Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisSpacing.sectionGap) {
                     detailContent
@@ -119,11 +111,12 @@ struct SettingsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.jarvisBackground.ignoresSafeArea())
-        .onAppear {
-            app.refreshPermissionStatus()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            app.refreshPermissionStatus()
+        .toolbar { JarvisToolbarPlaceholder(id: "settings.placeholder") }
+        .task {
+            while !Task.isCancelled {
+                app.refreshPermissionStatus()
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            }
         }
     }
 
@@ -170,7 +163,6 @@ struct SettingsView: View {
                 }
                 Spacer(minLength: 8)
                 Button("查看引导") {
-                    app.settingsPanelController.close()
                     app.taskPermissionPrompt = nil
                     app.onboarding.restart()
                     JarvisMenuBarController.shared.reopenMainWindow()

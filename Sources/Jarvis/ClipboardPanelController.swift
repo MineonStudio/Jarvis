@@ -19,6 +19,11 @@ final class ClipboardPanelController {
         self.animationsEnabled = animationsEnabled
     }
 
+    var hasKeyboardFocus: Bool {
+        guard isPresented, let panel, let keyWindow = NSApp.keyWindow else { return false }
+        return isShelfWindow(keyWindow, panel: panel)
+    }
+
     private var shouldAnimate: Bool {
         animationsEnabled && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }

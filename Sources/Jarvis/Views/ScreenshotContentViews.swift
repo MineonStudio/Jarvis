@@ -5,7 +5,7 @@ struct ScreenshotView: View {
     @Environment(AppModel.self) private var app
     @State private var selectedTimeFilter: ScreenshotTimeFilter = .threeDays
     @State private var searchText = ""
-    @State private var selectedItemID: UUID?
+    @State private var selection = GallerySelection<UUID>()
     @State private var gridZoom: HistoryGridZoomLevel = .regular
     @State private var toolbarAlignment = HistoryToolbarAlignment()
 
@@ -25,7 +25,7 @@ struct ScreenshotView: View {
                 ToolbarItem(id: "screenshot.actions", placement: .automatic) {
                     ScreenshotHistoryActionToolbar(
                         selectedItem: selectedItem,
-                        onClearSelection: { selectedItemID = nil }
+                        onClearSelection: { selection.clear() }
                     )
                 }
                 ToolbarSpacer(.fixed, placement: .automatic)
@@ -39,16 +39,20 @@ struct ScreenshotView: View {
                 }
             },
             content: {
-                JarvisBackToTopScroll("返回截图列表顶部", id: "screenshot-scroll-top") {
-                    ScreenshotHistorySection(
-                        selectedTimeFilter: $selectedTimeFilter,
-                        searchText: searchText,
-                        selectedItemID: $selectedItemID,
-                        gridZoom: gridZoom
-                    )
-                    .padding(.leading, toolbarAlignment.leadingInset)
-                    .padding(.trailing, toolbarAlignment.trailingInset)
-                    .padding(.bottom, HistoryGridMetrics.historyPanelInset)
+                GeometryReader { viewport in
+                    JarvisBackToTopScroll("返回截图列表顶部", id: "screenshot-scroll-top") {
+                        ScreenshotHistorySection(
+                            selectedTimeFilter: $selectedTimeFilter,
+                            searchText: searchText,
+                            selection: $selection,
+                            gridZoom: gridZoom,
+                            availableWidth: viewport.size.width - toolbarAlignment.leadingInset - toolbarAlignment.trailingInset
+                        )
+                        .padding(.leading, toolbarAlignment.leadingInset)
+                        .padding(.trailing, toolbarAlignment.trailingInset)
+                        .padding(.bottom, HistoryGridMetrics.historyPanelInset)
+                        .galleryBackground(minHeight: viewport.size.height) { selection.clear() }
+                    }
                 }
                 .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .content))
             }
@@ -56,7 +60,7 @@ struct ScreenshotView: View {
     }
 
     private var selectedItem: ScreenshotHistoryItem? {
-        guard let selectedItemID else { return nil }
+        guard let selectedItemID = selection.selectedID else { return nil }
         return app.screenshotHistory.first { $0.id == selectedItemID }
     }
 }
@@ -215,54 +219,14 @@ enum HistoryGridMetrics {
     static let screenshotFilterBarHeight: CGFloat = topControlHeight
 }
 
-/// 宫格的列宽：先按目标宽度算这一行放几列（四舍五入到最接近的列数，卡片就不会
-/// 比目标大太多），再把行内空间分满——右边不留参差的空档。
-///
-/// 壁纸模块是 justified 布局（行高随图的宽高比变），这里卡片比例恒为 16:9，所以改成
-/// 让**列宽**承担"铺满"这件事：宽定下来，高就是宽 × 9/16，比例始终不变。
-enum HistoryGridLayout {
-    /// 卡片比例（恒为 16:9）。卡片视图用 `.aspectRatio` 直接挂这个值，
-    /// 宽怎么变都走同一条约定。
-    ///
-    /// 「一行铺满」交给 `LazyVGrid` 的 `.adaptive(minimum:maximum: .infinity)`：
-    /// 列数由最小宽度（缩放档位）决定，剩余空间由列自己撑开，卡片按比例跟着长高。
-    /// 之前量宽度存 `@State` 再回算的写法在缩放时会滞后一帧（卡出空档），
-    /// 而且每帧一次状态更新——闪烁和卡顿都是它带来的。
-    static let aspectRatio: CGFloat = 16.0 / 9.0
-
-    /// 卡片高度：比例恒为 16:9。
-    static func cardHeight(forCardWidth width: CGFloat) -> CGFloat {
-        width / aspectRatio
-    }
-}
-
-/// 宫格的列几何：贴着一行铺满，卡片按比例跟着长。给测试用，也是这条约定的成文版本。
-enum HistoryGridColumns {
-    /// 按可用宽度算这一行放几列：取最接近目标宽度的那个列数。
-    static func columns(availableWidth: CGFloat, targetWidth: CGFloat, spacing: CGFloat) -> Int {
-        guard availableWidth > 0, targetWidth > 0 else { return 1 }
-        return max(1, Int(((availableWidth + spacing) / (targetWidth + spacing)).rounded()))
-    }
-
-    /// 铺满后的列宽。
-    static func cardWidth(availableWidth: CGFloat, targetWidth: CGFloat, spacing: CGFloat) -> CGFloat {
-        guard availableWidth > 0, targetWidth > 0 else { return targetWidth }
-        let count = CGFloat(columns(
-            availableWidth: availableWidth,
-            targetWidth: targetWidth,
-            spacing: spacing
-        ))
-        return max(1, (availableWidth - (count - 1) * spacing) / count)
-    }
-}
-
 struct ScreenshotHistorySection: View {
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selectedTimeFilter: ScreenshotTimeFilter
     let searchText: String
-    @Binding var selectedItemID: UUID?
+    @Binding var selection: GallerySelection<UUID>
     let gridZoom: HistoryGridZoomLevel
+    let availableWidth: CGFloat
 
     private var filteredItems: [ScreenshotHistoryItem] {
         ScreenshotTimeFilterLogic.filteredItems(
@@ -287,42 +251,35 @@ struct ScreenshotHistorySection: View {
                 )
                 .transition(JarvisMotion.contentTransition(reduceMotion: reduceMotion))
             } else {
-                LazyVGrid(
-                    columns: [GridItem(
-                        // 列数由最小宽度决定，剩下的一点点空间让列自己撑满——
-                        // 这就是"一行铺满"：不量宽度、不存状态，缩放时也就没有
-                        // 滞后一帧的空档，更没有每帧状态更新带来的闪烁和卡顿。
-                        .adaptive(
-                            minimum: gridZoom.cardWidth,
-                            maximum: .infinity
-                        ),
-                        spacing: HistoryGridMetrics.clipboardGridSpacing
-                    )],
-                    alignment: .leading,
-                    spacing: HistoryGridMetrics.clipboardGridSpacing
-                ) {
-                    ForEach(filteredItems) { item in
+                FixedRatioGallery(
+                    items: filteredItems, availableWidth: availableWidth, targetWidth: gridZoom.cardWidth,
+                    card: { item, size in
                         ScreenshotHistoryCard(
                             item: item,
                             fileURL: app.screenshotHistoryFileURL(for: item),
-                            isSelected: selectedItemID == item.id,
+                            isSelected: selection.selectedID == item.id,
+                            cardSize: size,
                             maxPixelSize: gridZoom.thumbnailPixelSize,
                             enablesHoverZoom: gridZoom.enablesHoverZoom,
-                            onSelect: { selectedItemID = item.id },
-                            onDoubleClick: { app.showScreenshotHistoryPreview(item) },
+                            onClick: { count in
+                                GallerySelection.handleClick(count, on: item.id, selection: $selection) {
+                                    app.showScreenshotHistoryPreview(item)
+                                }
+                            },
+                            onSelect: { selection.toggle(item.id) },
                             onCopy: { app.copyScreenshotHistory(item) },
                             onPreview: { app.showScreenshotHistoryPreview(item) },
                             onEdit: { app.editScreenshotHistory(item) },
                             onDelete: { app.deleteScreenshotHistory(item) },
                             onDragData: { app.screenshotHistoryData(for: item) },
-                            onClearSelection: { selectedItemID = nil }
+                            onClearSelection: { selection.clear() }
                         )
                         .equatable()
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                )
             }
         }
+        .onChange(of: filteredItems.map(\.id)) { _, ids in selection.retain(ids.contains) }
         .animation(
             JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion),
             value: selectedTimeFilter
@@ -355,16 +312,15 @@ struct ScreenshotHistorySection: View {
 }
 
 struct ScreenshotHistoryCard: View, Equatable {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingDeleteConfirmation = false
-    @State private var isHovered = false
     let item: ScreenshotHistoryItem
     let fileURL: URL
     let isSelected: Bool
+    let cardSize: CGSize
     let maxPixelSize: Int
     let enablesHoverZoom: Bool
+    let onClick: (Int) -> Void
     let onSelect: () -> Void
-    let onDoubleClick: () -> Void
     let onCopy: () -> Void
     let onPreview: () -> Void
     let onEdit: () -> Void
@@ -376,6 +332,7 @@ struct ScreenshotHistoryCard: View, Equatable {
         lhs.item == rhs.item
             && lhs.fileURL == rhs.fileURL
             && lhs.isSelected == rhs.isSelected
+            && lhs.cardSize == rhs.cardSize
             && lhs.maxPixelSize == rhs.maxPixelSize
             && lhs.enablesHoverZoom == rhs.enablesHoverZoom
     }
@@ -384,175 +341,77 @@ struct ScreenshotHistoryCard: View, Equatable {
         "\(item.id.uuidString)|\(item.updatedAt.timeIntervalSince1970)|\(maxPixelSize)"
     }
 
-    /// 预览区：比例锁在**占位**这一层。
-    ///
-    /// `Color.clear` 是弹性的，`.aspectRatio` 才能真的按列宽定出高度；把它直接挂在
-    /// 图片上不行——图片自带固有尺寸（一张竖图就能把卡片撑成 227×680），比例会被带跑。
-    /// 内容盖在占位上面，溢出的部分裁掉。
-    private var previewContent: some View {
-        Color.clear
-            .aspectRatio(HistoryGridLayout.aspectRatio, contentMode: .fit)
-            .frame(maxWidth: .infinity)
-            .overlay { previewLayer }
-            .clipped()
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                    style: .continuous
-                )
-            )
-            .contentShape(Rectangle())
-    }
-
-    private var previewLayer: some View {
-        ScreenshotHistoryThumbnail(
-            fileURL: fileURL,
-            cacheKey: thumbnailCacheKey,
-            maxPixelSize: maxPixelSize
-        )
+    private var timestamp: String {
+        JarvisHistoryDateFormatting.string(from: item.updatedAt)
     }
 
     private var previewArea: some View {
-        previewContent
+        Color.clear
+            .overlay {
+                ScreenshotHistoryThumbnail(fileURL: fileURL, cacheKey: thumbnailCacheKey, maxPixelSize: maxPixelSize)
+            }
+            .clipped()
             .onDrag {
-                guard let data = onDragData() else {
-                    return NSItemProvider()
-                }
+                guard let data = onDragData() else { return NSItemProvider() }
                 return ScreenshotSharing.itemProvider(for: item, data: data)
             }
     }
 
-    private var metadataRow: some View {
-        HStack(spacing: JarvisSpacing.iconGap) {
-            Image(systemName: "photo")
-                .font(JarvisTypography.captionEmphasis)
-                .fixedSize()
-            Spacer(minLength: 4)
-            Text(JarvisHistoryDateFormatting.string(from: item.updatedAt))
-                .font(JarvisTypography.caption)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .historyCardMetadata()
-    }
-
-    private var copyButton: some View {
-        Button {
-            onCopy()
-        } label: {
-            Text("复制")
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-        }
-        .buttonStyle(JarvisCardActionPillButtonStyle())
-        .accessibilityLabel("复制截图")
-    }
-
-    @ViewBuilder
-    private var copyActionOverlay: some View {
-        if isHovered {
-            HStack {
-                Spacer(minLength: 0)
-                copyButton
-            }
-            .padding(JarvisSpacing.controlGap)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .transition(JarvisMotion.cardOverlayTransition(reduceMotion: reduceMotion))
-        }
-    }
-
-    private var cardBody: some View {
-        HistoryCardChrome(
-            preview: previewArea,
-            isSelected: isSelected,
-            enablesHoverZoom: enablesHoverZoom
-        )
-        .overlay(alignment: .bottom) {
-            if isHovered {
-                metadataRow
-                    .transition(JarvisMotion.cardOverlayTransition(reduceMotion: reduceMotion))
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            copyActionOverlay
-        }
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                style: .continuous
-            )
-        )
-        .jarvisGridCardShadow()
-    }
-
     var body: some View {
-        cardBody
-            .contentShape(
-                RoundedRectangle(
-                    cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                    style: .continuous
-                )
-            )
-            .onTapGesture(count: 2, perform: onDoubleClick)
-            .onTapGesture(perform: onSelect)
-            .onHover { hovering in
-                guard hovering != isHovered else { return }
-                withAnimation(
-                    JarvisMotion.animation(
-                        JarvisMotion.content,
-                        reduceMotion: reduceMotion
-                    )
-                ) {
-                    isHovered = hovering
-                }
+        GalleryCard(
+            size: cardSize, isSelected: isSelected, enablesHoverZoom: enablesHoverZoom,
+            onClick: onClick, preview: { previewArea },
+            leading: { Label("PNG", systemImage: "photo") },
+            trailing: { Text(timestamp) }
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("截图，PNG，\(JarvisHistoryDateFormatting.string(from: item.updatedAt))")
+        .accessibilityValue(isSelected ? "已选中" : "未选中")
+        .accessibilityHint("点击选择，双击预览；可以拖到 Finder 或其他应用导出 PNG")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(.default, onSelect)
+        .accessibilityAction(named: "查看", onPreview)
+        .accessibilityAction(named: "复制") {
+            onCopy()
+        }
+        .contextMenu {
+            Button {
+                onPreview()
+            } label: {
+                Label("查看", systemImage: "eye")
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("截图，PNG，\(JarvisHistoryDateFormatting.string(from: item.updatedAt))")
-            .accessibilityValue(isSelected ? "已选中" : "未选中")
-            .accessibilityHint("点击选择，双击预览；可以拖到 Finder 或其他应用导出 PNG")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction(named: "复制") {
+            Button {
+                onEdit()
+            } label: {
+                Label("编辑", systemImage: "pencil")
+            }
+            Button {
                 onCopy()
+            } label: {
+                Label("复制", systemImage: "doc.on.doc")
             }
-            .contextMenu {
-                Button {
-                    onPreview()
-                } label: {
-                    Label("查看", systemImage: "eye")
-                }
-                Button {
-                    onEdit()
-                } label: {
-                    Label("编辑", systemImage: "pencil")
-                }
-                Button {
-                    onCopy()
-                } label: {
-                    Label("复制", systemImage: "doc.on.doc")
-                }
-                Divider()
-                Button(role: .destructive) {
-                    showingDeleteConfirmation = true
-                } label: {
-                    Label("删除", systemImage: "trash")
+            Divider()
+            Button(role: .destructive) {
+                showingDeleteConfirmation = true
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+        .confirmationDialog(
+            "删除这张截图？",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("删除", role: .destructive) {
+                onDelete()
+                if isSelected {
+                    onClearSelection()
                 }
             }
-            .confirmationDialog(
-                "删除这张截图？",
-                isPresented: $showingDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("删除", role: .destructive) {
-                    onDelete()
-                    if isSelected {
-                        onClearSelection()
-                    }
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
-                Text("删除后无法恢复。")
-            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删除后无法恢复。")
+        }
     }
 }
 
@@ -568,7 +427,7 @@ struct ScreenshotHistoryThumbnail: View {
                 Image(nsImage: image)
                     .interpolation(.medium)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
             } else {
                 Image(systemName: "photo")
                     .font(.system(size: 28))

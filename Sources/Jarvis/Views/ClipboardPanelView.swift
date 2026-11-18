@@ -24,12 +24,16 @@ enum ClipboardPanelLayout {
     }
 
     static func cardWidth(availableWidth: CGFloat, zoom: HistoryGridZoomLevel) -> CGFloat {
-        let count = CGFloat(columns(availableWidth: availableWidth, zoom: zoom))
-        return max(1, (availableWidth - (count - 1) * HistoryGridMetrics.clipboardGridSpacing) / count)
+        HistoryGridColumns.cardWidth(
+            availableWidth: max(1, availableWidth),
+            targetWidth: zoom.cardWidth,
+            spacing: HistoryGridMetrics.clipboardGridSpacing,
+            columnCount: columns(availableWidth: availableWidth, zoom: zoom)
+        )
     }
 
     static func galleryHeight(availableWidth: CGFloat, zoom: HistoryGridZoomLevel) -> CGFloat {
-        // SwiftUI rounds each adaptive row to layout points. Reserve both
+        // SwiftUI can round each row to layout points. Reserve both
         // rounded rows so the second row is never clipped by fractional widths.
         ceil(HistoryGridLayout.cardHeight(forCardWidth: cardWidth(availableWidth: availableWidth, zoom: zoom))) * 2
             + HistoryGridMetrics.clipboardGridSpacing
@@ -54,7 +58,7 @@ struct ClipboardPanelView: View {
     @State private var searchText = ""
     @State private var selectedTimeFilter: ClipboardTimeFilter = .threeDays
     @State private var selectedCategory: ClipboardViewFilter = .all
-    @State private var selectedItemID: UUID?
+    @State private var selection = GallerySelection<UUID>()
     @State private var gridZoom: HistoryGridZoomLevel = .regular
     @State private var toolbarHeight = ClipboardPanelLayout.controlsHeight
     @State private var galleryWidth: CGFloat?
@@ -70,7 +74,7 @@ struct ClipboardPanelView: View {
     }
 
     private var selectedItem: ClipboardItem? {
-        app.clipboardItems.first { $0.id == selectedItemID }
+        app.clipboardItems.first { $0.id == selection.selectedID }
     }
 
     private var shelfGridZoom: Binding<HistoryGridZoomLevel> {
@@ -92,10 +96,11 @@ struct ClipboardPanelView: View {
                         ClipboardHistoryGallery(
                             items: items,
                             gridZoom: gridZoom,
-                            selectedItemID: selectedItemID,
+                            selection: $selection,
+                            availableWidth: availableWidth,
+                            columnCount: ClipboardPanelLayout.columns(availableWidth: availableWidth, zoom: gridZoom),
                             hasQuery: !searchText.isEmpty || selectedTimeFilter != .all || selectedCategory != .all,
                             emptyStateHeight: galleryHeight,
-                            onSelect: { selectedItemID = $0.id },
                             onDoubleClick: { item in
                                 if item.canFullscreenPreview {
                                     app.showClipboardMediaPreview(item)
@@ -134,12 +139,8 @@ struct ClipboardPanelView: View {
             }
         }
         .jarvisTheme(app.themePreference, systemColorScheme: app.systemColorScheme)
-        .jarvisToastOverlay(app.toastMessage)
-        .onChange(of: app.clipboardItems) { _, items in
-            if let selectedItemID, !items.contains(where: { $0.id == selectedItemID }) {
-                self.selectedItemID = nil
-            }
-        }
+        .jarvisToastOverlay(app.toast(for: .clipboard))
+        .onChange(of: filteredItems.map(\.id)) { _, ids in selection.retain(ids.contains) }
     }
 
     private var controls: some View {
@@ -184,7 +185,7 @@ struct ClipboardPanelView: View {
             HistoryGridZoomControl(selection: shelfGridZoom)
                 .frame(height: ClipboardPanelLayout.controlsHeight)
                 .glassEffect(.regular, in: Capsule())
-            ClipboardHistoryActionToolbar(selectedItem: selectedItem, onClearSelection: { selectedItemID = nil })
+            ClipboardHistoryActionToolbar(selectedItem: selectedItem, onClearSelection: { selection.clear() })
                 .frame(height: ClipboardPanelLayout.controlsHeight)
                 .glassEffect(.regular, in: Capsule())
         }

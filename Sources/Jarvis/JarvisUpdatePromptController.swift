@@ -5,22 +5,65 @@ import AppKit
 final class JarvisUpdatePromptController {
     private(set) var isPresenting = false
 
-    static func makeAlert(release: JarvisReleaseInfo) -> NSAlert {
+    static func makeAlert(release: JarvisReleaseInfo, notes: [String] = []) -> NSAlert {
         let version = release.version.lowercased().hasPrefix("v") ? release.version : "v\(release.version)"
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "发现新版本 \(version)"
-        alert.informativeText = "Jarvis 有新版本可用。立马更新将下载更新，并在完成后重启应用。"
+        let restart = "安装完成后，Jarvis 将自动重启应用。"
+        if notes.isEmpty {
+            alert.informativeText = "暂时无法显示更新说明。\n\n" + restart
+        } else {
+            alert.informativeText = restart
+            alert.accessoryView = releaseNotesView(notes)
+        }
         alert.addButton(withTitle: "立马更新")
         alert.addButton(withTitle: "稍后更新")
         alert.buttons[1].keyEquivalent = "\u{1b}"
         return alert
     }
 
-    func present(release: JarvisReleaseInfo, onInstall: @escaping @MainActor () -> Void) {
+    private static func releaseNotesView(_ notes: [String]) -> NSView {
+        let width: CGFloat = 380
+        let maximumHeight: CGFloat = 180
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.headIndent = 14
+        paragraph.paragraphSpacing = 6
+        let contents = NSAttributedString(
+            string: notes.map { "•  \($0)" }.joined(separator: "\n"),
+            attributes: [.font: font, .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph]
+        )
+        let requiredHeight = ceil(contents.boundingRect(
+            with: NSSize(width: width - 20, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        ).height) + 8
+
+        let scrollView = NSTextView.scrollableTextView()
+        scrollView.frame.size = NSSize(width: width, height: min(requiredHeight, maximumHeight))
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = requiredHeight > maximumHeight
+        scrollView.autohidesScrollers = true
+        if let textView = scrollView.documentView as? NSTextView {
+            textView.isEditable = false
+            textView.isAutomaticLinkDetectionEnabled = false
+            textView.drawsBackground = false
+            textView.textContainerInset = NSSize(width: 5, height: 4)
+            textView.textStorage?.setAttributedString(contents)
+        }
+        scrollView.setAccessibilityLabel("本次更新")
+        return scrollView
+    }
+
+    func present(
+        release: JarvisReleaseInfo,
+        loadNotes: @escaping @Sendable (String) async -> [String] = JarvisReleaseNotes.load,
+        onInstall: @escaping @MainActor () -> Void
+    ) {
         guard !isPresenting else { return }
         isPresenting = true
         Task { @MainActor [self] in
+            let notes = await loadNotes(release.version)
             if Self.mainWindow(in: NSApp.windows)?.isVisible != true {
                 JarvisMenuBarController.shared.reopenMainWindow(preservingSelection: true)
             }
@@ -41,7 +84,7 @@ final class JarvisUpdatePromptController {
             }
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
-            let alert = Self.makeAlert(release: release)
+            let alert = Self.makeAlert(release: release, notes: notes)
             alert.beginSheetModal(for: window) { [self] response in
                 isPresenting = false
                 if response == .alertFirstButtonReturn {

@@ -132,6 +132,46 @@ final class JarvisDropdownMetricsTests: XCTestCase {
     }
 
     @MainActor
+    func testWallpaperColorMenuFitsEveryVisibleOptionWhenScreenHasRoom() {
+        let screen = CGRect(x: 0, y: 0, width: 1185, height: 686)
+        let anchor = CGRect(x: 463, y: 642, width: 90, height: 36)
+        let options = [JarvisDropdownOption(id: "none", title: "不限颜色")] + WallpaperColor.galleryCases.map {
+            JarvisDropdownOption(id: $0.rawValue, title: $0.title, colorHex: $0.rawValue)
+        }
+        let heightLimit = JarvisDropdownMetrics.menuHeightLimit(anchor: anchor, visibleFrame: screen)
+        let view = NSHostingView(rootView: JarvisDropdownPillMenuList(
+            options: options, selectionID: "none", showsSelectedOption: false, controlWidth: 96,
+            maximumHeight: heightLimit, onSelect: { _ in }
+        ))
+        let expectedHeight = JarvisDropdownMetrics.optionListHeight(count: options.count - 1)
+            + JarvisDropdownMetrics.menuEdgePadding * 2
+
+        XCTAssertEqual(view.fittingSize.height, expectedHeight, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(view.fittingSize.height, heightLimit)
+    }
+
+    @MainActor
+    func testShortMenuViewportFitsWholeRowsAndLeavesSpaceAboveTrigger() {
+        let screen = CGRect(x: 0, y: 0, width: 800, height: 260)
+        let anchor = CGRect(x: 150, y: 30, width: 96, height: 36)
+        let options = (0 ..< 9).map { JarvisDropdownOption(id: "option-\($0)", title: "选项 \($0)") }
+        let heightLimit = JarvisDropdownMetrics.menuHeightLimit(anchor: anchor, visibleFrame: screen)
+        let view = NSHostingView(rootView: JarvisDropdownPillMenuList(
+            options: options, selectionID: nil, showsSelectedOption: true, controlWidth: 96,
+            maximumHeight: heightLimit, onSelect: { _ in }
+        ))
+        let height = view.fittingSize.height
+        let expectedHeight = JarvisDropdownMetrics.optionListHeight(count: 5) + JarvisDropdownMetrics.menuEdgePadding * 2
+
+        XCTAssertEqual(height, expectedHeight, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(height, heightLimit)
+        XCTAssertEqual(
+            JarvisDropdownMetrics.menuOriginY(anchor: anchor, panelHeight: height, visibleFrame: screen),
+            anchor.maxY + JarvisDropdownMetrics.triggerGap
+        )
+    }
+
+    @MainActor
     func testHundredsOfModelsFitInsideScrollablePanel() {
         let view = NSHostingView(rootView: JarvisDropdownPillMenuList(
             options: (0 ..< 500).map { JarvisDropdownOption(id: "model-\($0)", title: "Model \($0)") },

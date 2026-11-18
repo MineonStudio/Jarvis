@@ -5,13 +5,16 @@ import SwiftUI
 struct ContentView: View {
     static let homePointerCoordinateSpace = "jarvis.main-window"
 
-    let onOpenSettings: () -> Void
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var navigationSelection: TopLevelSection = .home
-    @State private var loadedSection: AppSection = .home
+    @State private var loadedSection: AppSection
+    @State private var settingsSelection: SettingsSection = .general
     @State private var homePointerTracker = JarvisHomePointerTracker()
     @State private var homeMonitor = HomeSystemMonitor()
+
+    init(initialSection: AppSection) {
+        _loadedSection = State(initialValue: initialSection)
+    }
 
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
@@ -19,12 +22,12 @@ struct ContentView: View {
                 topItems: topNavigationItems,
                 bottomItems: bottomNavigationItems,
                 selection: selectedSectionBinding,
-                title: { $0.title },
+                title: { $0.navigationTitle },
                 icon: { $0.icon },
                 footerTitle: "设置",
                 footerIcon: "gearshape",
-                footerIsSelected: false,
-                footerAction: onOpenSettings,
+                footerIsSelected: app.selectedSection == .settings,
+                footerAction: { selectSection(.settings) },
                 showsHeader: false
             )
             // Track the page below the toolbar. A tracker on the entire
@@ -53,7 +56,6 @@ struct ContentView: View {
         .background(Color.jarvisBackground.ignoresSafeArea())
         .toolbarVisibility(.visible, for: .windowToolbar)
         .toolbarBackgroundVisibility(loadedSection == .home ? .hidden : .automatic, for: .windowToolbar)
-        .jarvisToastOverlay(app.toastMessage)
         .tint(app.accentColorPreference.resolvedColor)
         .coordinateSpace(name: Self.homePointerCoordinateSpace)
         .onChange(of: loadedSection) { _, section in
@@ -61,25 +63,13 @@ struct ContentView: View {
                 homePointerTracker.location = nil
             }
         }
-        .onChange(of: app.selectedSection) { _, newSection in
-            // Other entry points (quick actions, menu bar, screenshot flow)
-            // still drive the app model. Reflect them in the navbar immediately;
-            // the section task below mounts the page after the tab settles.
-            switch newSection {
-            case let .skill(skill):
-                navigationSelection = .skill(skill)
-            case .home:
-                navigationSelection = .home
-            case .aiConversation:
-                navigationSelection = .aiConversation
-            case .entertainment:
-                navigationSelection = .entertainment
-            case .gamePlaza:
-                navigationSelection = .gamePlaza
+        .onChange(of: app.selectedSection) { previous, next in
+            if previous == .settings, next != .settings, app.taskPermissionPrompt?.presentation == .settingsPage {
+                app.dismissTaskPermissionPrompt()
             }
         }
         .task(id: navigationTargetID) {
-            let nextSection = contentSection(for: navigationSelection)
+            let nextSection = app.selectedSection
             guard nextSection != loadedSection else { return }
 
             // Let the navigation indicator finish its interaction animation
@@ -92,7 +82,7 @@ struct ContentView: View {
                     return
                 }
             }
-            guard !Task.isCancelled, nextSection == contentSection(for: navigationSelection) else { return }
+            guard !Task.isCancelled, nextSection == app.selectedSection else { return }
             // The sidebar indicator has settled. Replace the page in one
             // transaction so old and new module hierarchies never overlap.
             loadedSection = nextSection
@@ -114,28 +104,18 @@ struct ContentView: View {
         }
     }
 
-    private func selectSection(_ section: TopLevelSection) {
-        if let tool = section.appSection.skill {
+    private func selectSection(_ section: AppSection) {
+        if let tool = section.skill {
             app.toolUsage.recordOpen(tool)
         }
-        guard navigationSelection != section || app.selectedSection != section.appSection else { return }
-        navigationSelection = section
-        app.selectedSection = section.appSection
+        app.selectedSection = section
     }
 
-    private var selectedSectionBinding: Binding<TopLevelSection> {
-        Binding(
-            get: { navigationSelection },
-            set: { newValue in
-                // Commit the navigation state synchronously. The page
-                // switch is deferred by the task above so heavy module
-                // construction cannot delay the selected tab.
-                selectSection(newValue)
-            }
-        )
+    private var selectedSectionBinding: Binding<AppSection> {
+        Binding(get: { app.selectedSection }, set: { selectSection($0) })
     }
 
-    private var topNavigationItems: [TopLevelSection] {
+    private var topNavigationItems: [AppSection] {
         [
             .home,
             .aiConversation,
@@ -148,12 +128,12 @@ struct ContentView: View {
         ]
     }
 
-    private var bottomNavigationItems: [TopLevelSection] {
+    private var bottomNavigationItems: [AppSection] {
         [.skill(.wallpaper), .gamePlaza, .entertainment]
     }
 
     private var navigationTargetID: String {
-        switch navigationSelection {
+        switch app.selectedSection {
         case .home:
             "home"
         case let .skill(skill):
@@ -164,21 +144,8 @@ struct ContentView: View {
             "entertainment|\(app.selectedEntertainmentPlatform.id)"
         case .gamePlaza:
             "game-plaza"
-        }
-    }
-
-    private func contentSection(for section: TopLevelSection) -> AppSection {
-        switch section {
-        case .home:
-            .home
-        case let .skill(skill):
-            .skill(skill)
-        case .aiConversation:
-            .aiConversation
-        case .entertainment:
-            .entertainment
-        case .gamePlaza:
-            .gamePlaza
+        case .settings:
+            "settings"
         }
     }
 
@@ -189,6 +156,7 @@ struct ContentView: View {
         case .aiConversation: AIConversationView()
         case .entertainment: EntertainmentView()
         case .gamePlaza: GamePlazaView()
+        case .settings: SettingsView(selection: $settingsSelection)
         case .skill(.screenshot): ScreenshotView()
         case .skill(.screenRecording): ScreenRecordingView()
         case .skill(.clipboard): ClipboardView()
@@ -240,54 +208,6 @@ extension View {
                 .padding(.bottom, JarvisSpacing.pageInset)
                 .frame(maxWidth: .infinity)
                 .allowsHitTesting(false)
-        }
-    }
-}
-
-private enum TopLevelSection: Hashable, Identifiable {
-    case home
-    case skill(SkillID)
-    case aiConversation
-    case entertainment
-    case gamePlaza
-
-    var id: String {
-        switch self {
-        case .home: "home"
-        case let .skill(skill): "skill.\(skill.id)"
-        case .aiConversation: "ai-conversation"
-        case .entertainment: "entertainment"
-        case .gamePlaza: "game-plaza"
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .home: "首页"
-        case let .skill(skill): skill.navigationTitle
-        case .aiConversation: "AI聚合"
-        case .entertainment: "娱乐广场"
-        case .gamePlaza: "游戏广场"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .home: "house"
-        case let .skill(skill): skill.icon
-        case .aiConversation: "sparkles"
-        case .entertainment: "play.rectangle"
-        case .gamePlaza: "gamecontroller"
-        }
-    }
-
-    var appSection: AppSection {
-        switch self {
-        case .home: .home
-        case let .skill(skill): .skill(skill)
-        case .aiConversation: .aiConversation
-        case .entertainment: .entertainment
-        case .gamePlaza: .gamePlaza
         }
     }
 }
