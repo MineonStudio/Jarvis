@@ -632,74 +632,6 @@ extension View {
 /// 历史网格卡片的骨架：悬停缩放、圆角裁剪、选中描边和「已选中」徽标。
 ///
 /// 剪贴板和截图两张卡片原本各写一份完全一样的外壳，唯一的差别是内容的对齐方式。
-struct HistoryCardChrome<Preview: View>: View {
-    let preview: Preview
-    /// 固定宽高；传 nil 表示跟着列宽走（内容自己带 16:9 的比例）。
-    var width: CGFloat?
-    var height: CGFloat?
-    let isSelected: Bool
-    var alignment: Alignment = .center
-    /// 宫格缩到最小时一屏几十张卡，悬停放大每张都要离屏合成，滚动会跟着卡。
-    var enablesHoverZoom: Bool = true
-    var cornerRadius: CGFloat = HistoryGridMetrics.clipboardCornerRadius
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovered = false
-
-    var body: some View {
-        ZStack {
-            preview
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .scaleEffect(
-                    enablesHoverZoom && isHovered && !reduceMotion
-                        ? HistoryGridMetrics.clipboardPreviewHoverScale
-                        : 1
-                )
-                .animation(
-                    enablesHoverZoom
-                        ? JarvisMotion.animation(JarvisMotion.hover, reduceMotion: reduceMotion)
-                        : nil,
-                    value: isHovered
-                )
-        }
-        .frame(width: width, height: height, alignment: alignment)
-        .frame(maxWidth: width == nil ? .infinity : nil)
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: cornerRadius,
-                style: .continuous
-            )
-        )
-        .jarvisContentSurface(cornerRadius: cornerRadius)
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: cornerRadius,
-                style: .continuous
-            )
-            .stroke(
-                isSelected ? Color.jarvisAccent : .clear,
-                lineWidth: isSelected ? 2 : 0
-            )
-            .allowsHitTesting(false)
-        }
-        .overlay(alignment: .topLeading) {
-            if isSelected {
-                Label("已选中", systemImage: "checkmark.circle.fill")
-                    .font(JarvisTypography.captionEmphasis)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    // 选中色和全app的选中胶囊同一枚（`selectionPillTint`）：
-                    // 徽标原来自己用了 0.92，比别处深一档，放在一起能看出色差。
-                    .background(JarvisMotion.selectionPillTint, in: Capsule())
-                    .padding(8)
-                    .accessibilityHidden(true)
-            }
-        }
-        .onHover { isHovered = $0 }
-    }
-}
-
 extension View {
     func jarvisButtonShadow() -> some View {
         modifier(JarvisButtonShadowModifier())
@@ -777,33 +709,6 @@ struct JarvisPrimaryButtonStyle: ButtonStyle {
                 tint: isEnabled ? Color.jarvisAccent : Color.primary.opacity(0.12)
             ))
             .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.98 : 1))
-            .animation(
-                JarvisMotion.animation(JarvisMotion.buttonPress, reduceMotion: reduceMotion),
-                value: configuration.isPressed
-            )
-    }
-}
-
-/// Bottom-overlay action used by media cards. Keep this aligned with the
-/// wallpaper card's "设为壁纸" action so card-level operations share one
-/// visual language across modules.
-struct JarvisCardActionPillButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(JarvisTypography.control)
-            .foregroundStyle(.primary)
-            .padding(.horizontal, JarvisSpacing.buttonHorizontalInset)
-            .padding(.vertical, JarvisSpacing.buttonVerticalInset)
-            .opacity(configuration.isPressed ? 0.68 : 1)
-            .background(Color.jarvisPanel, in: Capsule())
-            .jarvisButtonShadow()
-            .contentShape(Capsule())
-            .fixedSize(horizontal: true, vertical: false)
-            .scaleEffect(
-                reduceMotion ? 1 : (configuration.isPressed ? 0.98 : 1)
-            )
             .animation(
                 JarvisMotion.animation(JarvisMotion.buttonPress, reduceMotion: reduceMotion),
                 value: configuration.isPressed

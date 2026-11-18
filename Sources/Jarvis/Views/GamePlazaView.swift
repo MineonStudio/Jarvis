@@ -3,6 +3,7 @@ import SwiftUI
 
 struct GamePlazaView: View {
     @State private var selectedCategory: GamePlazaCategory = .all
+    @State private var gridZoom: HistoryGridZoomLevel = .regular
     @State private var game = MahjongGame()
     @State private var archive = MahjongArchiveStore()
     @State private var lanRoomService: MahjongLANRoomService?
@@ -28,16 +29,12 @@ struct GamePlazaView: View {
                 }
             },
             trailingToolbar: {
-                ToolbarItem(placement: .automatic) { EmptyView() }
+                ToolbarItem(id: "games.grid-zoom", placement: .automatic) {
+                    HistoryGridZoomControl(selection: $gridZoom)
+                }
             },
             content: {
-                ScrollView {
-                    GamePlazaGallery(category: selectedCategory, onStartMahjong: presentGameWindow)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(.bottom, HistoryGridMetrics.historyPanelInset)
-                }
-                .scrollIndicators(.hidden)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                GamePlazaGallery(category: selectedCategory, gridZoom: gridZoom, onStartMahjong: presentGameWindow)
             }
         )
         .onChange(of: game.phase) { _, phase in

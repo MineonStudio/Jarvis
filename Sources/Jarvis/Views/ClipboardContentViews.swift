@@ -180,7 +180,7 @@ struct ClipboardView: View {
     @State private var searchText = ""
     @State private var selectedTimeFilter: ClipboardTimeFilter = .threeDays
     @State private var selectedCategory: ClipboardViewFilter = .all
-    @State private var selectedItemID: UUID?
+    @State private var selection = GallerySelection<UUID>()
     @State private var gridZoom: HistoryGridZoomLevel = .regular
     @State private var toolbarAlignment = HistoryToolbarAlignment()
 
@@ -194,7 +194,7 @@ struct ClipboardView: View {
     }
 
     private var selectedItem: ClipboardItem? {
-        guard let selectedItemID else { return nil }
+        guard let selectedItemID = selection.selectedID else { return nil }
         return app.clipboardItems.first { $0.id == selectedItemID }
     }
 
@@ -217,7 +217,7 @@ struct ClipboardView: View {
                 ToolbarItem(id: "clipboard.actions", placement: .automatic) {
                     ClipboardHistoryActionToolbar(
                         selectedItem: selectedItem,
-                        onClearSelection: { selectedItemID = nil }
+                        onClearSelection: { selection.clear() }
                     )
                 }
                 ToolbarSpacer(.fixed, placement: .automatic)
@@ -231,37 +231,34 @@ struct ClipboardView: View {
                 }
             },
             content: {
-                JarvisBackToTopScroll("返回剪贴板列表顶部", id: "clipboard-scroll-top") {
-                    ClipboardHistoryGallery(
-                        items: filteredItems,
-                        gridZoom: gridZoom,
-                        selectedItemID: selectedItemID,
-                        hasQuery: !searchText.isEmpty || selectedTimeFilter != .all || selectedCategory != .all,
-                        onSelect: { selectedItemID = $0.id },
-                        onDoubleClick: { item in
-                            if item.canFullscreenPreview {
-                                app.showClipboardMediaPreview(item)
-                            }
-                        },
-                        onCopy: { app.copyClipboard($0) },
-                        onPreview: { app.showClipboardMediaPreview($0) },
-                        onPin: { app.toggleClipboardPin($0) },
-                        onDelete: { app.deleteClipboardItem($0) }
-                    )
-                    .padding(.leading, toolbarAlignment.leadingInset)
-                    .padding(.trailing, toolbarAlignment.trailingInset)
-                    .padding(.bottom, HistoryGridMetrics.historyPanelInset)
+                GeometryReader { viewport in
+                    JarvisBackToTopScroll("返回剪贴板列表顶部", id: "clipboard-scroll-top") {
+                        ClipboardHistoryGallery(
+                            items: filteredItems,
+                            gridZoom: gridZoom,
+                            selection: $selection,
+                            availableWidth: viewport.size.width - toolbarAlignment.leadingInset - toolbarAlignment.trailingInset,
+                            hasQuery: !searchText.isEmpty || selectedTimeFilter != .all || selectedCategory != .all,
+                            onDoubleClick: { item in
+                                if item.canFullscreenPreview {
+                                    app.showClipboardMediaPreview(item)
+                                }
+                            },
+                            onCopy: { app.copyClipboard($0) },
+                            onPreview: { app.showClipboardMediaPreview($0) },
+                            onPin: { app.toggleClipboardPin($0) },
+                            onDelete: { app.deleteClipboardItem($0) }
+                        )
+                        .padding(.leading, toolbarAlignment.leadingInset)
+                        .padding(.trailing, toolbarAlignment.trailingInset)
+                        .padding(.bottom, HistoryGridMetrics.historyPanelInset)
+                        .galleryBackground(minHeight: viewport.size.height) { selection.clear() }
+                    }
                 }
                 .background(HistoryToolbarFrameProbe(alignment: toolbarAlignment, edge: .content))
             }
         )
-        .onChange(of: app.clipboardItems.count) { _, _ in
-            if let selectedItemID,
-               !app.clipboardItems.contains(where: { $0.id == selectedItemID })
-            {
-                self.selectedItemID = nil
-            }
-        }
+        .onChange(of: filteredItems.map(\.id)) { _, ids in selection.retain(ids.contains) }
     }
 }
 
@@ -377,464 +374,5 @@ struct ClipboardEmptyState: View {
             title: hasQuery ? "没有找到匹配内容" : "还没有剪贴板记录",
             message: hasQuery ? "换个关键词或切换内容类型试试" : "复制一些内容，历史会自动出现在这里"
         )
-    }
-}
-
-struct ClipboardCard: View, Equatable {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(AppModel.self) private var app
-    @State private var isSensitiveRevealed = false
-    @State private var isTextExpanded = false
-    @State private var showingDeleteConfirmation = false
-    @State private var showingSensitiveCopyConfirmation = false
-    @State private var showingSensitivePreviewConfirmation = false
-    @State private var isHovered = false
-    let item: ClipboardItem
-    let isSelected: Bool
-    let maxPixelSize: Int
-    let enablesHoverZoom: Bool
-    let onSelect: () -> Void
-    let onDoubleClick: () -> Void
-    let onCopy: () -> Void
-    let onPreview: () -> Void
-    let onPin: () -> Void
-    let onDelete: () -> Void
-
-    init(
-        item: ClipboardItem,
-        isSelected: Bool = false,
-        maxPixelSize: Int = HistoryGridZoomLevel.regular.thumbnailPixelSize,
-        enablesHoverZoom: Bool = true,
-        onSelect: @escaping () -> Void = {},
-        onDoubleClick: @escaping () -> Void = {},
-        onCopy: @escaping () -> Void = {},
-        onPreview: @escaping () -> Void = {},
-        onPin: @escaping () -> Void = {},
-        onDelete: @escaping () -> Void = {}
-    ) {
-        self.item = item
-        self.isSelected = isSelected
-        self.maxPixelSize = maxPixelSize
-        self.enablesHoverZoom = enablesHoverZoom
-        self.onSelect = onSelect
-        self.onDoubleClick = onDoubleClick
-        self.onCopy = onCopy
-        self.onPreview = onPreview
-        self.onPin = onPin
-        self.onDelete = onDelete
-    }
-
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.item == rhs.item
-            && lhs.isSelected == rhs.isSelected
-            && lhs.maxPixelSize == rhs.maxPixelSize
-            && lhs.enablesHoverZoom == rhs.enablesHoverZoom
-    }
-
-    /// 预览区：比例锁在占位层（见 `ScreenshotHistoryCard.previewContent` 的说明）。
-    private var previewContent: some View {
-        Color.clear
-            .aspectRatio(HistoryGridLayout.aspectRatio, contentMode: .fit)
-            .frame(maxWidth: .infinity)
-            .overlay { previewLayer }
-            .clipped()
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                    style: .continuous
-                )
-            )
-            .contentShape(Rectangle())
-    }
-
-    private var previewLayer: some View {
-        ZStack {
-            if item.kind == .text {
-                VStack(spacing: JarvisSpacing.controlGap) {
-                    if let presentation = item.sensitivePresentation(
-                        revealed: isSensitiveRevealed || !app.hideSensitiveClipboardContent
-                    ) {
-                        Text(presentation.displayText)
-                            .font(
-                                presentation.requiresReveal
-                                    ? JarvisTypography.secondary
-                                    : JarvisTypography.body
-                            )
-                            .foregroundStyle(
-                                presentation.requiresReveal
-                                    ? Color.jarvisTextSecondary
-                                    : Color.primary
-                            )
-                            .lineLimit(
-                                presentation.requiresReveal
-                                    ? 2
-                                    : (isTextExpanded ? nil : 6)
-                            )
-                            .multilineTextAlignment(.center)
-                            .accessibilityLabel(
-                                isSensitiveRevealed ? presentation.accessibilityText : item.preview
-                            )
-
-                        if presentation.requiresReveal {
-                            Button("显示一次") {
-                                withAnimation(
-                                    JarvisMotion.animation(
-                                        JarvisMotion.feedback,
-                                        reduceMotion: reduceMotion
-                                    )
-                                ) {
-                                    isSensitiveRevealed = true
-                                }
-                            }
-                            .buttonStyle(JarvisSecondaryButtonStyle())
-                            .controlSize(.small)
-                            .accessibilityHint("仅临时显示，离开卡片后会重新隐藏")
-                        } else if presentation.sensitivity != nil,
-                                  isSensitiveRevealed
-                        {
-                            Label("已临时显示", systemImage: "eye")
-                                .font(JarvisTypography.caption)
-                                .foregroundStyle(Color.jarvisTextSecondary)
-                        }
-
-                        if shouldOfferTextExpansion {
-                            textExpansionButton
-                        }
-                    } else {
-                        Text(item.preview)
-                            .font(JarvisTypography.body)
-                            .lineLimit(isTextExpanded ? nil : 6)
-                            .multilineTextAlignment(.center)
-
-                        if shouldOfferTextExpansion {
-                            textExpansionButton
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .padding(.bottom, HistoryGridMetrics.clipboardMetadataHeight + 12)
-                .padding(HistoryGridMetrics.clipboardCardPadding)
-            } else if item.kind == .file {
-                VStack(spacing: JarvisSpacing.itemGap) {
-                    Image(systemName: item.kind.icon)
-                        .font(.system(size: 38, weight: .medium))
-                        .foregroundStyle(Color.jarvisAccent)
-                    Text(item.preview)
-                        .font(JarvisTypography.secondary)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, HistoryGridMetrics.clipboardCardPadding)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .padding(.bottom, HistoryGridMetrics.clipboardMetadataHeight + 12)
-            } else {
-                ClipboardItemPreview(item: item, maxPixelSize: maxPixelSize)
-            }
-        }
-    }
-
-    private var shouldOfferTextExpansion: Bool {
-        guard item.kind == .text, let text = item.resolvedText else { return false }
-        return text.count > 240 || text.split(separator: "\n").count > 6
-    }
-
-    private var textExpansionButton: some View {
-        Button(isTextExpanded ? "收起" : "展开") {
-            withAnimation(
-                JarvisMotion.animation(
-                    JarvisMotion.feedback,
-                    reduceMotion: reduceMotion
-                )
-            ) {
-                isTextExpanded.toggle()
-            }
-        }
-        .buttonStyle(JarvisContentPlainButtonStyle())
-        .font(JarvisTypography.captionEmphasis)
-        .foregroundStyle(Color.jarvisAccent)
-        .accessibilityLabel(isTextExpanded ? "收起长文本" : "展开长文本")
-    }
-
-    @ViewBuilder
-    private var previewArea: some View {
-        if ClipboardSharing.canProvide(for: item),
-           !item.isSensitive || isSensitiveRevealed
-        {
-            previewContent
-                .onDrag {
-                    ClipboardSharing.itemProvider(for: item) ?? NSItemProvider()
-                }
-        } else {
-            previewContent
-        }
-    }
-
-    private func copyContent() {
-        if item.isSensitive {
-            showingSensitiveCopyConfirmation = true
-        } else {
-            onCopy()
-        }
-    }
-
-    private var copyButton: some View {
-        Button(action: copyContent) {
-            Text("复制")
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-        }
-        .buttonStyle(JarvisCardActionPillButtonStyle())
-        .accessibilityLabel("复制剪贴板内容")
-    }
-
-    @ViewBuilder
-    private var copyActionOverlay: some View {
-        if isHovered {
-            HStack {
-                Spacer(minLength: 0)
-                copyButton
-            }
-            .padding(JarvisSpacing.controlGap)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .transition(JarvisMotion.cardOverlayTransition(reduceMotion: reduceMotion))
-        }
-    }
-
-    /// 读屏用的「时间戳，选中状态」。
-    ///
-    /// 别把它写回卡片 body 里那一长串修饰符中间的内联三元插值：release 构建下
-    /// （CI 那台机器的编译器）整条表达式的类型检查会超时——`the compiler is unable
-    /// to type-check this expression in reasonable time`，1.3.6 的发布就是这么红的。
-    private var selectionDescription: String {
-        let selection = isSelected ? "已选中" : "未选中"
-        let favorite = item.isPinned ? "，已收藏" : ""
-        return "\(item.shortTimestamp)，\(selection)\(favorite)"
-    }
-
-    private var metadataRow: some View {
-        HStack(spacing: JarvisSpacing.iconGap) {
-            Image(systemName: item.kind.icon)
-                .font(JarvisTypography.captionEmphasis)
-                .fixedSize()
-            Spacer(minLength: 4)
-            if item.isPinned {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.yellow)
-                    .accessibilityLabel("已收藏")
-            }
-            Text(JarvisHistoryDateFormatting.string(from: item.createdAt))
-                .font(JarvisTypography.caption)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .historyCardMetadata()
-    }
-
-    private var cardBody: some View {
-        HistoryCardChrome(
-            preview: previewArea,
-            isSelected: isSelected,
-            alignment: .topLeading,
-            enablesHoverZoom: enablesHoverZoom
-        )
-        .overlay(alignment: .bottom) {
-            if isHovered {
-                metadataRow
-                    .transition(JarvisMotion.cardOverlayTransition(reduceMotion: reduceMotion))
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            copyActionOverlay
-        }
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                style: .continuous
-            )
-        )
-        .jarvisGridCardShadow()
-    }
-
-    var body: some View {
-        cardBody
-            .contentShape(
-                RoundedRectangle(
-                    cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                    style: .continuous
-                )
-            )
-            .onTapGesture(count: 2) {
-                if item.isSensitive, !isSensitiveRevealed {
-                    isSensitiveRevealed = true
-                } else {
-                    onDoubleClick()
-                }
-            }
-            .onTapGesture(perform: onSelect)
-            .onHover { hovering in
-                guard hovering != isHovered else { return }
-                withAnimation(
-                    JarvisMotion.animation(
-                        JarvisMotion.content,
-                        reduceMotion: reduceMotion
-                    )
-                ) {
-                    isHovered = hovering
-                }
-            }
-            .onChange(of: item.id) { _, _ in
-                isSensitiveRevealed = false
-                isTextExpanded = false
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(
-                item.isSensitive
-                    ? "\(item.kind.title)，敏感内容"
-                    : "\(item.kind.title)，剪贴板内容"
-            )
-            .accessibilityValue(selectionDescription)
-            .accessibilityHint("点击选择，双击打开预览；悬停后可复制")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction(named: "复制") {
-                copyContent()
-            }
-            .contextMenu {
-                Button {
-                    if item.isSensitive {
-                        showingSensitivePreviewConfirmation = true
-                    } else {
-                        onPreview()
-                    }
-                } label: {
-                    Label("查看", systemImage: "eye")
-                }
-                .disabled(!item.canFullscreenPreview)
-
-                Button {
-                    copyContent()
-                } label: {
-                    Label("复制", systemImage: "doc.on.doc")
-                }
-
-                Button {
-                    onPin()
-                } label: {
-                    Label(
-                        item.isPinned ? "取消收藏" : "收藏",
-                        systemImage: item.isPinned ? "star.slash" : "star"
-                    )
-                }
-
-                Divider()
-
-                Button(role: .destructive) {
-                    showingDeleteConfirmation = true
-                } label: {
-                    Label("删除", systemImage: "trash")
-                }
-            }
-            .confirmationDialog(
-                "删除这条剪贴板记录？",
-                isPresented: $showingDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("删除", role: .destructive) {
-                    onDelete()
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
-                Text("删除后无法恢复。")
-            }
-            .confirmationDialog(
-                "这段内容疑似包含敏感信息",
-                isPresented: $showingSensitiveCopyConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("显示并复制") {
-                    onCopy()
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
-                Text("只有在你主动确认后，才会显示并复制原始内容。")
-            }
-            .confirmationDialog(
-                "这段内容疑似包含敏感信息",
-                isPresented: $showingSensitivePreviewConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("显示并查看") {
-                    onPreview()
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
-                Text("只有在你主动确认后，才会打开原始内容预览。")
-            }
-    }
-}
-
-struct ClipboardGrid: View {
-    let items: [ClipboardItem]
-    let gridZoom: HistoryGridZoomLevel
-    let selectedItemID: UUID?
-    let onSelect: (ClipboardItem) -> Void
-    let onDoubleClick: (ClipboardItem) -> Void
-    let onCopy: (ClipboardItem) -> Void
-    let onPreview: (ClipboardItem) -> Void
-    let onPin: (ClipboardItem) -> Void
-    let onDelete: (ClipboardItem) -> Void
-
-    init(
-        items: [ClipboardItem],
-        gridZoom: HistoryGridZoomLevel = .regular,
-        selectedItemID: UUID? = nil,
-        onSelect: @escaping (ClipboardItem) -> Void = { _ in },
-        onDoubleClick: @escaping (ClipboardItem) -> Void = { _ in },
-        onCopy: @escaping (ClipboardItem) -> Void = { _ in },
-        onPreview: @escaping (ClipboardItem) -> Void = { _ in },
-        onPin: @escaping (ClipboardItem) -> Void = { _ in },
-        onDelete: @escaping (ClipboardItem) -> Void = { _ in }
-    ) {
-        self.items = items
-        self.gridZoom = gridZoom
-        self.selectedItemID = selectedItemID
-        self.onSelect = onSelect
-        self.onDoubleClick = onDoubleClick
-        self.onCopy = onCopy
-        self.onPreview = onPreview
-        self.onPin = onPin
-        self.onDelete = onDelete
-    }
-
-    private var columns: [GridItem] {
-        let spacing = HistoryGridMetrics.clipboardGridSpacing
-        // The main window and F3 shelf share the same adaptive layout and zoom.
-        return [GridItem(.adaptive(minimum: gridZoom.cardWidth, maximum: .infinity), spacing: spacing)]
-    }
-
-    var body: some View {
-        LazyVGrid(
-            columns: columns,
-            alignment: .leading,
-            spacing: HistoryGridMetrics.clipboardGridSpacing
-        ) {
-            ForEach(items) { item in
-                ClipboardCard(
-                    item: item,
-                    isSelected: selectedItemID == item.id,
-                    maxPixelSize: gridZoom.thumbnailPixelSize,
-                    enablesHoverZoom: gridZoom.enablesHoverZoom,
-                    onSelect: { onSelect(item) },
-                    onDoubleClick: { onDoubleClick(item) },
-                    onCopy: { onCopy(item) },
-                    onPreview: { onPreview(item) },
-                    onPin: { onPin(item) },
-                    onDelete: { onDelete(item) }
-                )
-                .equatable()
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

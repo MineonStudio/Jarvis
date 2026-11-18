@@ -2,10 +2,26 @@ import AppKit
 import Foundation
 import SwiftUI
 
+enum JarvisToastDestination {
+    case main
+    case clipboard
+}
+
 extension AppModel {
     // MARK: - Shared UI state
 
-    func showToast(_ message: String) {
+    func openSettings() {
+        selectedSection = .settings
+        JarvisMenuBarController.shared.reopenMainWindow(preservingSelection: true)
+    }
+
+    func toast(for destination: JarvisToastDestination) -> String? {
+        toastDestination == destination ? toastMessage : nil
+    }
+
+    func showToast(_ message: String, destination: JarvisToastDestination? = nil) {
+        let clipboard = clipboardPanelController
+        toastDestination = destination ?? (clipboard.hasKeyboardFocus ? .clipboard : .main)
         toastDismissTask?.cancel()
         toastMessage = message
         toastDismissTask = Task { @MainActor [weak self] in

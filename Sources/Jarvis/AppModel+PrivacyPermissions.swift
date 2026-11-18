@@ -3,7 +3,7 @@ import Foundation
 
 enum JarvisPermissionPromptPresentation: Equatable {
     case mainWindow
-    case settingsWindow
+    case settingsPage
 }
 
 struct JarvisTaskPermissionPrompt: Equatable {

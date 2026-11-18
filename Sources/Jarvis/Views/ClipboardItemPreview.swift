@@ -26,14 +26,7 @@ struct ClipboardItemPreview: View {
                       let image = videoThumbnail
             {
                 mediaImage(image)
-                    .overlay(alignment: .bottomLeading) {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(JarvisSpacing.iconGap)
-                            .background(.black.opacity(0.55), in: Circle())
-                            .padding(JarvisSpacing.controlGap)
-                    }
+
             } else {
                 Image(systemName: item.kind.icon)
                     .font(.system(size: 42, weight: .medium))
@@ -171,7 +164,7 @@ struct ClipboardItemPreview: View {
         Image(nsImage: image)
             .interpolation(.medium)
             .resizable()
-            .scaledToFill()
+            .scaledToFit()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
     }

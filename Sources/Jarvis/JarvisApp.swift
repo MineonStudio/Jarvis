@@ -84,6 +84,11 @@ struct JarvisApp: App {
         .windowToolbarLabelStyle(fixed: .iconOnly)
         .commands {
             CommandGroup(replacing: .sidebar) {}
+            CommandGroup(replacing: .appSettings) {
+                Button("设置…") { appModel.openSettings() }
+                    .keyboardShortcut(",", modifiers: .command)
+                    .disabled(!appModel.onboarding.isCompleted)
+            }
             LANTransferCommands()
         }
     }
@@ -100,7 +105,7 @@ private struct JarvisRootView: View {
     var body: some View {
         Group {
             if appModel.onboarding.isCompleted {
-                ContentView(onOpenSettings: { appModel.settingsPanelController.show(app: appModel) })
+                ContentView(initialSection: appModel.selectedSection)
             } else {
                 JarvisOnboardingView { onboardingContentSize = $0 }
             }
@@ -120,7 +125,7 @@ private struct JarvisRootView: View {
                 ? JarvisMainWindowController.minimumWindowSize.height : nil
         )
         .overlay {
-            if let prompt = appModel.taskPermissionPrompt, prompt.presentation == .mainWindow {
+            if let prompt = appModel.taskPermissionPrompt {
                 JarvisTaskPermissionOverlay(prompt: prompt)
                     .environment(appModel)
                     .environment(\.jarvisFlatControls, true)
@@ -150,11 +155,7 @@ private struct JarvisRootView: View {
                 }
             }
         }
-        .overlay(alignment: .bottom) {
-            JarvisToastHost(message: appModel.toastMessage)
-                .padding(.bottom, JarvisSpacing.pageInset)
-                .allowsHitTesting(false)
-        }
+        .jarvisToastOverlay(appModel.toast(for: .main))
         .animation(.easeInOut(duration: 0.2), value: appModel.taskPermissionPrompt)
         // Keep the system title-bar region and its native window controls.
         // Apple recommends removing only the title and toolbar background

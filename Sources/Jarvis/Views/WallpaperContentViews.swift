@@ -49,6 +49,8 @@ struct WallpaperView: View {
     @StateObject private var model = WallpaperViewModel()
     @StateObject private var previewController = WallpaperPreviewController()
     @State private var libraryMode: WallpaperLibraryMode = .online
+    @State private var gridZoom: HistoryGridZoomLevel = .regular
+    @State private var selection = GallerySelection<String>()
     @State private var toolbarAlignment = HistoryToolbarAlignment()
     @State private var deleteItem: WallpaperItem?
     @State private var tagInput = ""
@@ -65,6 +67,10 @@ struct WallpaperView: View {
                 wallpaperLeadingToolbar
             },
             trailingToolbar: {
+                ToolbarItem(id: "wallpaper.grid-zoom", placement: .primaryAction) {
+                    HistoryGridZoomControl(selection: $gridZoom)
+                }
+                ToolbarSpacer(.fixed, placement: .primaryAction)
                 WallpaperLibraryToolbar(libraryMode: $libraryMode)
                 ToolbarSpacer(.fixed, placement: .primaryAction)
                 ToolbarItem(id: "wallpaper.tag-search", placement: .primaryAction) {
@@ -108,6 +114,7 @@ struct WallpaperView: View {
             await model.refresh()
         }
         .onChange(of: libraryMode) { _, newMode in
+            selection.clear()
             if newMode == .online {
                 refreshOnline()
             } else {
@@ -343,6 +350,7 @@ struct WallpaperView: View {
             .padding(.leading, toolbarAlignment.leadingInset)
             .padding(.trailing, toolbarAlignment.trailingInset)
             .padding(.bottom, HistoryGridMetrics.historyPanelInset)
+            .galleryBackground(minHeight: viewport.size.height) { selection.clear() }
             .id(WallpaperScrollTarget.top)
         }
         .coordinateSpace(name: WallpaperScrollSpace.name)
@@ -388,7 +396,7 @@ struct WallpaperView: View {
                 items: model.favorites,
                 availableWidth: availableWidth,
                 emptyTitle: "还没有收藏壁纸",
-                emptyMessage: "在壁纸卡片上点击心形按钮，即可收藏壁纸。"
+                emptyMessage: "将指针移到壁纸卡片上，点击心形按钮即可收藏。"
             )
         }
     }
@@ -467,6 +475,8 @@ struct WallpaperView: View {
             WallpaperGrid(
                 items: items,
                 availableWidth: availableWidth,
+                gridZoom: gridZoom,
+                selection: $selection,
                 imageURL: { model.localURL(for: $0) ?? $0.previewURL },
                 isDownloading: { model.isDownloading($0) },
                 isPreviewLoading: { previewController.isLoading(itemID: $0.id) },
@@ -626,140 +636,11 @@ private struct WallpaperLoadMoreButton: View {
     }
 }
 
-private enum WallpaperGalleryMetrics {
-    // Keep the existing justified-gallery proportions while giving every
-    // wallpaper tile a little more breathing room.
-    static let heightScale: CGFloat = 1.20
-    static let idealRowHeight: CGFloat = 158 * heightScale
-    static let minimumRowHeight: CGFloat = 128 * heightScale
-    static let maximumRowHeight: CGFloat = 220 * heightScale
-    static let trailingSafetyInset = JarvisSpacing.panelInset
-    static let cardSpacing = HistoryGridMetrics.clipboardGridSpacing
-    static let actionSpacing = JarvisSpacing.iconGap
-}
-
-private struct WallpaperJustifiedRow: Identifiable {
-    let id: Int
-    let items: [WallpaperItem]
-    let widths: [CGFloat]
-    let height: CGFloat
-}
-
-private enum WallpaperJustifiedLayout {
-    static func rows(
-        for items: [WallpaperItem],
-        availableWidth: CGFloat,
-        spacing: CGFloat = WallpaperGalleryMetrics.cardSpacing
-    ) -> [WallpaperJustifiedRow] {
-        guard !items.isEmpty else { return [] }
-
-        let width = max(1, availableWidth)
-        var rows: [WallpaperJustifiedRow] = []
-        var currentItems: [WallpaperItem] = []
-
-        for item in items {
-            currentItems.append(item)
-
-            guard currentItems.count > 1 else { continue }
-            if fittedHeight(
-                for: currentItems,
-                availableWidth: width,
-                spacing: spacing
-            ) < WallpaperGalleryMetrics.minimumRowHeight {
-                currentItems.removeLast()
-                rows.append(
-                    makeRow(
-                        id: rows.count,
-                        items: currentItems,
-                        availableWidth: width,
-                        spacing: spacing,
-                        isLastRow: false
-                    )
-                )
-                currentItems = [item]
-            }
-        }
-
-        if !currentItems.isEmpty {
-            rows.append(
-                makeRow(
-                    id: rows.count,
-                    items: currentItems,
-                    availableWidth: width,
-                    spacing: spacing,
-                    isLastRow: true
-                )
-            )
-        }
-        return rows
-    }
-
-    private static func makeRow(
-        id: Int,
-        items: [WallpaperItem],
-        availableWidth: CGFloat,
-        spacing: CGFloat,
-        isLastRow: Bool
-    ) -> WallpaperJustifiedRow {
-        let fittedHeight = fittedHeight(
-            for: items,
-            availableWidth: availableWidth,
-            spacing: spacing
-        )
-        let minimumHeight = items.count == 1
-            ? 1
-            : WallpaperGalleryMetrics.minimumRowHeight
-        let requestedHeight = isLastRow
-            ? min(WallpaperGalleryMetrics.idealRowHeight, fittedHeight)
-            : min(
-                WallpaperGalleryMetrics.maximumRowHeight,
-                max(minimumHeight, fittedHeight)
-            )
-
-        // A minimum row height can make a single ultra-wide wallpaper exceed
-        // the available width. Scale the whole row down as a final guard so
-        // the aspect ratios stay intact while the row can never overflow.
-        let totalAspectRatio = items
-            .map(aspectRatio(for:))
-            .reduce(0, +)
-        let totalSpacing = spacing * CGFloat(max(0, items.count - 1))
-        let requestedWidth = totalAspectRatio * requestedHeight + totalSpacing
-        let widthScale = min(1, availableWidth / max(1, requestedWidth))
-        let height = requestedHeight * widthScale
-        let widths = items.map { aspectRatio(for: $0) * height }
-        return WallpaperJustifiedRow(
-            id: id,
-            items: items,
-            widths: widths,
-            height: height
-        )
-    }
-
-    private static func fittedHeight(
-        for items: [WallpaperItem],
-        availableWidth: CGFloat,
-        spacing: CGFloat
-    ) -> CGFloat {
-        let totalAspectRatio = items
-            .map(aspectRatio(for:))
-            .reduce(0, +)
-        guard totalAspectRatio > 0 else {
-            return WallpaperGalleryMetrics.idealRowHeight
-        }
-
-        let totalSpacing = spacing * CGFloat(max(0, items.count - 1))
-        return max(1, (availableWidth - totalSpacing) / totalAspectRatio)
-    }
-
-    private static func aspectRatio(for item: WallpaperItem) -> CGFloat {
-        guard item.width > 0, item.height > 0 else { return 16 / 9 }
-        return max(0.1, CGFloat(item.width) / CGFloat(item.height))
-    }
-}
-
 private struct WallpaperGrid: View {
     let items: [WallpaperItem]
     let availableWidth: CGFloat
+    let gridZoom: HistoryGridZoomLevel
+    @Binding var selection: GallerySelection<String>
     let imageURL: (WallpaperItem) -> URL
     let isDownloading: (WallpaperItem) -> Bool
     let isPreviewLoading: (WallpaperItem) -> Bool
@@ -770,240 +651,66 @@ private struct WallpaperGrid: View {
     let showsDelete: Bool
     let onDelete: (WallpaperItem) -> Void
 
-    private var rows: [WallpaperJustifiedRow] {
-        WallpaperJustifiedLayout.rows(
-            for: items,
-            availableWidth: availableWidth
+    var body: some View {
+        JustifiedGallery(
+            items: items, availableWidth: availableWidth,
+            scale: gridZoom.cardWidth / HistoryGridZoomLevel.regular.cardWidth,
+            aspectRatio: { JustifiedGalleryLayout.aspectRatio(width: $0.width, height: $0.height) },
+            card: card
         )
+        .onChange(of: items.map(\.id)) { _, ids in selection.retain(ids.contains) }
     }
 
-    var body: some View {
-        LazyVStack(
-            alignment: .leading,
-            spacing: WallpaperGalleryMetrics.cardSpacing
-        ) {
-            ForEach(rows) { row in
-                HStack(
-                    alignment: .top,
-                    spacing: WallpaperGalleryMetrics.cardSpacing
-                ) {
-                    ForEach(row.items.indices, id: \.self) { index in
-                        let item = row.items[index]
-                        WallpaperCard(
-                            item: item,
-                            imageURL: imageURL(item),
-                            cardWidth: row.widths[index],
-                            cardHeight: row.height,
-                            isDownloading: isDownloading(item),
-                            isPreviewLoading: isPreviewLoading(item),
-                            onDoubleClick: { onDoubleClick(item) },
-                            onSet: { onSet(item) },
-                            isApplied: isApplied(item),
-                            onToggleFavorite: { onToggleFavorite(item) },
-                            showsDelete: showsDelete,
-                            onDelete: { onDelete(item) }
-                        )
+    private func card(_ item: WallpaperItem, _ size: CGSize) -> some View {
+        let isSelected = selection.selectedID == item.id
+        return GalleryCard(
+            size: size, isSelected: isSelected, enablesHoverZoom: gridZoom.enablesHoverZoom,
+            onClick: { count in
+                GallerySelection.handleClick(count, on: item.id, selection: $selection) { onDoubleClick(item) }
+            },
+            preview: {
+                WallpaperThumbnail(url: imageURL(item))
+                    .overlay {
+                        if isPreviewLoading(item) {
+                            ProgressView()
+                                .controlSize(.large)
+                                .padding(12)
+                                .glassEffect(.regular, in: Circle())
+                                .allowsHitTesting(false)
+                                .accessibilityLabel("正在加载原图")
+                        }
                     }
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct WallpaperCircleButtonStyle: ButtonStyle {
-    let tint: Color?
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: JarvisToolbarMetrics.iconSize, weight: .semibold))
-            .foregroundStyle(tint ?? .primary)
-            .frame(
-                width: JarvisToolbarMetrics.controlSize,
-                height: JarvisToolbarMetrics.controlSize
-            )
-            .opacity(configuration.isPressed ? 0.68 : 1)
-            .background(Color.jarvisPanel, in: Circle())
-            .jarvisButtonShadow()
-            .contentShape(Circle())
-            .scaleEffect(
-                reduceMotion ? 1 : (configuration.isPressed ? 0.94 : 1)
-            )
-            .animation(
-                JarvisMotion.animation(JarvisMotion.buttonPress, reduceMotion: reduceMotion),
-                value: configuration.isPressed
-            )
-    }
-}
-
-private struct WallpaperCard: View {
-    let item: WallpaperItem
-    let imageURL: URL
-    let cardWidth: CGFloat
-    let cardHeight: CGFloat
-    let isDownloading: Bool
-    let isPreviewLoading: Bool
-    let onDoubleClick: () -> Void
-    let onSet: () -> Void
-    let isApplied: Bool
-    let onToggleFavorite: () -> Void
-    let showsDelete: Bool
-    let onDelete: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovered = false
-
-    private var cardShape: RoundedRectangle {
-        RoundedRectangle(
-            cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-            style: .continuous
-        )
-    }
-
-    private var setWallpaperAccessibilityLabel: String {
-        isApplied
-            ? "已设置"
-            : (isDownloading ? "正在设置桌面壁纸" : "设为桌面壁纸")
-    }
-
-    @ViewBuilder
-    private var setWallpaperButton: some View {
-        if cardWidth < 160 {
-            Button(action: onSet) {
-                Image(systemName: "checkmark")
-            }
-            .buttonStyle(WallpaperCircleButtonStyle(tint: nil))
-            .disabled(isDownloading)
-            .accessibilityLabel(setWallpaperAccessibilityLabel)
-            .help("设置已连接显示器的桌面壁纸。锁屏及所有空间的行为由 macOS 系统设置管理。")
-        } else {
-            Button(action: onSet) {
-                Text(
-                    isApplied
-                        ? "已设置"
-                        : (isDownloading ? "正在设置…" : "设为桌面壁纸")
+            },
+            hoverContent: {
+                WallpaperHoverActions(
+                    isFavorite: item.isFavorite, isSetting: isDownloading(item), setTitle: setWallpaperTitle(item),
+                    onToggleFavorite: { onToggleFavorite(item) }, onSet: { onSet(item) }
                 )
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
             }
-            .buttonStyle(JarvisCardActionPillButtonStyle())
-            .disabled(isDownloading)
-            .accessibilityLabel(setWallpaperAccessibilityLabel)
-            .help("设置已连接显示器的桌面壁纸。锁屏及所有空间的行为由 macOS 系统设置管理。")
-        }
-    }
-
-    private var favoriteButton: some View {
-        Button(action: onToggleFavorite) {
-            Image(systemName: item.isFavorite ? "heart.fill" : "heart")
-        }
-        .buttonStyle(WallpaperCircleButtonStyle(tint: item.isFavorite ? .pink : nil))
-        .accessibilityLabel(item.isFavorite ? "取消收藏" : "收藏")
-    }
-
-    private var deleteButton: some View {
-        Button(role: .destructive, action: onDelete) {
-            Image(systemName: "trash")
-                .font(.system(size: JarvisToolbarMetrics.iconSize, weight: .semibold))
-                .foregroundStyle(Color.red)
-        }
-        .buttonStyle(JarvisToolbarIconButtonStyle())
-        .accessibilityLabel("删除")
-    }
-
-    @ViewBuilder
-    private var hoverActions: some View {
-        if cardWidth < 160 {
-            HStack(alignment: .center, spacing: WallpaperGalleryMetrics.actionSpacing) {
-                favoriteButton
-                if showsDelete {
-                    deleteButton
-                }
-                Spacer(minLength: 0)
-                setWallpaperButton
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            HStack(spacing: JarvisSpacing.iconGap) {
-                favoriteButton
-                if showsDelete {
-                    deleteButton
-                }
-                Spacer(minLength: 0)
-                setWallpaperButton
-            }
-        }
-    }
-
-    private var previewContent: some View {
-        ZStack {
-            WallpaperThumbnail(url: imageURL)
-        }
-        .frame(
-            width: cardWidth,
-            height: cardHeight,
-            alignment: .center
         )
-        .contentShape(cardShape)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(item.title)，\(item.resolutionDescription)")
-        .overlay {
-            if isPreviewLoading {
-                ZStack {
-                    Color.black.opacity(0.5)
-                    ProgressView()
-                        .controlSize(.large)
-                        .scaleEffect(1.35)
-                        .tint(.white)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: HistoryGridMetrics.clipboardCornerRadius,
-                        style: .continuous
-                    )
-                )
-                .allowsHitTesting(false)
-                .accessibilityLabel("正在加载原图")
+        .accessibilityHint("点击切换选中，双击查看原图")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { selection.toggle(item.id) }
+        .accessibilityAction(named: "查看原图") { onDoubleClick(item) }
+        .contextMenu {
+            Button("查看原图") { onDoubleClick(item) }
+            Button(setWallpaperTitle(item)) { onSet(item) }
+                .disabled(isDownloading(item))
+            Button(item.isFavorite ? "取消收藏" : "收藏") { onToggleFavorite(item) }
+            if showsDelete {
+                Divider()
+                Button("删除", role: .destructive) { onDelete(item) }
             }
-        }
-        .overlay(alignment: .bottom) {
-            if isHovered {
-                hoverActions
-                    .padding(JarvisSpacing.controlGap)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(
-                        reduceMotion
-                            ? .identity
-                            : .opacity.combined(with: .offset(y: 8))
-                    )
-            }
-        }
-        .clipShape(cardShape)
-        .overlay {
-            cardShape
-                .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.75)
-                .allowsHitTesting(false)
         }
     }
 
-    var body: some View {
-        previewContent
-            .jarvisGridCardShadow()
-            .onTapGesture(count: 2, perform: onDoubleClick)
-            .onHover { hovering in
-                guard hovering != isHovered else { return }
-                withAnimation(
-                    JarvisMotion.animation(
-                        JarvisMotion.content,
-                        reduceMotion: reduceMotion
-                    )
-                ) {
-                    isHovered = hovering
-                }
-            }
+    private func setWallpaperTitle(_ item: WallpaperItem) -> String {
+        if isDownloading(item) {
+            return "正在设置…"
+        }
+        return isApplied(item) ? "已设为桌面壁纸" : "设为桌面壁纸"
     }
 }
 

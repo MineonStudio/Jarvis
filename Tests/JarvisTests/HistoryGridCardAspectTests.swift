@@ -12,6 +12,10 @@ import XCTest
 final class HistoryGridCardAspectTests: XCTestCase {
     private static let aspect = HistoryGridLayout.aspectRatio
 
+    private struct Item: Identifiable {
+        let id: Int
+    }
+
     /// 一张 1:3 的竖图，专门用来把"比例被内容带跑"暴露出来。
     private func tallImage() throws -> NSImage {
         let rep = try XCTUnwrap(NSBitmapImageRep(
@@ -36,8 +40,8 @@ final class HistoryGridCardAspectTests: XCTestCase {
         return image
     }
 
-    /// 量出预览区（橙色）的包围盒，换算成比例。
-    private func previewAspect(view: some View) throws -> CGFloat {
+    /// 量出预览区（橙色）的包围盒。
+    private func previewSize(view: some View) throws -> CGSize {
         let renderer = ImageRenderer(content: view.frame(width: 640).padding(8).background(Color.white))
         renderer.scale = 1
         let rep = try NSBitmapImageRep(cgImage: XCTUnwrap(renderer.cgImage))
@@ -55,7 +59,12 @@ final class HistoryGridCardAspectTests: XCTestCase {
             }
         }
         guard minX <= maxX else { throw XCTSkip("没画出来") }
-        return CGFloat(maxX - minX + 1) / CGFloat(maxY - minY + 1)
+        return CGSize(width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+
+    private func previewAspect(view: some View) throws -> CGFloat {
+        let size = try previewSize(view: view)
+        return size.width / size.height
     }
 
     /// 卡片预览用的写法：占位层带比例，内容当 overlay。
@@ -79,6 +88,24 @@ final class HistoryGridCardAspectTests: XCTestCase {
         let ratio = try previewAspect(view: preview(of: image))
 
         XCTAssertEqual(ratio, Self.aspect, accuracy: 0.05, "预览区被内容带成了 \(ratio)")
+    }
+
+    func testPartialRowKeepsTheFixedCardSize() throws {
+        let viewportWidth: CGFloat = 640
+        let aspectRatio: CGFloat = 210.0 / 297.0
+        let gallery = FixedRatioGallery(
+            items: [Item(id: 0), Item(id: 1), Item(id: 2)],
+            availableWidth: viewportWidth,
+            targetWidth: 300,
+            aspectRatio: aspectRatio
+        ) { item, size in
+            Color(nsColor: item.id == 2 ? .systemOrange : .black)
+                .frame(width: size.width, height: size.height)
+        }
+        let expectedWidth = (viewportWidth - HistoryGridMetrics.clipboardGridSpacing) / 2
+        let size = try previewSize(view: gallery)
+        XCTAssertEqual(size.width, expectedWidth, accuracy: 1)
+        XCTAssertEqual(size.height, expectedWidth / aspectRatio, accuracy: 1)
     }
 
     /// 反例：比例挂在图片自己身上（旧写法）会被竖图带跑——这条确认测试真的在测东西。

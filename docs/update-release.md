@@ -54,3 +54,10 @@ JARVIS_VERSION=<version> JARVIS_BUILD=<build> ./package_release.sh
 - `Jarvis-update-manifest.sig`
 
 上传到对应的非预发布 GitHub Release。不要在签署清单后改动更新 ZIP、清单或签名。私钥不提交、不上传 GitHub Actions。发布前应在真实 macOS 中完成“授权 → 更新 → 检查权限继承”的验收；代码身份测试不能替代 TCC 实测。
+
+
+## 应用内更新说明
+
+发现新版本时，弹窗会读取对应 GitHub Release 的说明。面向用户的变更可写在「更新内容」「新功能」「调整」或「修复」等小节，优先使用列表。签名校验、发布验证等内容可放在单独小节。发布说明暂不可用时，弹窗仍会提供更新操作。
+
+本次待发布的弹窗文案保存在 [更新说明](release-notes.md)。发布本次版本时，将该文件内容作为对应 GitHub Release 的正文，应用内更新弹窗会从中提取「更新内容」列表。后续版本发布前，应按该版本的实际改动更新此文件。

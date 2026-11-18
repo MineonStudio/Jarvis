@@ -39,9 +39,9 @@ final class WindowDragLayoutAuthorizationTests: XCTestCase {
     }
 
     func testEnablePromptUsesTheSharedPermissionContentInSettings() {
-        let prompt = JarvisTaskPermissionPrompt(permission: .accessibility, presentation: .settingsWindow)
+        let prompt = JarvisTaskPermissionPrompt(permission: .accessibility, presentation: .settingsPage)
         XCTAssertEqual(prompt.title, JarvisTaskPermissionPrompt(permission: .accessibility).title)
         XCTAssertEqual(prompt.message, JarvisTaskPermissionPrompt(permission: .accessibility).message)
-        XCTAssertEqual(prompt.presentation, .settingsWindow)
+        XCTAssertEqual(prompt.presentation, .settingsPage)
     }
 }

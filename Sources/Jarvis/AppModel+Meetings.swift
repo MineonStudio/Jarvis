@@ -15,8 +15,8 @@ extension AppModel {
         guard meetingRecords.contains(where: { $0.id == recordID }) else { return }
         ensureMeetingDetailLoaded(recordID)
         guard AIAPIConfiguration.load().isConfigured else {
-            settingsPanelController.show(app: self)
-            showToast(JarvisFeedbackCopy.configureAIFirst)
+            openSettings()
+            showToast(JarvisFeedbackCopy.configureAIFirst, destination: .main)
             return
         }
         guard MeetingTranscriptConsent.isConfirmed else {

@@ -84,19 +84,14 @@ final class WindowSnapRenderingTests: XCTestCase {
     private func compositedHoverColor(in view: NSView, bitmap: NSBitmapImageRep) throws -> NSColor {
         let surface = WindowSnapBarGeometry.surfaceRect(in: view.bounds)
         let backdrop = try pixel(at: CGPoint(x: surface.minX + 4, y: surface.midY), bitmap: bitmap, size: view.bounds.size)
-        var foreground: NSColor?
-        view.effectiveAppearance.performAsCurrentDrawingAppearance {
-            foreground = JarvisMotion.hoverPillNSColor.usingColorSpace(.sRGB)
-        }
-        let tint = try XCTUnwrap(foreground)
-        let alpha = tint.alphaComponent
-        let backdropWeight = backdrop.alphaComponent * (1 - alpha)
-        let outputAlpha = alpha + backdropWeight
-        return NSColor(
-            srgbRed: (tint.redComponent * alpha + backdrop.redComponent * backdropWeight) / outputAlpha,
-            green: (tint.greenComponent * alpha + backdrop.greenComponent * backdropWeight) / outputAlpha,
-            blue: (tint.blueComponent * alpha + backdrop.blueComponent * backdropWeight) / outputAlpha,
-            alpha: outputAlpha
+        // Render the reference through AppKit's bitmap color transform, matching
+        // the native blocks instead of blending converted sRGB components.
+        let reference = WindowSnapHoverReferenceView(backdrop: backdrop)
+        view.addSubview(reference)
+        defer { reference.removeFromSuperview() }
+        return try pixel(
+            at: CGPoint(x: reference.bounds.midX, y: reference.bounds.midY),
+            bitmap: render(reference), size: reference.bounds.size
         )
     }
 
@@ -151,6 +146,27 @@ final class WindowSnapRenderingTests: XCTestCase {
 private final class WindowSnapAccentReferenceView: NSView {
     override func draw(_: NSRect) {
         NSColor.controlAccentColor.setFill()
+        NSBezierPath(rect: bounds).fill()
+    }
+}
+
+@MainActor
+private final class WindowSnapHoverReferenceView: NSView {
+    let backdrop: NSColor
+
+    init(backdrop: NSColor) {
+        self.backdrop = backdrop
+        super.init(frame: CGRect(x: 0, y: 0, width: 12, height: 12))
+    }
+
+    required init?(coder _: NSCoder) {
+        nil
+    }
+
+    override func draw(_: NSRect) {
+        backdrop.setFill()
+        NSBezierPath(rect: bounds).fill()
+        JarvisMotion.hoverPillNSColor.setFill()
         NSBezierPath(rect: bounds).fill()
     }
 }

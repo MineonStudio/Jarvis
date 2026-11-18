@@ -2,123 +2,56 @@ import SwiftUI
 
 struct ResumeTemplateSelectionView: View {
     let category: ResumeTemplateCategory
+    let gridZoom: HistoryGridZoomLevel
     let onSelect: (ResumeTemplate) -> Void
+    @State private var selection = GallerySelection<ResumeTemplate.ID>()
 
     var body: some View {
         GeometryReader { proxy in
             ScrollView {
-                LazyVGrid(
-                    columns: [GridItem(
-                        .adaptive(minimum: ResumeTemplateThumbnail.size.width, maximum: ResumeTemplateThumbnail.size.width),
-                        spacing: HistoryGridMetrics.clipboardGridSpacing,
-                        alignment: .leading
-                    )],
-                    alignment: .leading,
-                    spacing: HistoryGridMetrics.clipboardGridSpacing
-                ) {
-                    ForEach(category.templates) { template in
-                        ResumeTemplateCard(template: template, onSelect: onSelect)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                FixedRatioGallery(
+                    items: category.templates,
+                    availableWidth: proxy.size.width - JarvisMetrics.shellHorizontalPadding * 2,
+                    targetWidth: ResumeTemplateThumbnail.size.width * gridZoom.cardWidth / HistoryGridZoomLevel.regular.cardWidth,
+                    aspectRatio: ResumeTemplateThumbnail.size.width / ResumeTemplateThumbnail.size.height,
+                    card: card
+                )
                 .padding(.horizontal, JarvisMetrics.shellHorizontalPadding)
                 .padding(.bottom, HistoryGridMetrics.historyPanelInset)
-                .frame(minHeight: max(proxy.size.height, 430), alignment: .topLeading)
+                .galleryBackground(minHeight: max(proxy.size.height, 430)) { selection.clear() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.jarvisBackground)
-    }
-}
-
-private struct ResumeTemplateCard: View {
-    let template: ResumeTemplate
-    let onSelect: (ResumeTemplate) -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovered = false
-
-    private var styleTitle: String {
-        template.category.title
+        .onChange(of: category) { _, category in
+            selection.retain(Set(category.templates.map(\.id)).contains)
+        }
     }
 
-    var body: some View {
-        VStack(spacing: JarvisSpacing.controlGap) {
-            HistoryCardChrome(
-                preview: cover,
-                width: ResumeTemplateThumbnail.size.width,
-                height: ResumeTemplateThumbnail.size.height,
-                isSelected: false,
-                cornerRadius: 0
-            )
-            .overlay(alignment: .topTrailing) { useActionOverlay }
-            .clipShape(Rectangle())
-            .jarvisGridCardShadow(cornerRadius: 0)
-            metadataRow
-        }
-        .frame(width: ResumeTemplateThumbnail.size.width)
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) { onSelect(template) }
-        .onHover { hovering in
-            guard hovering != isHovered else { return }
-            withAnimation(JarvisMotion.animation(JarvisMotion.content, reduceMotion: reduceMotion)) {
-                isHovered = hovering
-            }
-        }
+    private func card(_ template: ResumeTemplate, _ size: CGSize) -> some View {
+        let isSelected = selection.selectedID == template.id
+        return GalleryCard(
+            size: size, isSelected: isSelected, enablesHoverZoom: gridZoom.enablesHoverZoom,
+            onClick: { count in
+                GallerySelection.handleClick(count, on: template.id, selection: $selection) { onSelect(template) }
+            },
+            preview: {
+                ResumeTemplateThumbnail(template: template)
+                    .scaleEffect(size.width / ResumeTemplateThumbnail.size.width, anchor: .topLeading)
+                    .frame(width: size.width, height: size.height, alignment: .topLeading)
+                    .clipped()
+            },
+            leading: { Label(template.category.title, systemImage: template.icon) },
+            trailing: { Text(template.title) }
+        )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(styleTitle)，\(template.title)模板")
-        .accessibilityHint("双击或点击悬浮的使用按钮来使用模板")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { onSelect(template) }
+        .accessibilityLabel("\(template.category.title)，\(template.title)模板")
+        .accessibilityHint("点击切换选中，双击使用模板")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { selection.toggle(template.id) }
+        .accessibilityAction(named: "使用模板") { onSelect(template) }
         .contextMenu {
             Button("使用") { onSelect(template) }
-        }
-    }
-
-    private var cover: some View {
-        Color.clear
-            .aspectRatio(ResumeTemplateThumbnail.size.width / ResumeTemplateThumbnail.size.height, contentMode: .fit)
-            .frame(maxWidth: .infinity)
-            .overlay {
-                GeometryReader { geometry in
-                    ResumeTemplateThumbnail(template: template)
-                        .scaleEffect(geometry.size.width / ResumeTemplateThumbnail.size.width, anchor: .topLeading)
-                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
-                }
-            }
-            .clipped()
-    }
-
-    private var metadataRow: some View {
-        HStack(spacing: JarvisSpacing.iconGap) {
-            Image(systemName: template.icon)
-                .font(JarvisTypography.captionEmphasis)
-                .fixedSize()
-            Text(styleTitle)
-                .font(JarvisTypography.caption)
-                .lineLimit(1)
-            Spacer(minLength: JarvisSpacing.textGap)
-            Text(template.title)
-                .font(JarvisTypography.captionEmphasis)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, JarvisSpacing.textGap)
-    }
-
-    @ViewBuilder
-    private var useActionOverlay: some View {
-        if isHovered {
-            Button { onSelect(template) } label: {
-                Text("使用")
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            .buttonStyle(JarvisCardActionPillButtonStyle())
-            .accessibilityLabel("使用\(template.title)模板")
-            .padding(JarvisSpacing.controlGap)
-            .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 8)))
         }
     }
 }
