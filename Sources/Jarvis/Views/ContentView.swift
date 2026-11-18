@@ -112,7 +112,7 @@ struct ContentView: View {
     }
 
     private var selectedSectionBinding: Binding<AppSection> {
-        Binding(get: { app.selectedSection }, set: selectSection)
+        Binding(get: { app.selectedSection }, set: { selectSection($0) })
     }
 
     private var topNavigationItems: [AppSection] {
