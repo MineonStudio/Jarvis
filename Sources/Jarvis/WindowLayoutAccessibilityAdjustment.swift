@@ -19,20 +19,16 @@ struct WindowLayoutAccessibilityAdjustment {
         let requestedFrame = placement.frame(in: visibleFrame)
         var resized = false
         if supportsResizing {
-            // AX keeps the top-left corner and grows right and down. Start on
+            // AX keeps the top-left corner and grows right and down. Park on
             // the target's top-left so that growth stays inside the screen.
-            // Centering a half layout first makes one edge hit the screen, and
-            // the clamped size then leaves gaps on both sides of that axis.
-            // A window whose current height would hang through the Dock is
-            // lifted above it; apps ignore a resize while that overlap remains.
-            if let currentSize = readSize(), currentSize.width > 0, currentSize.height > 0 {
-                _ = setPosition(Self.parkedFrame(currentSize, beforeResizingInto: requestedFrame, in: visibleFrame))
-            } else {
-                _ = setPosition(requestedFrame)
-            }
-            resized = setSize(requestedFrame.size)
+            // A move that does not land must not be followed by a resize:
+            // growing from the old origin stops at the screen edge, and the
+            // short size is then centered on a half layout.
+            resized = resize(to: requestedFrame, in: visibleFrame)
             if let actual = readSize(), !Self.matches(actual, requestedFrame.size) {
-                resized = setSize(requestedFrame.size) || resized
+                // The first growth may have been clamped. Park the size we
+                // have now, which can sit on the target corner, and try once more.
+                resized = resize(to: requestedFrame, in: visibleFrame) || resized
             }
         }
         guard let actualSize = readSize(), actualSize.width > 0, actualSize.height > 0 else {
@@ -45,6 +41,20 @@ struct WindowLayoutAccessibilityAdjustment {
         guard setPosition(actualFrame) else { return .failed }
         let matchesSize = Self.matches(actualSize, requestedFrame.size)
         return resized && matchesSize ? .applied : .constrained
+    }
+
+    /// Parks, then requests `requested.size`. Returns whether the resize was accepted.
+    /// A failed park skips the resize so the window is not grown from the wrong origin.
+    private func resize(to requested: CGRect, in visibleFrame: CGRect) -> Bool {
+        guard park(beforeResizingInto: requested, in: visibleFrame) else { return false }
+        return setSize(requested.size)
+    }
+
+    private func park(beforeResizingInto requested: CGRect, in visibleFrame: CGRect) -> Bool {
+        if let currentSize = readSize(), currentSize.width > 0, currentSize.height > 0 {
+            return setPosition(Self.parkedFrame(currentSize, beforeResizingInto: requested, in: visibleFrame))
+        }
+        return setPosition(requested)
     }
 
     /// Position that keeps the current size on screen while leaving room to grow
@@ -62,6 +72,8 @@ struct WindowLayoutAccessibilityAdjustment {
             x = visibleFrame.minX
         }
         var top = requested.maxY
+        // A window taller than the screen is lifted so its bottom stays above
+        // the Dock. Apps ignore a resize while that overlap remains.
         if top - currentSize.height < visibleFrame.minY {
             top = visibleFrame.minY + currentSize.height
         }

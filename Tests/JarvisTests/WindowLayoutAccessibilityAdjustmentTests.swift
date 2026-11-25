@@ -98,7 +98,7 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
                 ? WindowSnapPlacement.upperLeft.frame(in: visibleFrame)
                 : WindowSnapPlacement.upperRight.frame(in: visibleFrame)
             XCTAssertEqual(window.frame, expected)
-            XCTAssertEqual(window.frame.maxY, upper.minY, accuracy: 0.001)
+            XCTAssertEqual(upper.minY - window.frame.maxY, WindowSnapPlacement.windowGap, accuracy: 0.001)
             XCTAssertGreaterThanOrEqual(window.frame.minY, visibleFrame.minY)
         }
     }
@@ -138,6 +138,39 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
 
         XCTAssertEqual(adjustment.apply(.halfLeft, in: visibleFrame, supportsResizing: true), .applied)
         XCTAssertEqual(window.frame, WindowSnapPlacement.halfLeft.frame(in: visibleFrame))
+    }
+
+    func testHalfLayoutsRetryWhenTheOpeningMoveDoesNotLand() {
+        let screenTop: CGFloat = 1440
+        let initial = CGRect(x: 1500, y: 180, width: 880, height: 420)
+        for placement in [WindowSnapPlacement.halfLeft, .halfRight, .halfTop, .halfBottom] {
+            for acknowledgesWithoutMoving in [false, true] {
+                let window = ScreenEdgeClampedWindow(
+                    visibleFrame: visibleFrame,
+                    frame: initial,
+                    primaryDisplayTop: screenTop
+                )
+                var skippedOpeningMove = false
+                let adjustment = WindowLayoutAccessibilityAdjustment(
+                    readSize: { window.size },
+                    setSize: { window.setSize($0) },
+                    setPosition: { frame in
+                        if !skippedOpeningMove {
+                            skippedOpeningMove = true
+                            return acknowledgesWithoutMoving
+                        }
+                        window.setPosition(frame)
+                        return true
+                    }
+                )
+
+                XCTAssertEqual(
+                    adjustment.apply(placement, in: visibleFrame, supportsResizing: true),
+                    .applied
+                )
+                XCTAssertEqual(window.frame, placement.frame(in: visibleFrame))
+            }
+        }
     }
 
     private func apply(

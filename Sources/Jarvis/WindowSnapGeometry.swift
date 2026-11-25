@@ -25,6 +25,9 @@ enum WindowSnapPlacement: String, CaseIterable, Sendable {
         }
     }
 
+    /// Space between adjacent snapped windows, in points. On a 1x display this is 1px.
+    static let windowGap: CGFloat = 1
+
     /// Unit rectangle in AppKit's bottom-left coordinates, also used for icons.
     var unitRect: CGRect {
         switch self {
@@ -39,13 +42,23 @@ enum WindowSnapPlacement: String, CaseIterable, Sendable {
         }
     }
 
-    func frame(in bounds: CGRect) -> CGRect {
+    func frame(in bounds: CGRect, gap: CGFloat = windowGap) -> CGRect {
         let unit = unitRect
-        return CGRect(
+        var rect = CGRect(
             x: bounds.minX + bounds.width * unit.minX,
             y: bounds.minY + bounds.height * unit.minY,
             width: bounds.width * unit.width, height: bounds.height * unit.height
         )
+        guard gap > 0 else { return rect }
+        // Keep the whole seam on the leading tile. Splitting it in half produces
+        // a 0.5pt edge, which window frames round away.
+        if unit.minX + unit.width < 1 {
+            rect.size.width -= gap
+        }
+        if unit.minY + unit.height < 1 {
+            rect.size.height -= gap
+        }
+        return rect
     }
 
     func frame(preserving size: CGSize, in bounds: CGRect) -> CGRect {
@@ -83,7 +96,7 @@ struct WindowSnapBarGeometry {
     static func blockRect(for placement: WindowSnapPlacement, in panel: CGRect) -> CGRect {
         guard panel.width > 16, panel.height > 16 else { return .zero }
         let inner = panel.insetBy(dx: 8, dy: 8)
-        var rect = placement.frame(in: inner)
+        var rect = placement.frame(in: inner, gap: 0)
         let unit = placement.unitRect
         if unit.width < 1 {
             rect.size.width -= 2

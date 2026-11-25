@@ -42,9 +42,9 @@ final class WindowLayoutTests: XCTestCase {
         XCTAssertEqual(right.maxX, visibleFrame.maxX)
         XCTAssertEqual(left.minY, visibleFrame.minY)
         XCTAssertEqual(right.maxY, visibleFrame.maxY)
-        XCTAssertEqual(left.maxX, right.minX)
-        XCTAssertEqual(left.width + right.width, visibleFrame.width)
-        XCTAssertEqual(left.width, visibleFrame.width / 2)
+        XCTAssertEqual(right.minX - left.maxX, WindowSnapPlacement.windowGap)
+        XCTAssertEqual(left.width + right.width + WindowSnapPlacement.windowGap, visibleFrame.width)
+        XCTAssertEqual(left.width, visibleFrame.width / 2 - WindowSnapPlacement.windowGap)
         XCTAssertEqual(right.width, visibleFrame.width / 2)
     }
 
@@ -55,10 +55,13 @@ final class WindowLayoutTests: XCTestCase {
         let lowerLeft = WindowSnapPlacement.lowerLeft.frame(in: visibleFrame)
         let lowerRight = WindowSnapPlacement.lowerRight.frame(in: visibleFrame)
 
-        XCTAssertEqual(upperLeft.maxX, upperRight.minX)
-        XCTAssertEqual(lowerLeft.maxX, lowerRight.minX)
-        XCTAssertEqual(lowerLeft.maxY, upperLeft.minY)
-        XCTAssertEqual(lowerRight.maxY, upperRight.minY)
-        XCTAssertEqual(upperLeft.union(upperRight).union(lowerLeft).union(lowerRight), visibleFrame)
+        XCTAssertEqual(upperRight.minX - upperLeft.maxX, WindowSnapPlacement.windowGap)
+        XCTAssertEqual(lowerRight.minX - lowerLeft.maxX, WindowSnapPlacement.windowGap)
+        XCTAssertEqual(upperLeft.minY - lowerLeft.maxY, WindowSnapPlacement.windowGap)
+        XCTAssertEqual(upperRight.minY - lowerRight.maxY, WindowSnapPlacement.windowGap)
+        XCTAssertEqual(upperLeft.minX, visibleFrame.minX)
+        XCTAssertEqual(upperRight.maxX, visibleFrame.maxX)
+        XCTAssertEqual(upperLeft.maxY, visibleFrame.maxY)
+        XCTAssertEqual(lowerLeft.minY, visibleFrame.minY)
     }
 }
