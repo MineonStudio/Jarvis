@@ -5,11 +5,35 @@ import XCTest
 final class WindowSnapGeometryTests: XCTestCase {
     func testEightPlacementsRespectTheChosenDisplayAndUsableArea() {
         let screen = CGRect(x: -1920, y: 1150, width: 1920, height: 1000)
-        XCTAssertEqual(WindowSnapPlacement.halfLeft.frame(in: screen), CGRect(x: -1920, y: 1150, width: 960, height: 1000))
+        XCTAssertEqual(WindowSnapPlacement.windowGap, 1)
+        XCTAssertEqual(WindowSnapPlacement.halfLeft.frame(in: screen), CGRect(x: -1920, y: 1150, width: 959, height: 1000))
         XCTAssertEqual(WindowSnapPlacement.halfTop.frame(in: screen), CGRect(x: -1920, y: 1650, width: 1920, height: 500))
-        XCTAssertEqual(WindowSnapPlacement.lowerRight.frame(in: screen), CGRect(x: -960, y: 1150, width: 960, height: 500))
-        let corners: [WindowSnapPlacement] = [.upperLeft, .upperRight, .lowerLeft, .lowerRight]
-        XCTAssertEqual(corners.map { $0.frame(in: screen) }.reduce(CGRect.null) { $0.union($1) }, screen)
+        XCTAssertEqual(WindowSnapPlacement.lowerRight.frame(in: screen), CGRect(x: -960, y: 1150, width: 960, height: 499))
+        let upperLeft = WindowSnapPlacement.upperLeft.frame(in: screen)
+        let upperRight = WindowSnapPlacement.upperRight.frame(in: screen)
+        let lowerLeft = WindowSnapPlacement.lowerLeft.frame(in: screen)
+        XCTAssertEqual(upperRight.minX - upperLeft.maxX, WindowSnapPlacement.windowGap)
+        XCTAssertEqual(upperLeft.minY - lowerLeft.maxY, WindowSnapPlacement.windowGap)
+        XCTAssertEqual(upperLeft.minX, screen.minX)
+        XCTAssertEqual(upperRight.maxX, screen.maxX)
+        XCTAssertEqual(upperLeft.maxY, screen.maxY)
+        XCTAssertEqual(lowerLeft.minY, screen.minY)
+        let top = WindowSnapPlacement.halfTop.frame(in: screen)
+        let placed = WindowSnapPlacement.halfTop.frame(
+            preserving: CGSize(width: top.width, height: top.height + 1), in: screen
+        )
+        XCTAssertEqual(placed.minY, top.minY)
+        XCTAssertEqual(placed.maxY, top.maxY + 1)
+        let bottom = WindowSnapPlacement.halfBottom.frame(in: screen)
+        let placedBottom = WindowSnapPlacement.halfBottom.frame(
+            preserving: CGSize(width: bottom.width, height: bottom.height + 1), in: screen
+        )
+        XCTAssertEqual(placedBottom.maxY, bottom.maxY)
+        let left = WindowSnapPlacement.halfLeft.frame(in: screen)
+        let placedLeft = WindowSnapPlacement.halfLeft.frame(
+            preserving: CGSize(width: left.width + 1, height: left.height), in: screen
+        )
+        XCTAssertEqual(placedLeft.maxX, left.maxX)
         for placement in WindowSnapPlacement.allCases {
             XCTAssertTrue(screen.contains(placement.frame(in: screen)))
         }

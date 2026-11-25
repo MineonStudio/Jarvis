@@ -98,7 +98,7 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
                 ? WindowSnapPlacement.upperLeft.frame(in: visibleFrame)
                 : WindowSnapPlacement.upperRight.frame(in: visibleFrame)
             XCTAssertEqual(window.frame, expected)
-            XCTAssertEqual(window.frame.maxY, upper.minY, accuracy: 0.001)
+            XCTAssertGreaterThanOrEqual(upper.minY - window.frame.maxY, WindowSnapPlacement.windowGap)
             XCTAssertGreaterThanOrEqual(window.frame.minY, visibleFrame.minY)
         }
     }
@@ -138,6 +138,65 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
 
         XCTAssertEqual(adjustment.apply(.halfLeft, in: visibleFrame, supportsResizing: true), .applied)
         XCTAssertEqual(window.frame, WindowSnapPlacement.halfLeft.frame(in: visibleFrame))
+    }
+
+    func testHalfLayoutsRetryWhenTheOpeningMoveDoesNotLand() {
+        let screenTop: CGFloat = 1440
+        let initial = CGRect(x: 1500, y: 180, width: 880, height: 420)
+        for placement in [WindowSnapPlacement.halfLeft, .halfRight, .halfTop, .halfBottom] {
+            for acknowledgesWithoutMoving in [false, true] {
+                let window = ScreenEdgeClampedWindow(
+                    visibleFrame: visibleFrame,
+                    frame: initial,
+                    primaryDisplayTop: screenTop
+                )
+                var skippedOpeningMove = false
+                let adjustment = WindowLayoutAccessibilityAdjustment(
+                    readSize: { window.size },
+                    setSize: { window.setSize($0) },
+                    setPosition: { frame in
+                        if !skippedOpeningMove {
+                            skippedOpeningMove = true
+                            return acknowledgesWithoutMoving
+                        }
+                        window.setPosition(frame)
+                        return true
+                    }
+                )
+
+                XCTAssertEqual(
+                    adjustment.apply(placement, in: visibleFrame, supportsResizing: true),
+                    .applied
+                )
+                XCTAssertEqual(window.frame, placement.frame(in: visibleFrame))
+            }
+        }
+    }
+
+    func testRowSnapShrinksUntilTheLowerWindowClearsTheSeam() {
+        let visible = CGRect(x: 0, y: 89, width: 2560, height: 1321)
+        let region = WindowSnapPlacement.halfBottom.frame(in: visible)
+        let upper = WindowSnapPlacement.halfTop.frame(in: visible)
+        let window = RowSnappedWindow(
+            frame: CGRect(x: 200, y: 200, width: 900, height: 400),
+            widthHigh: region.width + 4,
+            widthQuantum: 8,
+            heightHigh: region.height + 5,
+            heightQuantum: 17
+        )
+        let adjustment = WindowLayoutAccessibilityAdjustment(
+            readSize: { window.frame.size },
+            setSize: { window.setSize($0) },
+            setPosition: { window.setPosition($0); return true }
+        )
+
+        _ = adjustment.apply(.halfBottom, in: visible, supportsResizing: true)
+
+        XCTAssertLessThanOrEqual(window.frame.width, region.width + 1)
+        XCTAssertLessThanOrEqual(window.frame.height, region.height + 1)
+        XCTAssertLessThanOrEqual(window.frame.maxY, region.maxY)
+        XCTAssertGreaterThanOrEqual(upper.minY - window.frame.maxY, WindowSnapPlacement.windowGap)
+        XCTAssertGreaterThanOrEqual(window.frame.minY, visible.minY)
     }
 
     private func apply(
@@ -266,5 +325,43 @@ private final class ScreenEdgeClampedWindow {
         )
         axFrame = WindowLayoutCoordinates.flipped(updated, primaryDisplayTop: primaryDisplayTop)
         return true
+    }
+}
+
+/// Rounds each edge up to its high value until the request falls a full cell below it.
+@MainActor
+private final class RowSnappedWindow {
+    var frame: CGRect
+    let widthHigh: CGFloat
+    let widthQuantum: CGFloat
+    let heightHigh: CGFloat
+    let heightQuantum: CGFloat
+
+    init(
+        frame: CGRect,
+        widthHigh: CGFloat,
+        widthQuantum: CGFloat,
+        heightHigh: CGFloat,
+        heightQuantum: CGFloat
+    ) {
+        self.frame = frame
+        self.widthHigh = widthHigh
+        self.widthQuantum = widthQuantum
+        self.heightHigh = heightHigh
+        self.heightQuantum = heightQuantum
+    }
+
+    func setPosition(_ frame: CGRect) {
+        self.frame.origin = frame.origin
+    }
+
+    func setSize(_ size: CGSize) -> Bool {
+        frame.size.width = snapped(size.width, high: widthHigh, quantum: widthQuantum)
+        frame.size.height = snapped(size.height, high: heightHigh, quantum: heightQuantum)
+        return true
+    }
+
+    private func snapped(_ requested: CGFloat, high: CGFloat, quantum: CGFloat) -> CGFloat {
+        requested <= high - quantum ? high - quantum : high
     }
 }

@@ -25,6 +25,9 @@ enum WindowSnapPlacement: String, CaseIterable, Sendable {
         }
     }
 
+    /// Space between adjacent snapped windows, in points. On a 1x display this is 1px.
+    static let windowGap: CGFloat = 1
+
     /// Unit rectangle in AppKit's bottom-left coordinates, also used for icons.
     var unitRect: CGRect {
         switch self {
@@ -39,27 +42,81 @@ enum WindowSnapPlacement: String, CaseIterable, Sendable {
         }
     }
 
-    func frame(in bounds: CGRect) -> CGRect {
+    func frame(in bounds: CGRect, gap: CGFloat = windowGap) -> CGRect {
         let unit = unitRect
-        return CGRect(
+        var rect = CGRect(
             x: bounds.minX + bounds.width * unit.minX,
             y: bounds.minY + bounds.height * unit.minY,
             width: bounds.width * unit.width, height: bounds.height * unit.height
         )
+        guard gap > 0 else { return rect }
+        // Keep the whole seam on the leading tile. A half-point split is rounded
+        // away by the window server, so the two frames end up touching.
+        if unit.minX + unit.width < 1 {
+            rect.size.width -= gap
+            rect.size.width = floor(rect.maxX) - rect.minX
+        }
+        if unit.minX > 0 {
+            let minX = ceil(rect.minX)
+            rect.size.width -= minX - rect.minX
+            rect.origin.x = minX
+        }
+        if unit.minY + unit.height < 1 {
+            rect.size.height -= gap
+            rect.size.height = floor(rect.maxY) - rect.minY
+        }
+        if unit.minY > 0 {
+            let minY = ceil(rect.minY)
+            rect.size.height -= minY - rect.minY
+            rect.origin.y = minY
+        }
+        return rect
     }
 
     func frame(preserving size: CGSize, in bounds: CGRect) -> CGRect {
         let region = frame(in: bounds)
         let unit = unitRect
-        let x = unit.width == 1 ? region.midX - size.width / 2
-            : (unit.minX == 0 ? region.minX : region.maxX - size.width)
-        let y = unit.height == 1 ? region.midY - size.height / 2
-            : (unit.minY == 0 ? region.minY : region.maxY - size.height)
+        // AX may return a size up to 1pt larger than requested. Keep that extra
+        // pixel on the outer side of a partial tile so it does not cover the
+        // neighbor. A larger overflow is a real minimum size and stays on screen.
+        let slack = Self.windowGap + 1
         return CGRect(
-            x: min(max(x, bounds.minX), max(bounds.minX, bounds.maxX - size.width)),
-            y: min(max(y, bounds.minY), max(bounds.minY, bounds.maxY - size.height)),
+            x: Self.preservedOrigin(
+                region: Span(origin: region.minX, length: region.width), size: size.width,
+                bounds: Span(origin: bounds.minX, length: bounds.width),
+                unit: Span(origin: unit.minX, length: unit.width), slack: slack
+            ),
+            y: Self.preservedOrigin(
+                region: Span(origin: region.minY, length: region.height), size: size.height,
+                bounds: Span(origin: bounds.minY, length: bounds.height),
+                unit: Span(origin: unit.minY, length: unit.height), slack: slack
+            ),
             width: size.width, height: size.height
         )
+    }
+
+    private struct Span {
+        var origin: CGFloat
+        var length: CGFloat
+    }
+
+    private static func preservedOrigin(
+        region: Span, size: CGFloat, bounds: Span, unit: Span, slack: CGFloat
+    ) -> CGFloat {
+        let overflow = size - region.length
+        let withinSlack = overflow > 0 && overflow <= slack
+        let raw: CGFloat = if unit.length == 1 {
+            region.origin + (region.length - size) / 2
+        } else if unit.origin == 0 {
+            withinSlack ? region.origin + region.length - size : region.origin
+        } else {
+            withinSlack ? region.origin : region.origin + region.length - size
+        }
+        guard unit.length < 1, withinSlack else {
+            let limit = bounds.origin + bounds.length - size
+            return min(max(raw, bounds.origin), max(bounds.origin, limit))
+        }
+        return raw
     }
 }
 
@@ -83,7 +140,7 @@ struct WindowSnapBarGeometry {
     static func blockRect(for placement: WindowSnapPlacement, in panel: CGRect) -> CGRect {
         guard panel.width > 16, panel.height > 16 else { return .zero }
         let inner = panel.insetBy(dx: 8, dy: 8)
-        var rect = placement.frame(in: inner)
+        var rect = placement.frame(in: inner, gap: 0)
         let unit = placement.unitRect
         if unit.width < 1 {
             rect.size.width -= 2
