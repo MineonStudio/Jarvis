@@ -47,18 +47,22 @@ struct WindowLayoutAccessibilityAdjustment {
         return resized && matchesSize ? .applied : .constrained
     }
 
-    /// Shrinks an app that snapped larger than `requested` until it fits, or until
-    /// the size stops changing. Each miss steps further down so a round-up grid
-    /// can fall into the previous cell.
+    /// Shrinks an app that snapped larger than `requested` until it fits.
+    /// Width and height search separately: a column change must not ask a
+    /// fitted row to grow back, or the window covers its neighbor again.
     private func pullInside(_ requested: CGRect, in visibleFrame: CGRect) {
-        var step = CGSize.zero
-        var stuck = 0
-        for _ in 0..<4 {
+        var width = AxisSearch()
+        var height = AxisSearch()
+        for _ in 0..<6 {
             guard let actual = readSize() else { return }
-            let extra = CGSize(width: actual.width - requested.width, height: actual.height - requested.height)
+            width.observe(actual.width)
+            height.observe(actual.height)
             if Self.fits(actual, inside: requested.size) { return }
-            let ask = Self.nextSmallerSize(requested.size, extra: extra, step: &step, stuck: &stuck)
-            guard let ask else { return }
+            let ask = CGSize(
+                width: width.propose(requested: requested.width, actual: actual.width),
+                height: height.propose(requested: requested.height, actual: actual.height)
+            )
+            if Self.matches(ask, actual) { return }
             let frame = CGRect(
                 x: requested.minX,
                 y: requested.maxY - ask.height,
@@ -66,34 +70,51 @@ struct WindowLayoutAccessibilityAdjustment {
                 height: ask.height
             )
             guard resize(to: frame, in: visibleFrame), let next = readSize() else { return }
-            let moved = abs(next.width - actual.width) > 1 || abs(next.height - actual.height) > 1
-            if moved {
-                stuck = 0
-                step = .zero
+            width.noteMove(from: actual.width, to: next.width)
+            height.noteMove(from: actual.height, to: next.height)
+        }
+    }
+
+    private struct AxisSearch {
+        var step: CGFloat = 0
+        var misses = 0
+        var smallest: CGFloat = .greatestFiniteMagnitude
+        var gaveUp = false
+
+        mutating func observe(_ actual: CGFloat) {
+            smallest = min(smallest, actual)
+        }
+
+        mutating func propose(requested: CGFloat, actual: CGFloat) -> CGFloat {
+            let extra = actual - requested
+            guard !gaveUp, extra > 1 else { return smallest }
+            if step == 0 {
+                step = extra
+            } else {
+                misses += 1
+                guard misses < 6 else {
+                    gaveUp = true
+                    return smallest
+                }
+                step *= 2
             }
+            let ask = requested - step
+            guard ask > 1 else {
+                gaveUp = true
+                return smallest
+            }
+            return min(ask, smallest)
+        }
+
+        mutating func noteMove(from previous: CGFloat, to next: CGFloat) {
+            guard abs(next - previous) > 1 else { return }
+            misses = 0
+            step = 0
         }
     }
 
     private static func fits(_ actual: CGSize, inside requested: CGSize) -> Bool {
         actual.width <= requested.width + 1 && actual.height <= requested.height + 1
-    }
-
-    private static func nextSmallerSize(
-        _ requested: CGSize, extra: CGSize, step: inout CGSize, stuck: inout Int
-    ) -> CGSize? {
-        if step == .zero {
-            step = CGSize(width: max(extra.width, 0), height: max(extra.height, 0))
-        } else {
-            stuck += 1
-            if stuck == 3 { return nil }
-            step = CGSize(width: step.width * 2, height: step.height * 2)
-        }
-        let ask = CGSize(
-            width: requested.width - (extra.width > 1 ? step.width : 0),
-            height: requested.height - (extra.height > 1 ? step.height : 0)
-        )
-        guard ask.width > 1, ask.height > 1 else { return nil }
-        return ask
     }
 
     /// Parks, then requests `requested.size`. Returns whether the resize was accepted.

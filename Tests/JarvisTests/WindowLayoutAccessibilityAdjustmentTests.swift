@@ -179,8 +179,10 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
         let upper = WindowSnapPlacement.halfTop.frame(in: visible)
         let window = RowSnappedWindow(
             frame: CGRect(x: 200, y: 200, width: 900, height: 400),
-            high: region.height + 5,
-            quantum: 24
+            widthHigh: region.width + 4,
+            widthQuantum: 8,
+            heightHigh: region.height + 5,
+            heightQuantum: 17
         )
         let adjustment = WindowLayoutAccessibilityAdjustment(
             readSize: { window.frame.size },
@@ -190,6 +192,7 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
 
         _ = adjustment.apply(.halfBottom, in: visible, supportsResizing: true)
 
+        XCTAssertLessThanOrEqual(window.frame.width, region.width + 1)
         XCTAssertLessThanOrEqual(window.frame.height, region.height + 1)
         XCTAssertLessThanOrEqual(window.frame.maxY, region.maxY)
         XCTAssertGreaterThanOrEqual(upper.minY - window.frame.maxY, WindowSnapPlacement.windowGap)
@@ -325,17 +328,27 @@ private final class ScreenEdgeClampedWindow {
     }
 }
 
-/// Rounds a requested height up to `high` until the request falls a full row below it.
+/// Rounds each edge up to its high value until the request falls a full cell below it.
 @MainActor
 private final class RowSnappedWindow {
     var frame: CGRect
-    let high: CGFloat
-    let quantum: CGFloat
+    let widthHigh: CGFloat
+    let widthQuantum: CGFloat
+    let heightHigh: CGFloat
+    let heightQuantum: CGFloat
 
-    init(frame: CGRect, high: CGFloat, quantum: CGFloat) {
+    init(
+        frame: CGRect,
+        widthHigh: CGFloat,
+        widthQuantum: CGFloat,
+        heightHigh: CGFloat,
+        heightQuantum: CGFloat
+    ) {
         self.frame = frame
-        self.high = high
-        self.quantum = quantum
+        self.widthHigh = widthHigh
+        self.widthQuantum = widthQuantum
+        self.heightHigh = heightHigh
+        self.heightQuantum = heightQuantum
     }
 
     func setPosition(_ frame: CGRect) {
@@ -343,8 +356,12 @@ private final class RowSnappedWindow {
     }
 
     func setSize(_ size: CGSize) -> Bool {
-        frame.size.width = size.width
-        frame.size.height = size.height <= high - quantum ? high - quantum : high
+        frame.size.width = snapped(size.width, high: widthHigh, quantum: widthQuantum)
+        frame.size.height = snapped(size.height, high: heightHigh, quantum: heightQuantum)
         return true
+    }
+
+    private func snapped(_ requested: CGFloat, high: CGFloat, quantum: CGFloat) -> CGFloat {
+        requested <= high - quantum ? high - quantum : high
     }
 }
