@@ -53,16 +53,20 @@ struct WindowLayoutAccessibilityAdjustment {
     private func pullInside(_ requested: CGRect, in visibleFrame: CGRect) {
         var width = AxisSearch()
         var height = AxisSearch()
-        for _ in 0..<6 {
+        for _ in 0 ..< 6 {
             guard let actual = readSize() else { return }
             width.observe(actual.width)
             height.observe(actual.height)
-            if Self.fits(actual, inside: requested.size) { return }
+            if Self.fits(actual, inside: requested.size) {
+                return
+            }
             let ask = CGSize(
                 width: width.propose(requested: requested.width, actual: actual.width),
                 height: height.propose(requested: requested.height, actual: actual.height)
             )
-            if Self.matches(ask, actual) { return }
+            if Self.matches(ask, actual) {
+                return
+            }
             let frame = CGRect(
                 x: requested.minX,
                 y: requested.maxY - ask.height,

@@ -105,13 +105,12 @@ enum WindowSnapPlacement: String, CaseIterable, Sendable {
     ) -> CGFloat {
         let overflow = size - region.length
         let withinSlack = overflow > 0 && overflow <= slack
-        let raw: CGFloat
-        if unit.length == 1 {
-            raw = region.origin + (region.length - size) / 2
+        let raw: CGFloat = if unit.length == 1 {
+            region.origin + (region.length - size) / 2
         } else if unit.origin == 0 {
-            raw = withinSlack ? region.origin + region.length - size : region.origin
+            withinSlack ? region.origin + region.length - size : region.origin
         } else {
-            raw = withinSlack ? region.origin : region.origin + region.length - size
+            withinSlack ? region.origin : region.origin + region.length - size
         }
         guard unit.length < 1, withinSlack else {
             let limit = bounds.origin + bounds.length - size
