@@ -30,6 +30,10 @@ struct WindowLayoutAccessibilityAdjustment {
                 // have now, which can sit on the target corner, and try once more.
                 resized = resize(to: requestedFrame, in: visibleFrame) || resized
             }
+            // A text row can come back a few points too tall. The window server
+            // will not leave that surplus under the Dock, so it would cover the
+            // neighbor. Ask for a shorter size until the snap fits.
+            pullInside(requestedFrame, in: visibleFrame)
         }
         guard let actualSize = readSize(), actualSize.width > 0, actualSize.height > 0 else {
             return .failed
@@ -41,6 +45,55 @@ struct WindowLayoutAccessibilityAdjustment {
         guard setPosition(actualFrame) else { return .failed }
         let matchesSize = Self.matches(actualSize, requestedFrame.size)
         return resized && matchesSize ? .applied : .constrained
+    }
+
+    /// Shrinks an app that snapped larger than `requested` until it fits, or until
+    /// the size stops changing. Each miss steps further down so a round-up grid
+    /// can fall into the previous cell.
+    private func pullInside(_ requested: CGRect, in visibleFrame: CGRect) {
+        var step = CGSize.zero
+        var stuck = 0
+        for _ in 0..<4 {
+            guard let actual = readSize() else { return }
+            let extra = CGSize(width: actual.width - requested.width, height: actual.height - requested.height)
+            if Self.fits(actual, inside: requested.size) { return }
+            let ask = Self.nextSmallerSize(requested.size, extra: extra, step: &step, stuck: &stuck)
+            guard let ask else { return }
+            let frame = CGRect(
+                x: requested.minX,
+                y: requested.maxY - ask.height,
+                width: ask.width,
+                height: ask.height
+            )
+            guard resize(to: frame, in: visibleFrame), let next = readSize() else { return }
+            let moved = abs(next.width - actual.width) > 1 || abs(next.height - actual.height) > 1
+            if moved {
+                stuck = 0
+                step = .zero
+            }
+        }
+    }
+
+    private static func fits(_ actual: CGSize, inside requested: CGSize) -> Bool {
+        actual.width <= requested.width + 1 && actual.height <= requested.height + 1
+    }
+
+    private static func nextSmallerSize(
+        _ requested: CGSize, extra: CGSize, step: inout CGSize, stuck: inout Int
+    ) -> CGSize? {
+        if step == .zero {
+            step = CGSize(width: max(extra.width, 0), height: max(extra.height, 0))
+        } else {
+            stuck += 1
+            if stuck == 3 { return nil }
+            step = CGSize(width: step.width * 2, height: step.height * 2)
+        }
+        let ask = CGSize(
+            width: requested.width - (extra.width > 1 ? step.width : 0),
+            height: requested.height - (extra.height > 1 ? step.height : 0)
+        )
+        guard ask.width > 1, ask.height > 1 else { return nil }
+        return ask
     }
 
     /// Parks, then requests `requested.size`. Returns whether the resize was accepted.

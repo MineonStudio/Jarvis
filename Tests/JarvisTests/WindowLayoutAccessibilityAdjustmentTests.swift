@@ -98,7 +98,7 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
                 ? WindowSnapPlacement.upperLeft.frame(in: visibleFrame)
                 : WindowSnapPlacement.upperRight.frame(in: visibleFrame)
             XCTAssertEqual(window.frame, expected)
-            XCTAssertEqual(upper.minY - window.frame.maxY, WindowSnapPlacement.windowGap, accuracy: 0.001)
+            XCTAssertGreaterThanOrEqual(upper.minY - window.frame.maxY, WindowSnapPlacement.windowGap)
             XCTAssertGreaterThanOrEqual(window.frame.minY, visibleFrame.minY)
         }
     }
@@ -171,6 +171,29 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
                 XCTAssertEqual(window.frame, placement.frame(in: visibleFrame))
             }
         }
+    }
+
+    func testRowSnapShrinksUntilTheLowerWindowClearsTheSeam() {
+        let visible = CGRect(x: 0, y: 89, width: 2560, height: 1321)
+        let region = WindowSnapPlacement.halfBottom.frame(in: visible)
+        let upper = WindowSnapPlacement.halfTop.frame(in: visible)
+        let window = RowSnappedWindow(
+            frame: CGRect(x: 200, y: 200, width: 900, height: 400),
+            high: region.height + 5,
+            quantum: 24
+        )
+        let adjustment = WindowLayoutAccessibilityAdjustment(
+            readSize: { window.frame.size },
+            setSize: { window.setSize($0) },
+            setPosition: { window.setPosition($0); return true }
+        )
+
+        _ = adjustment.apply(.halfBottom, in: visible, supportsResizing: true)
+
+        XCTAssertLessThanOrEqual(window.frame.height, region.height + 1)
+        XCTAssertLessThanOrEqual(window.frame.maxY, region.maxY)
+        XCTAssertGreaterThanOrEqual(upper.minY - window.frame.maxY, WindowSnapPlacement.windowGap)
+        XCTAssertGreaterThanOrEqual(window.frame.minY, visible.minY)
     }
 
     private func apply(
@@ -298,6 +321,30 @@ private final class ScreenEdgeClampedWindow {
             height: fitted.height
         )
         axFrame = WindowLayoutCoordinates.flipped(updated, primaryDisplayTop: primaryDisplayTop)
+        return true
+    }
+}
+
+/// Rounds a requested height up to `high` until the request falls a full row below it.
+@MainActor
+private final class RowSnappedWindow {
+    var frame: CGRect
+    let high: CGFloat
+    let quantum: CGFloat
+
+    init(frame: CGRect, high: CGFloat, quantum: CGFloat) {
+        self.frame = frame
+        self.high = high
+        self.quantum = quantum
+    }
+
+    func setPosition(_ frame: CGRect) {
+        self.frame.origin = frame.origin
+    }
+
+    func setSize(_ size: CGSize) -> Bool {
+        frame.size.width = size.width
+        frame.size.height = size.height <= high - quantum ? high - quantum : high
         return true
     }
 }

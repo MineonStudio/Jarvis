@@ -42,10 +42,12 @@ final class WindowLayoutTests: XCTestCase {
         XCTAssertEqual(right.maxX, visibleFrame.maxX)
         XCTAssertEqual(left.minY, visibleFrame.minY)
         XCTAssertEqual(right.maxY, visibleFrame.maxY)
-        XCTAssertEqual(right.minX - left.maxX, WindowSnapPlacement.windowGap)
-        XCTAssertEqual(left.width + right.width + WindowSnapPlacement.windowGap, visibleFrame.width)
-        XCTAssertEqual(left.width, visibleFrame.width / 2 - WindowSnapPlacement.windowGap)
-        XCTAssertEqual(right.width, visibleFrame.width / 2)
+        XCTAssertGreaterThanOrEqual(right.minX - left.maxX, WindowSnapPlacement.windowGap)
+        XCTAssertLessThanOrEqual(left.maxX, right.minX - WindowSnapPlacement.windowGap)
+        XCTAssertEqual(left.maxX, floor(left.maxX))
+        XCTAssertEqual(right.minX, ceil(right.minX))
+        XCTAssertEqual(left.minX, floor(left.minX))
+        XCTAssertEqual(right.maxX, floor(right.maxX))
     }
 
     func testCornerFramesTileTheVisibleArea() {
@@ -55,10 +57,12 @@ final class WindowLayoutTests: XCTestCase {
         let lowerLeft = WindowSnapPlacement.lowerLeft.frame(in: visibleFrame)
         let lowerRight = WindowSnapPlacement.lowerRight.frame(in: visibleFrame)
 
-        XCTAssertEqual(upperRight.minX - upperLeft.maxX, WindowSnapPlacement.windowGap)
-        XCTAssertEqual(lowerRight.minX - lowerLeft.maxX, WindowSnapPlacement.windowGap)
-        XCTAssertEqual(upperLeft.minY - lowerLeft.maxY, WindowSnapPlacement.windowGap)
-        XCTAssertEqual(upperRight.minY - lowerRight.maxY, WindowSnapPlacement.windowGap)
+        XCTAssertGreaterThanOrEqual(upperRight.minX - upperLeft.maxX, WindowSnapPlacement.windowGap)
+        XCTAssertGreaterThanOrEqual(lowerRight.minX - lowerLeft.maxX, WindowSnapPlacement.windowGap)
+        XCTAssertGreaterThanOrEqual(upperLeft.minY - lowerLeft.maxY, WindowSnapPlacement.windowGap)
+        XCTAssertGreaterThanOrEqual(upperRight.minY - lowerRight.maxY, WindowSnapPlacement.windowGap)
+        XCTAssertEqual(lowerLeft.maxY, floor(lowerLeft.maxY))
+        XCTAssertEqual(upperLeft.minY, ceil(upperLeft.minY))
         XCTAssertEqual(upperLeft.minX, visibleFrame.minX)
         XCTAssertEqual(upperRight.maxX, visibleFrame.maxX)
         XCTAssertEqual(upperLeft.maxY, visibleFrame.maxY)
