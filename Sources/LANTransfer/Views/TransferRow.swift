@@ -101,7 +101,12 @@ public struct TransferRow: View {
     }
 
     private var title: String {
-        guard let text = transfer.textContent else { return transfer.name }
+        guard let text = transfer.textContent else {
+            if let position = transfer.batchPosition {
+                return "\(position) · \(transfer.name)"
+            }
+            return transfer.name
+        }
         let preview = String(text.prefix(160))
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }

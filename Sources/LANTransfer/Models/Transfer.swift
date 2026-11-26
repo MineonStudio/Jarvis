@@ -71,8 +71,53 @@ public struct Transfer: Identifiable, Codable {
     public var resourceURL: URL?
     public var textContent: String?
     public var targetDeviceIP: String?
+    public var batchID: UUID?
+    public var batchIndex: Int?
+    public var batchCount: Int?
+    public var batchFileNames: [String]?
     public var isText: Bool {
         textContent != nil
+    }
+
+    public var batchPosition: String? {
+        guard let batchCount, batchCount > 1, let batchIndex else { return nil }
+        return "\(batchIndex)/\(batchCount)"
+    }
+
+    public var incomingPromptTitle: String {
+        if isText {
+            return "接收文本"
+        }
+        if let batchCount, batchCount > 1 {
+            return "接收 \(batchCount) 个文件"
+        }
+        return "接收文件"
+    }
+
+    public var incomingPromptConfirm: String {
+        if isText {
+            return "复制文本"
+        }
+        if let batchCount, batchCount > 1 {
+            return "全部接收"
+        }
+        return "下载"
+    }
+
+    public var incomingPromptMessage: String {
+        if let text = textContent {
+            return text.count > 300 ? String(text.prefix(300)) + "…" : text
+        }
+        let size = TransferByteCount.string(from: total)
+        if let batchPosition {
+            if let names = batchFileNames, names.count > 1 {
+                let shown = names.prefix(6).joined(separator: "、")
+                let remainder = names.count > 6 ? " 等 \(names.count) 个文件" : ""
+                return "\(shown)\(remainder) · \(size)。确认后会按顺序接收。"
+            }
+            return "\(batchPosition) · \(name) · \(size)。确认后会按顺序接收其余文件"
+        }
+        return "\(name) · \(size)"
     }
 
     public var isInProgress: Bool {
@@ -85,6 +130,7 @@ public struct Transfer: Identifiable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, direction, total, done, bytesPerSecond, status, detail, resourceURL, textContent, targetDeviceIP
+        case batchID, batchIndex, batchCount, batchFileNames
     }
 
     public init(
@@ -98,7 +144,10 @@ public struct Transfer: Identifiable, Codable {
         detail: String = "",
         resourceURL: URL? = nil,
         textContent: String? = nil,
-        targetDeviceIP: String? = nil
+        targetDeviceIP: String? = nil,
+        batchID: UUID? = nil,
+        batchIndex: Int? = nil,
+        batchCount: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -111,6 +160,9 @@ public struct Transfer: Identifiable, Codable {
         self.resourceURL = resourceURL
         self.textContent = textContent
         self.targetDeviceIP = targetDeviceIP
+        self.batchID = batchID
+        self.batchIndex = batchIndex
+        self.batchCount = batchCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -126,5 +178,9 @@ public struct Transfer: Identifiable, Codable {
         resourceURL = try values.decodeIfPresent(URL.self, forKey: .resourceURL)
         textContent = try values.decodeIfPresent(String.self, forKey: .textContent)
         targetDeviceIP = try values.decodeIfPresent(String.self, forKey: .targetDeviceIP)
+        batchID = try values.decodeIfPresent(UUID.self, forKey: .batchID)
+        batchIndex = try values.decodeIfPresent(Int.self, forKey: .batchIndex)
+        batchCount = try values.decodeIfPresent(Int.self, forKey: .batchCount)
+        batchFileNames = try values.decodeIfPresent([String].self, forKey: .batchFileNames)
     }
 }

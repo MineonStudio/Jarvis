@@ -11,6 +11,7 @@ final class WebPageTextHistoryTests: XCTestCase {
         let root: URL
         let entry: URL
         let browser: WKWebView
+        let navigation: Navigation
 
         func close() {
             browser.stopLoading()
@@ -21,31 +22,47 @@ final class WebPageTextHistoryTests: XCTestCase {
     }
 
     private final class Navigation: NSObject, WKNavigationDelegate {
-        let ready: XCTestExpectation
-        init(_ ready: XCTestExpectation) {
-            self.ready = ready
-        }
+        var ready: XCTestExpectation?
+        private(set) var downloadURLs: [URL] = []
 
         func webView(_: WKWebView, didFinish _: WKNavigation!) {
-            ready.fulfill()
+            ready?.fulfill()
+            ready = nil
         }
 
         func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
-            XCTFail("Page failed: \(error)"); ready.fulfill()
+            guard (error as NSError).code != NSURLErrorCancelled else { return }
+            XCTFail("Page failed: \(error)"); ready?.fulfill(); ready = nil
         }
 
         func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
-            XCTFail("Page failed: \(error)"); ready.fulfill()
+            guard (error as NSError).code != NSURLErrorCancelled else { return }
+            XCTFail("Page failed: \(error)"); ready?.fulfill(); ready = nil
+        }
+
+        func webView(
+            _: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            guard let url = navigationAction.request.url, url.path == "/api/file" else {
+                decisionHandler(.allow)
+                return
+            }
+            downloadURLs.append(url)
+            decisionHandler(.cancel)
+            var request = URLRequest(url: url)
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            URLSession.shared.dataTask(with: request).resume()
         }
     }
 
-    private func load(_ entry: URL, in browser: WKWebView) async throws {
+    private func load(_ entry: URL, in browser: WKWebView, navigation: Navigation) async throws {
         let ready = expectation(description: "Web page loaded")
-        let navigation = Navigation(ready)
+        navigation.ready = ready
         browser.navigationDelegate = navigation
         browser.load(URLRequest(url: entry))
         await fulfillment(of: [ready], timeout: 10)
-        withExtendedLifetime(navigation) {}
         let title = try await browser.evaluateJavaScript("document.title") as? String
         XCTAssertEqual(title, "文件传输")
         try await waitFor("typeof rememberTextTransfer === 'function'", in: browser)
@@ -74,8 +91,9 @@ final class WebPageTextHistoryTests: XCTestCase {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         let browser = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: configuration)
-        try await load(entry, in: browser)
-        return Harness(server: server, root: root, entry: entry, browser: browser)
+        let navigation = Navigation()
+        try await load(entry, in: browser, navigation: navigation)
+        return Harness(server: server, root: root, entry: entry, browser: browser, navigation: navigation)
     }
 
     private func waitFor(_ condition: String, in browser: WKWebView) async throws {
@@ -117,7 +135,7 @@ final class WebPageTextHistoryTests: XCTestCase {
         let copied = try await harness.browser.evaluateJavaScript("window.__copies[3]") as? String
         XCTAssertEqual(copied, second)
 
-        try await load(harness.entry, in: harness.browser)
+        try await load(harness.entry, in: harness.browser, navigation: harness.navigation)
         let restored = try await harness.browser.evaluateJavaScript("Array.from(document.querySelectorAll('#textHistory pre'), node=>node.textContent)") as? [String]
         XCTAssertEqual(restored, [first, second, first])
     }
@@ -148,5 +166,48 @@ final class WebPageTextHistoryTests: XCTestCase {
         XCTAssertEqual(texts, ["message-3", "message-2", "message-1"])
         let activeTaskHidden = try await harness.browser.evaluateJavaScript("!uploadTask.classList.contains('visible')") as? Bool
         XCTAssertEqual(activeTaskHidden, true)
+    }
+
+    func testOneAcceptKeepsEveryReceivedFileOpenable() async throws {
+        let harness = try await makeHarness()
+        defer { harness.close() }
+        let shared = harness.root.appendingPathComponent("shared")
+        try Data("hello".utf8).write(to: shared.appendingPathComponent("notes.txt"))
+        try Data("bin".utf8).write(to: shared.appendingPathComponent("payload.bin"))
+        let batch = UUID()
+        let first = await harness.server.offerDownload(
+            name: "notes.txt", to: "127.0.0.1", batch: DownloadBatch(id: batch, index: 1, count: 2)
+        )
+        XCTAssertNotNil(first)
+        try await waitFor("currentOffer && document.getElementById('accept').textContent === '全部接收'", in: harness.browser)
+        _ = try await harness.browser.evaluateJavaScript("window.__downloads=[]; window.__opens=[]; const nativeClick=HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click=function(){if(this.download){window.__downloads.push(String(this.href)); fetch(this.href,{cache:'no-store'}); return} return nativeClick.call(this)}; openStoredFile=record=>{window.__opens.push(record.name)}; document.getElementById('accept').click(); true")
+        try await waitFor("receivedFiles.length === 1", in: harness.browser)
+        let second = await harness.server.offerDownload(
+            name: "payload.bin", to: "127.0.0.1", batch: DownloadBatch(id: batch, index: 2, count: 2)
+        )
+        XCTAssertNotNil(second)
+        _ = try await harness.browser.evaluateJavaScript("checkOffer(); true")
+        try await waitFor("receivedFiles.length === 2 && activeDownload === null", in: harness.browser)
+        let names = try await harness.browser.evaluateJavaScript("Array.from(document.querySelectorAll('#receivedFiles strong'), node=>node.textContent)") as? [String]
+        XCTAssertEqual(names, ["payload.bin", "notes.txt"])
+        let downloads = try await harness.browser.evaluateJavaScript("window.__downloads.slice()") as? [String]
+        XCTAssertEqual(downloads?.count, 2)
+        XCTAssertEqual(downloads?.allSatisfy { !$0.contains("inline=1") }, true)
+        try await waitFor("Array.from(document.querySelectorAll('#receivedFiles pre'), node=>node.textContent).includes('hello')", in: harness.browser)
+        _ = try await harness.browser.evaluateJavaScript("document.querySelectorAll('#receivedFiles .text-actions button')[0].click(); true")
+        try await waitFor("filePreview.hidden === false", in: harness.browser)
+        let openedBefore = try await harness.browser.evaluateJavaScript("window.__opens.slice()") as? [String]
+        XCTAssertEqual(openedBefore, [])
+        let labels = try await harness.browser.evaluateJavaScript("Array.from(document.querySelectorAll('#receivedFiles .text-actions button'), node=>node.textContent)") as? [String]
+        XCTAssertEqual(labels, ["预览", "打开", "预览", "打开"])
+        _ = try await harness.browser.evaluateJavaScript("document.querySelectorAll('#receivedFiles .text-actions button')[1].click(); true")
+        let opened = try await harness.browser.evaluateJavaScript("window.__opens.slice()") as? [String]
+        XCTAssertEqual(opened, ["payload.bin"])
+        let downloadsAfterOpen = try await harness.browser.evaluateJavaScript("window.__downloads.slice()") as? [String]
+        XCTAssertEqual(downloadsAfterOpen?.count, 2)
+        _ = try await harness.browser.evaluateJavaScript("document.querySelectorAll('#receivedFiles .text-actions button')[2].click(); true")
+        try await waitFor("filePreview.hidden === false && previewFrame.hidden === false", in: harness.browser)
+        let previewName = try await harness.browser.evaluateJavaScript("document.getElementById('previewName').textContent") as? String
+        XCTAssertEqual(previewName, "notes.txt")
     }
 }

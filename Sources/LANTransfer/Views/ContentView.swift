@@ -207,7 +207,7 @@ struct ContentView: View {
             }
             if let task = store.transfers.first(where: { $0.direction == .download && $0.isInProgress }) {
                 transferAnimation(task, tint: .accentColor)
-            } else if store.isImporting {
+            } else if store.isImporting || store.isSendingBatch {
                 HStack(spacing: JarvisSpacing.controlGap) {
                     ProgressView().controlSize(.small)
                     Text("正在准备")
@@ -248,6 +248,9 @@ struct ContentView: View {
                     .font(.system(size: 16, weight: .light))
                     .foregroundStyle(tint)
                     .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
+                if let position = task.batchPosition {
+                    Text(position).monospacedDigit()
+                }
                 Text(task.status.rawValue)
                 if task.status == .active {
                     Text("\(Int(task.fraction * 100))%")
@@ -270,26 +273,36 @@ struct ContentView: View {
 
     private var uploadDropZone: some View {
         Button { store.chooseSharedFiles() } label: {
-            Text("选择文件")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.accentColor.opacity(isDropTargeted ? 0.12 : 0.045), in: RoundedRectangle(cornerRadius: 10))
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.accentColor.opacity(isDropTargeted ? 0.7 : 0.18), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-                }
+            VStack(spacing: 4) {
+                Text("选择文件")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("可多选，最多 \(TransferBatchLimit.maximumCount) 个")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.accentColor.opacity(isDropTargeted ? 0.12 : 0.045), in: RoundedRectangle(cornerRadius: 10))
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.accentColor.opacity(isDropTargeted ? 0.7 : 0.18), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+            }
         }
         .buttonStyle(.plain)
         .modifier(JarvisButtonShadowModifier())
         .disabled(!store.canStartTask)
         .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted) { providers in
-            guard store.canStartTask,
-                  let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) })
-            else { return false }
+            let fileProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
+            guard store.canStartTask, !fileProviders.isEmpty else { return false }
             Task {
-                if let url = await droppedFileURL(from: provider) {
-                    store.importSharedFiles([url])
+                var urls: [URL] = []
+                for provider in fileProviders {
+                    if let url = await droppedFileURL(from: provider) {
+                        urls.append(url)
+                    }
+                }
+                if !urls.isEmpty {
+                    store.importSharedFiles(urls)
                 }
             }
             return true

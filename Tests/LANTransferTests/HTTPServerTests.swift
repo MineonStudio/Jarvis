@@ -110,7 +110,10 @@ final class HTTPServerTests: XCTestCase {
         let preview = try request("api/file?id=\(id.uuidString)&t=1a2b&inline=1", base: harness.base)
         XCTAssertEqual(preview.0.statusCode, 200)
         XCTAssertEqual(preview.0.value(forHTTPHeaderField: "Content-Type"), "text/plain")
-        XCTAssertTrue(preview.0.value(forHTTPHeaderField: "Content-Disposition")?.hasPrefix("inline") == true)
+        let previewDisposition = try XCTUnwrap(preview.0.value(forHTTPHeaderField: "Content-Disposition"))
+        XCTAssertTrue(previewDisposition.hasPrefix("inline"))
+        XCTAssertTrue(previewDisposition.contains("filename=\"small.txt\""))
+        XCTAssertFalse(previewDisposition.contains("filename=\"download\""))
     }
 
     func testPhoneUploadWaitsForMacAcceptanceAndSavesReceivedFile() throws {
