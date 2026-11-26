@@ -132,7 +132,7 @@ private struct JarvisRootView: View {
                     .environment(\.jarvisContentButtonShadows, true)
             }
         }
-        .alert(shareStore.incomingOffer?.isText == true ? "接收文本" : "接收文件", isPresented: Binding(
+        .alert(shareStore.incomingOffer?.incomingPromptTitle ?? "接收文件", isPresented: Binding(
             get: { shareStore.incomingOffer != nil },
             set: { _ in }
         )) {
@@ -141,18 +141,14 @@ private struct JarvisRootView: View {
                     shareStore.cancel(offer.id)
                 }
             }
-            Button(shareStore.incomingOffer?.isText == true ? "复制文本" : "下载") {
+            Button(shareStore.incomingOffer?.incomingPromptConfirm ?? "下载") {
                 if let offer = shareStore.incomingOffer {
                     shareStore.acceptIncoming(offer.id)
                 }
             }
         } message: {
             if let offer = shareStore.incomingOffer {
-                if let text = offer.textContent {
-                    Text(text.count > 300 ? String(text.prefix(300)) + "…" : text)
-                } else {
-                    Text("\(offer.name) · \(ByteCountFormatter.string(fromByteCount: offer.total, countStyle: .file))")
-                }
+                Text(offer.incomingPromptMessage)
             }
         }
         .jarvisToastOverlay(appModel.toast(for: .main))

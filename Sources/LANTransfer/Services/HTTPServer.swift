@@ -38,6 +38,7 @@ final class HTTPServer: @unchecked Sendable {
     }
 
     private var downloads: [UUID: DownloadProgress] = [:]
+    private var uploadBatches: [UUID: OpenUploadBatch] = [:]
     private var stopped = false
 
     init(ip: String, token: String, sharedDirectory: URL, receivedDirectory: URL, maxBytes: Int64) {
@@ -62,7 +63,7 @@ final class HTTPServer: @unchecked Sendable {
             for client in Array(self.clients.values) {
                 client.cancel()
             }
-            self.clients.removeAll(); self.sessions.removeAll()
+            self.clients.removeAll(); self.sessions.removeAll(); self.uploadBatches.removeAll()
             self.publishDevices()
         }
     }
@@ -76,6 +77,9 @@ final class HTTPServer: @unchecked Sendable {
         task.status = .cancelled
         task.bytesPerSecond = 0
         task.detail = "已取消"
+        if let batchID = task.batchID {
+            uploadBatches.removeValue(forKey: batchID)
+        }
         emit(task)
         for client in Array(clients.values) where client.transferID == id {
             client.cancel()
@@ -92,24 +96,57 @@ final class HTTPServer: @unchecked Sendable {
     }
 
     func offerDownload(name: String, to targetDeviceIP: String) async -> Bool {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+        if case .started = await prepareDownloadOffer(name: name, to: targetDeviceIP, batch: nil) {
+            return true
+        }
+        return false
+    }
+
+    func offerDownload(name: String, to targetDeviceIP: String, batch: DownloadBatch?) async -> UUID? {
+        if case let .started(id) = await prepareDownloadOffer(name: name, to: targetDeviceIP, batch: batch) {
+            return id
+        }
+        return nil
+    }
+
+    func prepareDownloadOffer(
+        name: String,
+        to targetDeviceIP: String,
+        batch: DownloadBatch?,
+        names: [String]? = nil
+    ) async -> DownloadOfferResult {
+        await withCheckedContinuation { (continuation: CheckedContinuation<DownloadOfferResult, Never>) in
             queue.async {
-                guard !self.stopped, !self.hasCurrentTask, self.sessions.values.contains(where: { $0.ipAddress == targetDeviceIP }),
-                      !name.isEmpty, !name.hasPrefix("."), name == (name as NSString).lastPathComponent
-                else { continuation.resume(returning: false); return }
+                let batchCount = batch?.count ?? 1
+                let batchIndex = batch?.index ?? 1
+                let nameReady = !name.isEmpty && !name.hasPrefix(".") && name == (name as NSString).lastPathComponent
+                let batchReady = (1 ... TransferBatchLimit.maximumCount).contains(batchCount)
+                    && (1 ... batchCount).contains(batchIndex)
+                guard !self.stopped, nameReady, batchReady,
+                      self.sessions.values.contains(where: { $0.ipAddress == targetDeviceIP })
+                else { continuation.resume(returning: .unavailable); return }
+                guard !self.hasCurrentTask else { continuation.resume(returning: .busy); return }
                 let url = self.sharedDirectory.appendingPathComponent(name)
                 guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]),
                       values.isRegularFile == true, values.isSymbolicLink != true, let size = values.fileSize
-                else { continuation.resume(returning: false); return }
+                else { continuation.resume(returning: .unavailable); return }
                 var task = Transfer(id: UUID(), name: name, direction: .download, total: Int64(size))
                 task.status = .pending
                 task.detail = "等待设备接收"
                 task.resourceURL = url
                 task.targetDeviceIP = targetDeviceIP
+                if let batch, batch.count > 1 {
+                    task.batchID = batch.id
+                    task.batchIndex = batch.index
+                    task.batchCount = batch.count
+                    if let names, names.count == batch.count {
+                        task.batchFileNames = names
+                    }
+                }
                 self.emit(task)
                 self.downloads[task.id] = DownloadProgress(name: name, total: Int64(size))
                 self.armDownloadIdleTimeout(task.id)
-                continuation.resume(returning: true)
+                continuation.resume(returning: .started(task.id))
             }
         }
     }
@@ -186,20 +223,32 @@ final class HTTPServer: @unchecked Sendable {
         return task
     }
 
-    fileprivate func offerUpload(name: String, size: Int64) -> Transfer? {
-        guard !hasCurrentTask, size >= 0, size <= maxBytes else { return nil }
+    fileprivate func offerUpload(name: String, size: Int64, query: [String: String], sessionID: String) -> UploadOfferResult {
+        guard size >= 0, size <= maxBytes else { return .rejected(400, "无效文件") }
+        let queued = queuedUpload(from: query, sessionID: sessionID)
+        if case let .rejected(code, message) = queued {
+            return .rejected(code, message)
+        }
         var task = Transfer(id: UUID(), name: name, direction: .upload, total: size)
         task.status = .pending
         task.detail = "等待 Mac 接收"
-        emit(task)
-        let taskID = task.id
-        queue.asyncAfter(deadline: .now() + 300) { [weak self] in
-            guard let self, var current = self.transferRecords[taskID], current.status == .pending else { return }
-            current.status = .failed
-            current.detail = "接收等待超时"
-            self.emit(current)
+        if case let .batch(request, accepted) = queued {
+            task.batchID = request.id
+            task.batchIndex = request.index
+            task.batchCount = request.count
+            task.batchFileNames = request.names
+            if accepted {
+                task.status = .accepted
+                task.detail = "等待设备发送"
+            }
         }
-        return task
+        emit(task)
+        armUploadTimeout(
+            id: task.id,
+            status: task.status,
+            detail: task.status == .accepted ? "设备未发送文件" : "接收等待超时"
+        )
+        return .ready(task)
     }
 
     func acceptUpload(_ id: UUID) {
@@ -207,13 +256,11 @@ final class HTTPServer: @unchecked Sendable {
             guard var task = self.transferRecords[id], task.direction == .upload, task.status == .pending else { return }
             task.status = .accepted
             task.detail = "等待设备发送"
-            self.emit(task)
-            self.queue.asyncAfter(deadline: .now() + 300) { [weak self] in
-                guard let self, var current = self.transferRecords[id], current.status == .accepted else { return }
-                current.status = .failed
-                current.detail = "设备未发送文件"
-                self.emit(current)
+            if let batchID = task.batchID {
+                self.uploadBatches[batchID]?.accepted = true
             }
+            self.emit(task)
+            self.armUploadTimeout(id: id, status: .accepted, detail: "设备未发送文件")
         }
     }
 
@@ -447,6 +494,83 @@ final class HTTPServer: @unchecked Sendable {
             .sorted { $0.connectedAt < $1.connectedAt }
         onDevices?(devices)
     }
+
+    private func queuedUpload(from query: [String: String], sessionID: String) -> QueuedUpload {
+        guard !hasCurrentTask else { return .rejected(409, "当前有传输任务") }
+        guard query["batch"] != nil || query["index"] != nil || query["count"] != nil else { return .single }
+        guard let rawID = query["batch"], let id = UUID(uuidString: rawID),
+              let index = query["index"].flatMap(Int.init),
+              let count = query["count"].flatMap(Int.init),
+              (2 ... TransferBatchLimit.maximumCount).contains(count),
+              (1 ... count).contains(index)
+        else { return .rejected(400, "无效的多文件任务") }
+        if var open = uploadBatches[id] {
+            guard open.sessionID == sessionID, open.count == count, open.nextIndex == index else {
+                return .rejected(409, "多文件任务不连续")
+            }
+            let accepted = open.accepted
+            let names = open.names
+            open.nextIndex += 1
+            uploadBatches[id] = open.nextIndex > open.count ? nil : open
+            return .batch(UploadBatchRequest(id: id, index: index, count: count, names: names), accepted: accepted)
+        }
+        guard index == 1 else { return .rejected(409, "多文件任务不连续") }
+        let names = batchFileNames(from: query["names"], count: count)
+        uploadBatches[id] = OpenUploadBatch(sessionID: sessionID, count: count, nextIndex: 2, accepted: false, names: names)
+        return .batch(UploadBatchRequest(id: id, index: index, count: count, names: names), accepted: false)
+    }
+
+    private func batchFileNames(from raw: String?, count: Int) -> [String]? {
+        guard let raw, let data = raw.data(using: .utf8),
+              let names = try? JSONDecoder().decode([String].self, from: data),
+              names.count == count, names.allSatisfy(acceptableFileName)
+        else { return nil }
+        return names
+    }
+
+    private func acceptableFileName(_ name: String) -> Bool {
+        !name.isEmpty && name != "." && name != ".." && name == (name as NSString).lastPathComponent
+            && !name.contains("\\") && !name.hasPrefix(".")
+            && name.unicodeScalars.allSatisfy { $0.value >= 32 && $0.value != 127 }
+    }
+
+    private func armUploadTimeout(id: UUID, status: TransferStatus, detail: String) {
+        queue.asyncAfter(deadline: .now() + 300) { [weak self] in
+            guard let self, var current = self.transferRecords[id], current.status == status else { return }
+            current.status = .failed
+            current.detail = detail
+            if status == .pending, let batchID = current.batchID {
+                self.uploadBatches.removeValue(forKey: batchID)
+            }
+            self.emit(current)
+        }
+    }
+}
+
+private enum UploadOfferResult {
+    case ready(Transfer)
+    case rejected(Int, String)
+}
+
+private struct UploadBatchRequest {
+    var id: UUID
+    var index: Int
+    var count: Int
+    var names: [String]?
+}
+
+private struct OpenUploadBatch {
+    var sessionID: String
+    var count: Int
+    var nextIndex: Int
+    var accepted: Bool
+    var names: [String]?
+}
+
+private enum QueuedUpload {
+    case single
+    case batch(UploadBatchRequest, accepted: Bool)
+    case rejected(Int, String)
 }
 
 final class HTTPConnection: @unchecked Sendable {
@@ -699,11 +823,7 @@ final class HTTPConnection: @unchecked Sendable {
             server.finishText(id, direction: .download)
             respond(200, "已接收")
         case ("POST", "/api/offer-upload"):
-            guard let name = query["name"], validName(name), let size = query["size"].flatMap(Int64.init),
-                  size >= 0, size <= server.maxBytes else { respond(400, "无效文件"); return }
-            guard let task = server.offerUpload(name: name, size: size) else { respond(409, "当前有传输任务"); return }
-            let data = (try? JSONSerialization.data(withJSONObject: ["id": task.id.uuidString])) ?? Data("{}".utf8)
-            sendHeaders(201, extra: ["Content-Type: application/json; charset=utf-8"], length: Int64(data.count)) { [weak self] in self?.send(data) }
+            respondToUploadOffer(query: query, session: session)
         case ("GET", "/api/transfer"):
             guard let value = query["id"], let id = UUID(uuidString: value) else { respond(400, "无效任务"); return }
             transferStatus(id)
@@ -733,6 +853,19 @@ final class HTTPConnection: @unchecked Sendable {
         !name.isEmpty && name != "." && name != ".." && name == (name as NSString).lastPathComponent && !name.contains("\\") && !name.hasPrefix(".") && name.unicodeScalars.allSatisfy { $0.value >= 32 && $0.value != 127 }
     }
 
+    private func respondToUploadOffer(query: [String: String], session: String?) {
+        guard let session else { respond(401, "会话已过期，请重新扫描二维码"); return }
+        guard let name = query["name"], validName(name), let size = query["size"].flatMap(Int64.init),
+              size >= 0, size <= server.maxBytes else { respond(400, "无效文件"); return }
+        switch server.offerUpload(name: name, size: size, query: query, sessionID: session) {
+        case let .ready(task):
+            let data = (try? JSONSerialization.data(withJSONObject: ["id": task.id.uuidString])) ?? Data("{}".utf8)
+            sendHeaders(201, extra: ["Content-Type: application/json; charset=utf-8"], length: Int64(data.count)) { [weak self] in self?.send(data) }
+        case let .rejected(code, message):
+            respond(code, message)
+        }
+    }
+
     private func handleTextOffer(_ body: Data) {
         guard let payload = try? JSONSerialization.jsonObject(with: body) as? [String: String],
               let text = payload["text"], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -746,14 +879,23 @@ final class HTTPConnection: @unchecked Sendable {
             sendHeaders(204, extra: ["Cache-Control: no-store"], length: 0) { [weak self] in self?.finishOutput() }
             return
         }
-        let data = (try? JSONSerialization.data(withJSONObject: [
+        var payload: [String: Any] = [
             "id": task.id.uuidString,
             "name": task.name,
             "size": task.total,
             "displaySize": TransferByteCount.string(from: task.total),
             "type": task.isText ? "text" : "file",
             "text": task.textContent ?? ""
-        ])) ?? Data("{}".utf8)
+        ]
+        if let batchID = task.batchID, let batchIndex = task.batchIndex, let batchCount = task.batchCount, batchCount > 1 {
+            payload["batchID"] = batchID.uuidString
+            payload["batchIndex"] = batchIndex
+            payload["batchCount"] = batchCount
+            if let names = task.batchFileNames, names.count > 1 {
+                payload["names"] = names
+            }
+        }
+        let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{}".utf8)
         sendHeaders(200, extra: ["Content-Type: application/json; charset=utf-8", "Cache-Control: no-store"], length: Int64(data.count)) { [weak self] in self?.send(data) }
     }
 
@@ -866,14 +1008,10 @@ final class HTTPConnection: @unchecked Sendable {
             status = 206
         }
         let length = total == 0 ? 0 : end - start + 1
-        let rfc5987Safe = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$&+-.^_|~")
-        let encoded = name.addingPercentEncoding(withAllowedCharacters: rfc5987Safe) ?? "file"
         let mime = inline
             ? (UTType(filenameExtension: (name as NSString).pathExtension)?.preferredMIMEType ?? "application/octet-stream")
             : "application/octet-stream"
-        let disposition = inline
-            ? "inline; filename*=UTF-8''\(encoded)"
-            : "attachment; filename=\"download\"; filename*=UTF-8''\(encoded)"
+        let disposition = transferContentDisposition(name: name, inline: inline)
         var extra = [
             "Content-Type: \(mime)",
             "Content-Disposition: \(disposition)",
@@ -1034,4 +1172,19 @@ final class HTTPConnection: @unchecked Sendable {
         }
         connection.cancel(); server.finished(id)
     }
+}
+
+private func transferContentDisposition(name: String, inline: Bool) -> String {
+    let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$&+-.^_|~")
+    let encoded = name.addingPercentEncoding(withAllowedCharacters: allowed) ?? "file"
+    let ext = (name as NSString).pathExtension
+    let reserved = CharacterSet(charactersIn: "\"\\")
+    let printableASCII: (Unicode.Scalar) -> Bool = { value in
+        value.value > 31 && value.value < 127 && !reserved.contains(value)
+    }
+    let asciiSafe = name.unicodeScalars.allSatisfy(printableASCII)
+    let asciiExtension = ext.unicodeScalars.allSatisfy(printableASCII) ? ext : ""
+    let asciiName = asciiSafe ? name : (asciiExtension.isEmpty ? "file" : "file.\(asciiExtension)")
+    let kind = inline ? "inline" : "attachment"
+    return "\(kind); filename=\"\(asciiName)\"; filename*=UTF-8''\(encoded)"
 }

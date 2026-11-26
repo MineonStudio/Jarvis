@@ -26,10 +26,17 @@ import Foundation
     private var addressTimer: Timer?
     private var lastIP: String?
     private var deletedIDs: Set<UUID> = []
+    private var outboundQueue: OutboundFileQueue?
+    private var isOfferingOutbound = false
     private let importer = SharedFileImporter()
     private let historyURL: URL
     public var canStartTask: Bool {
-        running && selectedDeviceIP != nil && !isImporting && !transfers.contains(where: \.isInProgress)
+        running && selectedDeviceIP != nil && !isImporting && !isSendingBatch
+            && !transfers.contains(where: \.isInProgress)
+    }
+
+    var isSendingBatch: Bool {
+        outboundQueue != nil || isOfferingOutbound
     }
 
     init(rootDirectory: URL? = nil, fileManager: FileManager = .default) {
@@ -89,6 +96,7 @@ import Foundation
     }
 
     public func stop() {
+        discardOutboundRemainder()
         addressTimer?.invalidate(); addressTimer = nil
         server?.stop(); server = nil
         running = false; address = ""; startedAt = nil; pairedDevices = 0; lastIP = nil
@@ -230,8 +238,9 @@ import Foundation
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = true
         panel.prompt = "发送"
+        panel.message = "可同时选择最多 \(TransferBatchLimit.maximumCount) 个文件"
         panel.begin { [weak self] response in
             guard response == .OK else { return }
             Task { @MainActor in self?.importSharedFiles(panel.urls, to: targetDeviceIP) }
@@ -239,26 +248,110 @@ import Foundation
     }
 
     func importSharedFiles(_ urls: [URL], to selectedTargetIP: String? = nil) {
-        guard canStartTask, let targetDeviceIP = selectedTargetIP ?? selectedDeviceIP, let url = urls.first else { return }
+        guard canStartTask, let targetDeviceIP = selectedTargetIP ?? selectedDeviceIP, !urls.isEmpty else { return }
+        let selected = Array(urls.prefix(TransferBatchLimit.maximumCount))
+        let skippedCount = urls.count - selected.count
         isImporting = true
         importMessage = nil
         importHasErrors = false
         Task {
-            let result = await importer.importFiles([url], into: sharedDirectory, maxBytes: Self.maxFileBytes)
+            let result = await importer.importFiles(selected, into: sharedDirectory, maxBytes: Self.maxFileBytes)
             isImporting = false
-            importHasErrors = !result.failedNames.isEmpty
-            if let name = result.importedNames.first {
-                guard let server, running, await server.offerDownload(name: name, to: targetDeviceIP) else {
-                    try? FileManager.default.removeItem(at: sharedDirectory.appendingPathComponent(name))
-                    importMessage = "当前有传输任务，请稍后发送"
-                    importHasErrors = true
-                    return
-                }
-                importMessage = nil
+            var failures = result.failedNames
+            if skippedCount > 0 {
+                failures.append("一次最多发送 \(TransferBatchLimit.maximumCount) 个文件")
+            }
+            importHasErrors = !failures.isEmpty
+            importMessage = failures.isEmpty ? nil : failures.joined(separator: "\n")
+            guard !result.importedNames.isEmpty else { return }
+            if result.importedNames.count == 1 {
+                await offerSingleDownload(named: result.importedNames[0], to: targetDeviceIP)
             } else {
-                importMessage = result.failedNames.joined(separator: "\n")
+                outboundQueue = OutboundFileQueue(deviceIP: targetDeviceIP, names: result.importedNames)
+                await offerNextOutboundFile()
             }
         }
+    }
+
+    private func offerSingleDownload(named name: String, to targetDeviceIP: String) async {
+        guard let server, running, await server.offerDownload(name: name, to: targetDeviceIP) else {
+            try? FileManager.default.removeItem(at: sharedDirectory.appendingPathComponent(name))
+            importMessage = "当前有传输任务，请稍后发送"
+            importHasErrors = true
+            return
+        }
+    }
+
+    private func offerNextOutboundFile() async {
+        guard !isOfferingOutbound, outboundQueue != nil, running, server != nil else { return }
+        isOfferingOutbound = true
+        defer { isOfferingOutbound = false }
+        while running, let server, var queue = outboundQueue {
+            guard let next = queue.takeNext() else {
+                outboundQueue = nil
+                return
+            }
+            let batchID = queue.batchID
+            outboundQueue = queue
+            let batch = DownloadBatch(id: batchID, index: next.index, count: queue.total)
+            let result = await server.prepareDownloadOffer(
+                name: next.name,
+                to: queue.deviceIP,
+                batch: batch,
+                names: queue.fileNames
+            )
+            guard outboundQueue?.batchID == batchID else {
+                if case let .started(id) = result {
+                    server.cancel(id)
+                }
+                return
+            }
+            switch result {
+            case let .started(id):
+                outboundQueue?.activeTransferID = id
+                return
+            case .busy:
+                restoreOutboundFile(next.name, at: next.index, batchID: batchID)
+                try? await Task.sleep(for: .milliseconds(400))
+            case .unavailable:
+                try? FileManager.default.removeItem(at: sharedDirectory.appendingPathComponent(next.name))
+                discardOutboundRemainder()
+                importMessage = "当前有传输任务，请稍后发送"
+                importHasErrors = true
+                return
+            }
+        }
+    }
+
+    private func restoreOutboundFile(_ name: String, at index: Int, batchID: UUID) {
+        guard var queue = outboundQueue, queue.batchID == batchID else { return }
+        queue.pendingNames.insert(name, at: 0)
+        queue.nextIndex = index
+        outboundQueue = queue
+    }
+
+    private func continueOutboundQueue(after transfer: Transfer) {
+        guard var queue = outboundQueue, transfer.id == queue.activeTransferID, !transfer.isInProgress else { return }
+        queue.activeTransferID = nil
+        outboundQueue = queue
+        guard transfer.status == .completed else {
+            let remainder = queue.pendingNames
+            discardOutboundRemainder()
+            if !remainder.isEmpty {
+                importMessage = "剩余文件未发送"
+                importHasErrors = true
+            }
+            return
+        }
+        Task { await offerNextOutboundFile() }
+    }
+
+    private func discardOutboundRemainder() {
+        guard let queue = outboundQueue else { return }
+        for name in queue.pendingNames {
+            try? FileManager.default.removeItem(at: sharedDirectory.appendingPathComponent(name))
+        }
+        outboundQueue = nil
     }
 
     private func upsert(_ transfer: Transfer) {
@@ -272,6 +365,9 @@ import Foundation
         if previousStatus != transfer.status {
             onTransferEvent?(transfer)
             persistHistory()
+            if transfer.direction == .download {
+                continueOutboundQueue(after: transfer)
+            }
         }
         if transfer.direction == .upload, transfer.status == .pending {
             incomingOffer = transfer
