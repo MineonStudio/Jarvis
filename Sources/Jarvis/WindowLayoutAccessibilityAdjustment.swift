@@ -30,21 +30,37 @@ struct WindowLayoutAccessibilityAdjustment {
                 // have now, which can sit on the target corner, and try once more.
                 resized = resize(to: requestedFrame, in: visibleFrame) || resized
             }
-            // A text row can come back a few points too tall. The window server
-            // will not leave that surplus under the Dock, so it would cover the
-            // neighbor. Ask for a shorter size until the snap fits.
-            pullInside(requestedFrame, in: visibleFrame)
+            // A real minimum can be much larger than the tile and has to move
+            // inside the screen. A character row is only a few points off, and
+            // shrinking it drops the whole row.
+            if let actual = readSize(), !Self.characterGrid(actual, requestedFrame.size) {
+                pullInside(requestedFrame, in: visibleFrame)
+            }
         }
         guard let actualSize = readSize(), actualSize.width > 0, actualSize.height > 0 else {
             return .failed
         }
 
-        // AX positions use the top-left corner. Reusing the requested top-left
-        // with a taller actual size would push a lower layout into the Dock.
-        let actualFrame = placement.frame(preserving: actualSize, in: visibleFrame)
+        // A character row keeps the requested top-left, the same sequence the
+        // first layout used. The extra points extend down from that top.
+        // Anything further off is placed by its real size so a tall minimum
+        // stays above the Dock.
+        let actualFrame = Self.characterGrid(actualSize, requestedFrame.size)
+            ? requestedFrame
+            : placement.frame(preserving: actualSize, in: visibleFrame)
         guard setPosition(actualFrame) else { return .failed }
         let matchesSize = Self.matches(actualSize, requestedFrame.size)
-        return resized && matchesSize ? .applied : .constrained
+        let keptGrid = Self.characterGrid(actualSize, requestedFrame.size)
+        return resized && (matchesSize || keptGrid) ? .applied : .constrained
+    }
+
+    /// Terminal's height lands on a character row, about 15pt. The nearest row
+    /// can be a little taller or shorter than the tile. That is the size to keep.
+    private static func characterGrid(_ actual: CGSize, _ requested: CGSize) -> Bool {
+        let widthGap = abs(actual.width - requested.width)
+        let heightGap = abs(actual.height - requested.height)
+        let largest = max(widthGap, heightGap)
+        return largest > 1 && largest <= 16
     }
 
     /// Shrinks an app that snapped larger than `requested` until it fits.
