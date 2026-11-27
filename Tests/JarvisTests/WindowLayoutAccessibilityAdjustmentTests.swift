@@ -173,30 +173,29 @@ final class WindowLayoutAccessibilityAdjustmentTests: XCTestCase {
         }
     }
 
-    func testRowSnapShrinksUntilTheLowerWindowClearsTheSeam() {
+    func testCharacterRowKeepsTheRequestedTopInsteadOfDroppingACell() {
         let visible = CGRect(x: 0, y: 89, width: 2560, height: 1321)
-        let region = WindowSnapPlacement.halfBottom.frame(in: visible)
-        let upper = WindowSnapPlacement.halfTop.frame(in: visible)
-        let window = RowSnappedWindow(
-            frame: CGRect(x: 200, y: 200, width: 900, height: 400),
-            widthHigh: region.width + 4,
-            widthQuantum: 8,
-            heightHigh: region.height + 5,
-            heightQuantum: 17
-        )
-        let adjustment = WindowLayoutAccessibilityAdjustment(
-            readSize: { window.frame.size },
-            setSize: { window.setSize($0) },
-            setPosition: { window.setPosition($0); return true }
-        )
+        for placement in [WindowSnapPlacement.halfBottom, .lowerRight, .upperRight, .halfRight] {
+            let region = placement.frame(in: visible)
+            let heightMiss: CGFloat = placement.unitRect.height == 1 ? -12 : 5
+            let window = RowSnappedWindow(
+                frame: CGRect(x: 200, y: 200, width: 900, height: 400),
+                widthHigh: region.width,
+                widthQuantum: 8,
+                heightHigh: region.height + heightMiss,
+                heightQuantum: 30
+            )
+            let adjustment = WindowLayoutAccessibilityAdjustment(
+                readSize: { window.frame.size },
+                setSize: { window.setSize($0) },
+                setPosition: { window.setPosition($0); return true }
+            )
 
-        _ = adjustment.apply(.halfBottom, in: visible, supportsResizing: true)
-
-        XCTAssertLessThanOrEqual(window.frame.width, region.width + 1)
-        XCTAssertLessThanOrEqual(window.frame.height, region.height + 1)
-        XCTAssertLessThanOrEqual(window.frame.maxY, region.maxY)
-        XCTAssertGreaterThanOrEqual(upper.minY - window.frame.maxY, WindowSnapPlacement.windowGap)
-        XCTAssertGreaterThanOrEqual(window.frame.minY, visible.minY)
+            XCTAssertEqual(adjustment.apply(placement, in: visible, supportsResizing: true), .applied)
+            XCTAssertEqual(window.frame.height, region.height + heightMiss)
+            XCTAssertEqual(window.frame.maxY, region.maxY)
+            XCTAssertEqual(window.frame.minX, region.minX)
+        }
     }
 
     private func apply(
@@ -352,7 +351,8 @@ private final class RowSnappedWindow {
     }
 
     func setPosition(_ frame: CGRect) {
-        self.frame.origin = frame.origin
+        // Accessibility positions the top of the passed rect and keeps the snapped height.
+        self.frame.origin = CGPoint(x: frame.minX, y: frame.maxY - self.frame.height)
     }
 
     func setSize(_ size: CGSize) -> Bool {
