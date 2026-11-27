@@ -29,9 +29,9 @@ struct MeetingModelSetupCard: View {
             HStack(alignment: .center, spacing: JarvisSpacing.itemGap) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Paraformer-large").font(SettingsTypography.itemTitle)
-                    Text("支持中英文，中文准、速度快、内存占用小。\n热词交给大模型在纪要里纠正。")
+                    Text("支持中英文，中文准、速度快、内存占用小。热词交给大模型在纪要里纠正。")
                         .font(SettingsTypography.itemSubtitle).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 statusSlot
