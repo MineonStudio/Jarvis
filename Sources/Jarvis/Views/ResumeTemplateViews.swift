@@ -36,10 +36,7 @@ struct ResumeTemplateSelectionView: View {
                 GallerySelection.handleClick(count, on: template.id, selection: $selection) { onSelect(template) }
             },
             preview: {
-                ResumeTemplateThumbnail(template: template)
-                    .scaleEffect(size.width / ResumeTemplateThumbnail.size.width, anchor: .topLeading)
-                    .frame(width: size.width, height: size.height, alignment: .topLeading)
-                    .clipped()
+                ResumeTemplateThumbnail(template: template, renderSize: size)
             },
             leading: { Label(template.category.title, systemImage: template.icon) },
             trailing: { Text(template.title) }
@@ -59,26 +56,26 @@ struct ResumeTemplateSelectionView: View {
 struct ResumeTemplateThumbnail: View {
     static let size = CGSize(width: 168, height: 237)
     let template: ResumeTemplate
+    var renderSize = ResumeTemplateThumbnail.size
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
-        let document = Self.sampleDocument(template: template)
-        ResumePageView(
-            document: document,
-            selectedProjectID: nil,
-            selectedBulletIndex: nil,
-            showsEmptyState: false,
-            onSelectProject: { _ in },
-            onSelectBullet: { _, _ in },
-            pageContent: ResumePageLayout.pages(for: document).first
-        )
-        .scaleEffect(Self.size.width / ResumePageLayout.pageSize.width, anchor: .topLeading)
-        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
+        Group {
+            if let image = ResumeTemplatePreviewRenderer.image(template: template, size: renderSize, displayScale: displayScale) {
+                Image(decorative: image, scale: displayScale)
+                    .resizable()
+                    .interpolation(.none)
+            } else {
+                template.paperColor
+            }
+        }
+        .frame(width: renderSize.width, height: renderSize.height, alignment: .topLeading)
         .clipped()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
-    /// Only the gallery uses sample content; selecting a template still creates a blank resume.
+    /// Representative content for full-page rendering and pagination verification.
     static func sampleDocument(template: ResumeTemplate) -> ResumeDocument {
         ResumeDocument(
             template: template,

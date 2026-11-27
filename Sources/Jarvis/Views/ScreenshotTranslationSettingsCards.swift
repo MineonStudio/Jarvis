@@ -7,7 +7,8 @@ import Translation
 final class LanguagePackSettingsStore: ObservableObject {
     private let models: [ScreenshotTranslationLanguage: LanguagePackRowModel]
     private var cancellables: Set<AnyCancellable> = []
-    private var isWaitingForSystemSettingsReturn = false
+    private var activationRefreshTask: Task<Void, Never>?
+    private var lifecycleGeneration = 0
 
     init(service: any LanguagePackService = SystemLanguagePackService()) {
         var models: [ScreenshotTranslationLanguage: LanguagePackRowModel] = [:]
@@ -34,33 +35,56 @@ final class LanguagePackSettingsStore: ObservableObject {
         return LanguagePackRowModel(target: target, service: SystemLanguagePackService())
     }
 
-    func checkAll() async {
-        for model in models.values {
-            await model.refresh()
+    func checkAll(excluding completedTarget: ScreenshotTranslationLanguage? = nil) async {
+        for target in ScreenshotTranslationLanguage.packTargets where target != completedTarget {
+            guard !Task.isCancelled else {
+                return
+            }
+            await model(for: target).refresh()
         }
     }
 
     func openLanguageSettings() -> Bool {
-        isWaitingForSystemSettingsReturn = true
-        let didOpen = SystemLanguagePackService.openLanguageSettings()
-        if !didOpen {
-            isWaitingForSystemSettingsReturn = false
-        }
-        return didOpen
+        SystemLanguagePackService.openLanguageSettings()
     }
 
-    func refreshAfterSystemSettingsReturn() {
-        guard isWaitingForSystemSettingsReturn else {
+    func refreshAfterActivation() {
+        // Assets are shared with screenshot translation and other apps, so a
+        // refresh cannot depend on opening Settings through this card.
+        refreshStatuses()
+    }
+
+    func consumeSession(
+        _ handler: any LanguagePackSessionHandling,
+        for target: ScreenshotTranslationLanguage
+    ) async {
+        let generation = lifecycleGeneration
+        await model(for: target).consumeSession(handler)
+        guard generation == lifecycleGeneration else {
             return
         }
-        isWaitingForSystemSettingsReturn = false
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
-            await self?.checkAll()
+        // Preparing a pair installs both languages; update every affected row.
+        // Clearing sessionConfiguration can cancel translationTask itself, so
+        // the store owns this refresh independently of that SwiftUI task.
+        await refreshStatuses(excluding: target).value
+    }
+
+    @discardableResult
+    private func refreshStatuses(
+        excluding target: ScreenshotTranslationLanguage? = nil
+    ) -> Task<Void, Never> {
+        activationRefreshTask?.cancel()
+        let task = Task<Void, Never> { @MainActor [weak self] in
+            await self?.checkAll(excluding: target)
         }
+        activationRefreshTask = task
+        return task
     }
 
     func tearDownAll() {
+        lifecycleGeneration += 1
+        activationRefreshTask?.cancel()
+        activationRefreshTask = nil
         for model in models.values {
             model.tearDown()
         }
@@ -71,19 +95,33 @@ struct ScreenshotLanguagePackSettingsCard: View {
     @StateObject private var store = LanguagePackSettingsStore()
 
     var body: some View {
-        SettingsSectionCard("截图翻译语言包") {
-            VStack(spacing: JarvisSpacing.controlGap) {
-                ForEach(ScreenshotTranslationLanguage.packTargets) { target in
-                    LanguagePackRowView(
-                        model: store.model(for: target),
-                        openLanguageSettings: store.openLanguageSettings
-                    )
+        VStack(alignment: .leading, spacing: JarvisSpacing.itemGap) {
+            HStack {
+                Text("截图翻译语言包")
+                    .font(SettingsTypography.cardTitle)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                Button("刷新状态") {
+                    store.refreshAfterActivation()
+                }
+                .buttonStyle(JarvisSecondaryButtonStyle())
+            }
+            SettingsContentPanel {
+                VStack(spacing: JarvisSpacing.controlGap) {
+                    ForEach(ScreenshotTranslationLanguage.packTargets) { target in
+                        LanguagePackRowView(
+                            model: store.model(for: target),
+                            openLanguageSettings: store.openLanguageSettings,
+                            consumeSession: { await store.consumeSession($0, for: target) }
+                        )
+                    }
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .task { await store.checkAll() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            store.refreshAfterSystemSettingsReturn()
+            store.refreshAfterActivation()
         }
         .onDisappear { store.tearDownAll() }
     }
@@ -92,6 +130,7 @@ struct ScreenshotLanguagePackSettingsCard: View {
 private struct LanguagePackRowView: View {
     @ObservedObject var model: LanguagePackRowModel
     let openLanguageSettings: () -> Bool
+    let consumeSession: (any LanguagePackSessionHandling) async -> Void
     @State private var showingSettingsOpenFailure = false
 
     var body: some View {
@@ -108,7 +147,7 @@ private struct LanguagePackRowView: View {
         .background {
             Color.clear
                 .translationTask(model.sessionConfiguration) { session in
-                    await model.consumeSession(
+                    await consumeSession(
                         SystemLanguagePackSessionHandler(target: model.target, session: session)
                     )
                 }
@@ -141,10 +180,13 @@ private struct LanguagePackRowView: View {
         case .checking:
             Text("检测中").font(JarvisTypography.control).foregroundStyle(Color.secondary)
         case .installed:
+            Text("已下载").font(JarvisTypography.control).foregroundStyle(Color.secondary)
+                .fixedSize()
             Button("移除") {
                 showingSettingsOpenFailure = !openLanguageSettings()
             }
             .buttonStyle(JarvisSecondaryButtonStyle())
+            .fixedSize(horizontal: true, vertical: false)
             .accessibilityLabel("在系统设置中移除\(model.target.title)语言包")
             .help("打开系统设置的语言与地区页面管理翻译语言包")
         case .supported:

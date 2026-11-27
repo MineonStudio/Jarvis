@@ -4,12 +4,15 @@ import Observation
 
 struct HomeSystemSnapshot: Sendable {
     var cpu: Double?
+    var gpu: Double?
     var memoryUsed: UInt64?
     var memoryTotal: UInt64 = ProcessInfo.processInfo.physicalMemory
     var upload: Double?
     var download: Double?
     var diskAvailable: UInt64?
     var diskTotal: UInt64?
+    var temperatures = HomeTemperatures()
+    var thermalStatus: HomeThermalStatus = .unknown
     var uptime: TimeInterval = ProcessInfo.processInfo.systemUptime
 
     var memoryFraction: Double? {
@@ -17,21 +20,26 @@ struct HomeSystemSnapshot: Sendable {
         return min(1, Double(memoryUsed) / Double(memoryTotal))
     }
 
-    var diskFraction: Double? {
+    var diskUsed: UInt64? {
         guard let diskAvailable, let diskTotal, diskTotal > 0 else { return nil }
-        return min(1, max(0, 1 - Double(diskAvailable) / Double(diskTotal)))
+        return diskTotal - min(diskAvailable, diskTotal)
+    }
+
+    var diskFraction: Double? {
+        guard let diskUsed, let diskTotal else { return nil }
+        return Double(diskUsed) / Double(diskTotal)
     }
 }
 
 @Observable @MainActor
 final class HomeSystemMonitor {
     var snapshot = HomeSystemSnapshot()
-    var cpuHistory: [Double] = []
-    var memoryHistory: [Double] = []
-    var networkHistory: [Double] = []
-    var diskHistory: [Double] = []
     let deviceName = Host.current().localizedName ?? "我的 Mac"
     var macInfo = HomeMacSystemInfo.fallback
+
+    func refreshThermalStatus() {
+        snapshot.thermalStatus = HomeThermalStatus(ProcessInfo.processInfo.thermalState)
+    }
 
     /// The view owns this task; leaving Home or deactivating the scene cancels it.
     func run() async {
@@ -43,32 +51,34 @@ final class HomeSystemMonitor {
 
     private func sampleLoop() async {
         let sampler = HomeSystemSampler()
+        var isBaseline = true
         while !Task.isCancelled {
             let next = await sampler.sample()
             guard !Task.isCancelled else { return }
-            snapshot = next
-            append(next.cpu, to: &cpuHistory)
-            append(next.memoryFraction, to: &memoryHistory)
-            append(next.diskFraction, to: &diskHistory)
-            if let upload = next.upload, let download = next.download {
-                append(upload + download, to: &networkHistory)
-            } else {
-                networkHistory.removeAll()
-            }
-            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            record(next, isBaseline: isBaseline)
+            // Rates need two samples. Warm up quickly on entry, then keep the
+            // normal low-frequency refresh while Home remains visible.
+            let interval: Duration = isBaseline ? .milliseconds(250) : .seconds(2)
+            isBaseline = false
+            do { try await Task.sleep(for: interval) } catch { return }
         }
     }
 
-    private func append(_ value: Double?, to values: inout [Double]) {
-        guard let value else { return }
-        values.append(value)
-        if values.count > 30 {
-            values.removeFirst(values.count - 30)
+    func record(_ next: HomeSystemSnapshot, isBaseline: Bool = false) {
+        var displayed = next
+        if isBaseline {
+            // Re-entering Home resets counter baselines to avoid averaging
+            // over time spent away. Keep the last rates until the next sample.
+            displayed.cpu = next.cpu ?? snapshot.cpu
+            displayed.upload = next.upload ?? snapshot.upload
+            displayed.download = next.download ?? snapshot.download
         }
+        snapshot = displayed
     }
 }
 
 actor HomeSystemSampler {
+    private lazy var temperatureReader = HomeTemperatureReader()
     private var previousCPU: [UInt32]?
     private struct InterfaceCounters {
         let received: UInt64
@@ -136,6 +146,9 @@ actor HomeSystemSampler {
         }
         result.diskAvailable = disk.available
         result.diskTotal = disk.total
+        result.gpu = HomeGPUReader().read()
+        result.temperatures = temperatureReader.read()
+        result.thermalStatus = HomeThermalStatus(ProcessInfo.processInfo.thermalState)
         return result
     }
 

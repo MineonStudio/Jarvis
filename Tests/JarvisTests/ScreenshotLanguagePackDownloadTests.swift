@@ -343,3 +343,124 @@ final class ScreenshotLanguagePackDownloadTests: XCTestCase {
         await running.value
     }
 }
+
+extension ScreenshotLanguagePackDownloadTests {
+    func testRefreshDoesNotInvalidatePendingSession() async {
+        let service = FakeLanguagePackService()
+        let model = await supportedModel(service: service)
+        model.startDownload()
+        let callsBeforeRefresh = service.statusCallCount
+
+        await model.refresh()
+
+        XCTAssertEqual(model.phase, .downloading)
+        XCTAssertEqual(service.statusCallCount, callsBeforeRefresh)
+        XCTAssertNotNil(model.sessionConfiguration)
+        service.statusResult = .installed
+        let handler = FakeSessionHandler(behavior: .succeed)
+        await model.consumeSession(handler)
+        XCTAssertEqual(handler.prepareCallCount, 1)
+        XCTAssertEqual(model.phase, .installed)
+    }
+
+    func testSystemCancellationClearsSessionAndAllowsRetry() async {
+        let service = FakeLanguagePackService()
+        let model = await supportedModel(service: service)
+        model.startDownload()
+        await model.consumeSession(FakeSessionHandler(behavior: .fail(CancellationError())))
+
+        XCTAssertEqual(model.phase, .supported)
+        XCTAssertNil(model.sessionConfiguration)
+        service.statusResult = .installed
+        model.startDownload()
+        await model.consumeSession(FakeSessionHandler(behavior: .succeed))
+        XCTAssertEqual(model.phase, .installed)
+    }
+
+    func testActivationDetectsExternallyInstalledAndRemovedPacks() async {
+        let service = FakeLanguagePackService()
+        let store = LanguagePackSettingsStore(service: service)
+        await store.checkAll()
+        XCTAssertEqual(store.model(for: .simplifiedChinese).phase, .supported)
+
+        service.statusResult = .installed
+        store.refreshAfterActivation()
+        await waitUntil {
+            ScreenshotTranslationLanguage.packTargets.allSatisfy { store.model(for: $0).phase == .installed }
+        }
+
+        service.statusResult = .supported
+        store.refreshAfterActivation()
+        await waitUntil {
+            ScreenshotTranslationLanguage.packTargets.allSatisfy { store.model(for: $0).phase == .supported }
+        }
+        store.tearDownAll()
+    }
+
+    func testDownloadRefreshesOtherLanguageInSharedPair() async {
+        let service = FakeLanguagePackService()
+        let store = LanguagePackSettingsStore(service: service)
+        await store.checkAll()
+        let english = store.model(for: .english)
+        let chinese = store.model(for: .simplifiedChinese)
+        XCTAssertEqual(chinese.phase, .supported)
+
+        english.startDownload()
+        service.statusResult = .installed
+        await store.consumeSession(FakeSessionHandler(behavior: .succeed), for: .english)
+
+        XCTAssertEqual(english.phase, .installed)
+        XCTAssertEqual(chinese.phase, .installed, "下载中文与英文配对后，两行都必须更新")
+        store.tearDownAll()
+    }
+
+    func testSharedPairRefreshPreservesDownloadFailure() async {
+        let service = FakeLanguagePackService()
+        let store = LanguagePackSettingsStore(service: service)
+        await store.checkAll()
+        let english = store.model(for: .english)
+        english.startDownload()
+
+        await store.consumeSession(FakeSessionHandler(behavior: .fail(TestError(message: "下载失败"))), for: .english)
+
+        XCTAssertEqual(english.phase, .failed("下载失败"))
+        XCTAssertEqual(store.model(for: .simplifiedChinese).phase, .supported)
+        store.tearDownAll()
+    }
+
+    func testSharedPairRefreshSurvivesTranslationTaskCancellation() async {
+        let service = FakeLanguagePackService()
+        let store = LanguagePackSettingsStore(service: service)
+        await store.checkAll()
+        store.model(for: .english).startDownload()
+        service.statusResult = .installed
+
+        let running = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            await store.consumeSession(FakeSessionHandler(behavior: .succeed), for: .english)
+        }
+        await running.value
+
+        XCTAssertEqual(store.model(for: .english).phase, .installed)
+        XCTAssertEqual(store.model(for: .simplifiedChinese).phase, .installed)
+        store.tearDownAll()
+    }
+
+    func testTearDownPreventsSessionFromRestartingStoreRefresh() async {
+        let service = FakeLanguagePackService()
+        let store = LanguagePackSettingsStore(service: service)
+        await store.checkAll()
+        store.model(for: .english).startDownload()
+        let handler = FakeSessionHandler(behavior: .gate)
+        let running = Task { await store.consumeSession(handler, for: .english) }
+        await waitUntil { handler.prepareCallCount == 1 }
+        let callsBeforeTearDown = service.statusCallCount
+
+        store.tearDownAll()
+        service.statusResult = .installed
+        await running.value
+
+        XCTAssertEqual(service.statusCallCount, callsBeforeTearDown)
+        XCTAssertEqual(store.model(for: .simplifiedChinese).phase, .supported)
+    }
+}

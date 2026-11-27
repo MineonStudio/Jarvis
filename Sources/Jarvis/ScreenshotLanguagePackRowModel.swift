@@ -41,15 +41,19 @@ final class LanguagePackRowModel: ObservableObject {
     }
 
     func refresh() async {
-        // 只有**句柄还在**才说明真的在下载。切走设置页会 tearDown 掉句柄，而相位
-        // 留在 .downloading——原来这里无条件早退，那一行就永远停在「下载中…」，
-        // 连刷新都救不回来。
-        guard phase != .downloading || handler == nil else {
+        // A pending SwiftUI session is also an active download. A foreground
+        // refresh must not invalidate it before translationTask hands it over.
+        guard phase != .downloading || (handler == nil && pendingGeneration == nil) else {
             return
         }
         let g = beginGeneration()
-        apply(.checking, ifGeneration: g)
+        if phase == .downloading {
+            apply(.checking, ifGeneration: g)
+        }
         let resolved = await resolveStatus()
+        guard !Task.isCancelled else {
+            return
+        }
         apply(resolved, ifGeneration: g)
     }
 
@@ -109,6 +113,12 @@ final class LanguagePackRowModel: ObservableObject {
         handler: any LanguagePackSessionHandling,
         generation g: Int
     ) async {
+        defer {
+            if generation == g {
+                self.handler = nil
+                sessionConfiguration = nil
+            }
+        }
         do {
             try await handler.prepare()
             guard generation == g else {
@@ -121,13 +131,11 @@ final class LanguagePackRowModel: ObservableObject {
                 return
             }
             if Self.isCancellation(error) {
-                return
+                let resolved = await resolveStatus()
+                apply(resolved, ifGeneration: g)
+            } else {
+                apply(.failed(message(for: error)), ifGeneration: g)
             }
-            apply(.failed(message(for: error)), ifGeneration: g)
-        }
-        if generation == g {
-            self.handler = nil
-            sessionConfiguration = nil
         }
     }
 
