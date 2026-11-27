@@ -2,6 +2,8 @@ import SwiftUI
 
 struct HomeQuickToolsCard: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hoveredTool: SkillID?
 
     var body: some View {
         HomeDashboardCard(title: "工具使用排行榜", symbol: "chart.bar.xaxis", contentSpacing: 10, contentPadding: 12) {
@@ -18,15 +20,24 @@ struct HomeQuickToolsCard: View {
                                 .overlay(alignment: .topTrailing) {
                                     HomeToolRankBadge(rank: index + 1).offset(x: 8, y: -6)
                                 }
+                                .scaleEffect(hoveredTool == tool && !reduceMotion ? 1.14 : 1)
+                                .animation(JarvisMotion.animation(JarvisMotion.hover, reduceMotion: reduceMotion), value: hoveredTool == tool)
                             Text(tool.navigationTitle)
                                 .font(.system(size: 11, weight: .medium)).foregroundStyle(.primary)
                                 .lineLimit(1).minimumScaleFactor(0.75)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 4)
                         .contentShape(RoundedRectangle(cornerRadius: 10))
-                        .jarvisHoverFeedback(in: RoundedRectangle(cornerRadius: 10), scale: 1)
                     }
                     .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering {
+                            hoveredTool = tool
+                        } else if hoveredTool == tool {
+                            hoveredTool = nil
+                        }
+                    }
+                    .zIndex(hoveredTool == tool ? 1 : 0)
                     .accessibilityLabel("第 \(index + 1) 名，\(tool.navigationTitle)")
                     .help("打开\(tool.navigationTitle)")
                 }

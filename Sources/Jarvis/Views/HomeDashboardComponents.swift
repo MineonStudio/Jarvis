@@ -91,114 +91,171 @@ struct HomeMetricsGrid: View {
     let monitor: HomeSystemMonitor
     let width: CGFloat
 
+    private var isCompact: Bool {
+        width < 1040
+    }
+
+    private var valueFontSize: CGFloat {
+        isCompact ? 22 : 25
+    }
+
+    private var metricSpacing: CGFloat {
+        isCompact ? 8 : 12
+    }
+
+    private var cpuColor: Color {
+        metricColor(HomeMetricLevel(fraction: monitor.snapshot.cpu))
+    }
+
+    private var memoryColor: Color {
+        metricColor(HomeMetricLevel(fraction: monitor.snapshot.memoryFraction))
+    }
+
+    private var diskColor: Color {
+        metricColor(HomeMetricLevel(fraction: monitor.snapshot.diskFraction))
+    }
+
+    private var gpuColor: Color {
+        metricColor(HomeMetricLevel(fraction: monitor.snapshot.gpu))
+    }
+
+    private var temperatureReminderColor: Color {
+        switch monitor.snapshot.thermalStatus {
+        case .warm: .orange
+        case .hot, .critical: .red
+        default: .secondary
+        }
+    }
+
+    private func metricColor(_ level: HomeMetricLevel?) -> Color {
+        guard let level else { return .secondary }
+        let rgb = level.rawValue
+        return Color(
+            red: Double((rgb >> 16) & 0xFF) / 255,
+            green: Double((rgb >> 8) & 0xFF) / 255,
+            blue: Double(rgb & 0xFF) / 255
+        )
+    }
+
     var body: some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: width >= 760 ? 4 : 2), spacing: 12
-        ) {
-            metric(title: "CPU", symbol: "cpu", color: .jarvisAccent) {
-                HStack(spacing: 12) {
-                    ring(monitor.snapshot.cpu, color: .jarvisAccent)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(HomeDashboardFormatting.percent(monitor.snapshot.cpu)).font(
-                            .system(size: 25, weight: .semibold)
-                        ).monospacedDigit()
-                        Text("全系统使用率").font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
+        // A single row should fill the dashboard band. LazyVGrid keeps its
+        // intrinsic height, leaving extra space around shorter metric cards.
+        HStack(alignment: .top, spacing: 12) {
+            metric(title: "CPU", symbol: "cpu", color: cpuColor) {
+                usageBody(
+                    monitor.snapshot.cpu, color: cpuColor,
+                    detail: monitor.snapshot.thermalStatus.temperatureReminder(for: monitor.snapshot.temperatures.cpu),
+                    detailColor: temperatureReminderColor,
+                    temperature: HomeDashboardFormatting.temperature(monitor.snapshot.temperatures.cpu)
+                )
+                if let guidance = monitor.snapshot.thermalStatus.guidance {
+                    Text(guidance)
+                        .font(.system(size: 10))
+                        .foregroundStyle(temperatureReminderColor)
+                        .lineLimit(2)
+                        .frame(height: 22, alignment: .leading)
                 }
-                HomeSparkline(values: monitor.cpuHistory, color: .jarvisAccent, maximum: 1)
             }
-            metric(title: "内存", symbol: "memorychip", color: .green) {
-                HStack(spacing: 12) {
-                    ring(monitor.snapshot.memoryFraction, color: .green)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(HomeDashboardFormatting.percent(monitor.snapshot.memoryFraction)).font(
-                            .system(size: 25, weight: .semibold)
-                        ).monospacedDigit()
-                        Text(
-                            "\(HomeDashboardFormatting.bytes(monitor.snapshot.memoryUsed)) / \(HomeDashboardFormatting.bytes(monitor.snapshot.memoryTotal))"
-                        )
-                        .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                    Spacer(minLength: 0)
-                }
-                HomeSparkline(values: monitor.memoryHistory, color: .green, maximum: 1)
+            metric(title: "GPU", symbol: "square.stack.3d.up", color: gpuColor) {
+                usageBody(
+                    monitor.snapshot.gpu, color: gpuColor,
+                    detail: monitor.snapshot.thermalStatus.temperatureReminder(for: monitor.snapshot.temperatures.gpu),
+                    detailColor: temperatureReminderColor,
+                    temperature: HomeDashboardFormatting.temperature(monitor.snapshot.temperatures.gpu)
+                )
             }
-            metric(title: "磁盘", symbol: "internaldrive", color: .orange) {
-                HStack(spacing: 12) {
-                    ring(monitor.snapshot.diskFraction, color: .orange)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(HomeDashboardFormatting.percent(monitor.snapshot.diskFraction))
-                            .font(.system(size: 25, weight: .semibold)).monospacedDigit()
-                        Text("可用 \(HomeDashboardFormatting.bytes(monitor.snapshot.diskAvailable))")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                    Spacer(minLength: 0)
-                }
-                HomeSparkline(values: monitor.diskHistory, color: .orange, maximum: 1)
+            metric(title: "内存", symbol: "memorychip", color: memoryColor) {
+                usageBody(
+                    monitor.snapshot.memoryFraction, color: memoryColor,
+                    detail: "\(HomeDashboardFormatting.bytes(monitor.snapshot.memoryUsed)) / \(HomeDashboardFormatting.bytes(monitor.snapshot.memoryTotal))"
+                )
+            }
+            metric(title: "磁盘", symbol: "internaldrive", color: diskColor) {
+                usageBody(
+                    monitor.snapshot.diskFraction, color: diskColor,
+                    detail: "\(HomeDashboardFormatting.bytes(monitor.snapshot.diskUsed)) / \(HomeDashboardFormatting.bytes(monitor.snapshot.diskTotal))"
+                )
             }
             metric(title: "网络", symbol: "network", color: .purple) {
                 let upload = HomeDashboardFormatting.rate(monitor.snapshot.upload)
                 let download = HomeDashboardFormatting.rate(monitor.snapshot.download)
                 VStack(alignment: .leading, spacing: 5) {
-                    Label(upload, systemImage: "arrow.up")
-                        .accessibilityLabel("上传 \(upload)")
-                    Label(download, systemImage: "arrow.down")
-                        .accessibilityLabel("下载 \(download)")
+                    networkRow(upload, symbol: "arrow.up", title: "上传")
+                    networkRow(download, symbol: "arrow.down", title: "下载")
                 }
                 .font(.system(size: 15, weight: .medium))
                 .monospacedDigit()
                 .frame(height: 48, alignment: .leading)
-
-                HomeSparkline(values: monitor.networkHistory, color: .purple, maximum: nil)
             }
         }
     }
 
-    private func ring(_ value: Double?, color: Color) -> some View {
-        ZStack {
+    private func usageBody(
+        _ fraction: Double?, color: Color, detail: String? = nil, detailColor: Color = .secondary, temperature: String? = nil
+    ) -> some View {
+        HStack(spacing: 0) {
+            ring(fraction, color: color, temperature: temperature)
+            Spacer(minLength: metricSpacing)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(HomeDashboardFormatting.percent(fraction))
+                    .font(.system(size: valueFontSize, weight: .semibold))
+                    .monospacedDigit().lineLimit(1)
+                if let detail {
+                    Text(detail).font(.system(size: 10)).foregroundStyle(detailColor)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
+            .multilineTextAlignment(.trailing)
+            .frame(height: 48, alignment: .topTrailing)
+        }
+        .frame(maxWidth: .infinity).frame(height: 48)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func networkRow(_ value: String, symbol: String, title: String) -> some View {
+        HStack(spacing: 0) {
+            Image(systemName: symbol).foregroundStyle(.purple).frame(width: 18)
+            Spacer(minLength: metricSpacing)
+            Text(value).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title) \(value)")
+    }
+
+    private func ring(_ value: Double?, color: Color, temperature: String? = nil) -> some View {
+        let diameter: CGFloat = isCompact ? 40 : 42
+        return ZStack {
             Circle().stroke(color.opacity(0.12), lineWidth: 6)
             Circle().trim(from: 0, to: value ?? 0).stroke(color, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-        }.frame(width: 44, height: 44).padding(3).accessibilityHidden(true)
+            if let temperature {
+                Text(temperature)
+                    .font(.system(size: isCompact ? 10 : 11, weight: .medium))
+                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                    .frame(width: diameter - 10)
+            }
+        }
+        .frame(width: diameter, height: diameter).padding(3)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(temperature.map { "温度 \($0)" } ?? "")
+        .accessibilityHidden(temperature == nil)
     }
 
     private func metric(
-        title: String, symbol: String, color: Color, @ViewBuilder content: () -> some View
+        title: String, symbol: String, color: Color,
+        @ViewBuilder content: () -> some View
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(color)
+            HStack(spacing: 4) {
+                Label(title, systemImage: symbol)
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(color)
+                Spacer(minLength: 0)
+            }
+            .frame(height: 16)
             content()
         }
-        .padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(isCompact ? 12 : 14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .jarvisContentSurface(cornerRadius: 16)
-    }
-}
-
-struct HomeSparkline: View {
-    let values: [Double]
-    let color: Color
-    let maximum: Double?
-    var body: some View {
-        Canvas { context, size in
-            guard values.count > 1 else { return }
-            let ceiling = max(maximum ?? values.max() ?? 1, 1e-6)
-            var line = Path()
-            for (index, value) in values.enumerated() {
-                let point = CGPoint(
-                    x: size.width * CGFloat(index) / CGFloat(max(29, values.count - 1)),
-                    y: size.height * (1 - min(1, max(0, value / ceiling)))
-                )
-                if index == 0 {
-                    line.move(to: point)
-                } else {
-                    line.addLine(to: point)
-                }
-            }
-            context.stroke(
-                line, with: .color(color), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
-            )
-        }.frame(height: 22).accessibilityHidden(true)
     }
 }

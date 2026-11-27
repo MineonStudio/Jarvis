@@ -2,6 +2,11 @@ import Foundation
 
 /// Pure formatting and date calculations shared by the dashboard and its tests.
 enum HomeDashboardFormatting {
+    static func temperature(_ celsius: Double?) -> String {
+        guard let celsius, celsius.isFinite, celsius > 0, celsius <= 150 else { return "—" }
+        return String(format: "%.0f°C", celsius)
+    }
+
     static func percent(_ fraction: Double?) -> String {
         guard let fraction, fraction.isFinite else { return "—" }
         return "\(Int((min(1, max(0, fraction)) * 100).rounded()))%"
